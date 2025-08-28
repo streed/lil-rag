@@ -484,7 +484,8 @@ func TestMiniRag_Search(t *testing.T) {
 	miniRag := &MiniRag{
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
-		config:   &Config{},
+		chunker:  NewTextChunker(1000, 200),
+		config:   &Config{MaxTokens: 1000, Overlap: 200},
 	}
 
 	err := miniRag.storage.Initialize()

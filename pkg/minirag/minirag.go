@@ -106,6 +106,9 @@ func (m *MiniRag) Index(ctx context.Context, text string, id string) error {
 	if id == "" {
 		return fmt.Errorf("id cannot be empty")
 	}
+	if m.chunker == nil || m.embedder == nil || m.storage == nil {
+		return fmt.Errorf("MiniRag not properly initialized")
+	}
 
 	// Check if text needs chunking
 	if !m.chunker.IsLongText(text) {
@@ -222,6 +225,9 @@ func (m *MiniRag) Search(ctx context.Context, query string, limit int) ([]Search
 	}
 	if limit <= 0 {
 		limit = 10
+	}
+	if m.embedder == nil || m.storage == nil {
+		return nil, fmt.Errorf("MiniRag not properly initialized")
 	}
 
 	var embedding []float32
