@@ -1,0 +1,116 @@
+# Configuration for golangci-lint
+# https://github.com/golangci/golangci-lint
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnamedResult
+      - hugeParam
+      - rangeValCopy
+
+  gocyclo:
+    min-complexity: 15
+
+  govet:
+    enable:
+      - shadow
+    disable:
+      - fieldalignment
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  exhaustive:
+    default-signifies-exhaustive: true
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: mini-rag
+
+  golint:
+    min-confidence: 0.8
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  lll:
+    line-length: 120
+
+  unparam:
+    check-exported: false
+
+  nakedret:
+    max-func-lines: 30
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - deadcode
+    - depguard
+    - dogsled
+    - errcheck
+    - exportloopref
+    - exhaustive
+    - goconst
+    - gocritic
+    - gofmt
+    - goimports
+    - golint
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - rowserrcheck
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - lll
+        - goconst
+    
+    - linters:
+        - lll
+      source: "^//go:generate "
+
+  exclude:
+    # Exclude some gosec messages
+    - "G404: Use of weak random number generator"
+    
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
