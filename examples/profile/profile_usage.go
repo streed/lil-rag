@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	"mini-rag/pkg/config"
-	"mini-rag/pkg/minirag"
+	"lil-rag/pkg/config"
+	"lil-rag/pkg/minirag"
 )
 
 func main() {

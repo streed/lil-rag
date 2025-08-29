@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"mini-rag/pkg/minirag"
+	"lil-rag/pkg/minirag"
 )
 
 type Handler struct {

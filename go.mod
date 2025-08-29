@@ -1,4 +1,4 @@
-module mini-rag
+module lil-rag
 
 go 1.24.6
 

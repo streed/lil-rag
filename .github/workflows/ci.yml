@@ -61,13 +61,13 @@ jobs:
       run: go mod download
 
     - name: Build CLI
-      run: go build -v -o bin/mini-rag ./cmd/mini-rag
+      run: go build -v -o bin/lil-rag ./cmd/lil-rag
 
     - name: Build Server
-      run: go build -v -o bin/mini-rag-server ./cmd/mini-rag-server
+      run: go build -v -o bin/lil-rag-server ./cmd/lil-rag-server
 
     - name: Test CLI build
-      run: ./bin/mini-rag --help
+      run: ./bin/lil-rag --help
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3

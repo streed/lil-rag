@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"mini-rag/pkg/minirag"
+	"lil-rag/pkg/minirag"
 )
 
 func main() {

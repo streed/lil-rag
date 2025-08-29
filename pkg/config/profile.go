@@ -33,7 +33,7 @@ type ChunkConfig struct {
 
 func DefaultProfile() *ProfileConfig {
 	homeDir, _ := os.UserHomeDir()
-	dataDir := filepath.Join(homeDir, ".minirag", "data")
+	dataDir := filepath.Join(homeDir, ".lilrag", "data")
 
 	return &ProfileConfig{
 		Ollama: OllamaConfig{
@@ -41,7 +41,7 @@ func DefaultProfile() *ProfileConfig {
 			EmbeddingModel: "nomic-embed-text",
 			VectorSize:     768,
 		},
-		StoragePath: filepath.Join(dataDir, "minirag.db"),
+		StoragePath: filepath.Join(dataDir, "lilrag.db"),
 		DataDir:     dataDir,
 		Server: ServerConfig{
 			Host: "localhost",
@@ -60,7 +60,7 @@ func GetProfileConfigPath() (string, error) {
 		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	configDir := filepath.Join(homeDir, ".minirag")
+	configDir := filepath.Join(homeDir, ".lilrag")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}

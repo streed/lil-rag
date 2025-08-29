@@ -1,10 +1,10 @@
-# Mini-RAG
+# Lil-RAG
 
 [![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-username/mini-rag)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-username/lil-rag)
 
-A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Mini-RAG provides both CLI and HTTP API interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
+A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides both CLI and HTTP API interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
 
 ## ✨ Features
 
@@ -46,15 +46,15 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/mini-rag.git
-cd mini-rag
+git clone https://github.com/your-username/lil-rag.git
+cd lil-rag
 
 # Build both CLI and server
 make build
 
 # Or build individually
-make build-cli      # builds bin/mini-rag
-make build-server   # builds bin/mini-rag-server
+make build-cli      # builds bin/lil-rag
+make build-server   # builds bin/lil-rag-server
 
 # Install to $GOPATH/bin (optional)
 make install
@@ -64,10 +64,10 @@ make install
 
 ```bash
 # Install CLI directly
-go install github.com/your-username/mini-rag/cmd/mini-rag@latest
+go install github.com/your-username/lil-rag/cmd/lil-rag@latest
 
 # Install server directly  
-go install github.com/your-username/mini-rag/cmd/mini-rag-server@latest
+go install github.com/your-username/lil-rag/cmd/lil-rag-server@latest
 ```
 
 ## 🎯 Quick Start
@@ -86,39 +86,39 @@ ollama pull nomic-embed-text
 
 ```bash
 # Initialize user profile configuration
-./bin/mini-rag config init
+./bin/lil-rag config init
 
 # View current settings
-./bin/mini-rag config show
+./bin/lil-rag config show
 ```
 
 ### 3. Index Documents
 
 ```bash
 # Index direct text
-./bin/mini-rag index doc1 "This is about machine learning and neural networks."
+./bin/lil-rag index doc1 "This is about machine learning and neural networks."
 
 # Index from a file  
-./bin/mini-rag index doc2 document.txt
+./bin/lil-rag index doc2 document.txt
 
 # Index a PDF file
-./bin/mini-rag index doc3 research_paper.pdf
+./bin/lil-rag index doc3 research_paper.pdf
 
 # Index from stdin
-echo "Content about artificial intelligence" | ./bin/mini-rag index doc4 -
+echo "Content about artificial intelligence" | ./bin/lil-rag index doc4 -
 ```
 
 ### 4. Search Content
 
 ```bash
 # Search with default limit (10)
-./bin/mini-rag search "machine learning"
+./bin/lil-rag search "machine learning"
 
 # Search with custom limit
-./bin/mini-rag search "neural networks" 3
+./bin/lil-rag search "neural networks" 3
 
 # Get full document content (limit=1 shows complete documents)
-./bin/mini-rag search "AI concepts" 1
+./bin/lil-rag search "AI concepts" 1
 ```
 
 **Example Output:**
@@ -146,19 +146,19 @@ Found 2 results:
 
 ```bash
 # Index examples
-mini-rag index doc1 "Hello world"                    # Direct text
-mini-rag index doc2 document.txt                     # From file
-echo "Hello world" | mini-rag index doc3 -          # From stdin
-cat large_file.txt | mini-rag index doc4 -          # Pipe large files
+lil-rag index doc1 "Hello world"                    # Direct text
+lil-rag index doc2 document.txt                     # From file
+echo "Hello world" | lil-rag index doc3 -          # From stdin
+cat large_file.txt | lil-rag index doc4 -          # Pipe large files
 
 # Search examples  
-mini-rag search "hello" 10                          # Search with limit
-mini-rag search "machine learning concepts"         # Default limit (10)
+lil-rag search "hello" 10                          # Search with limit
+lil-rag search "machine learning concepts"         # Default limit (10)
 
 # Configuration
-mini-rag config init                                 # Initialize profile config
-mini-rag config show                                 # Show current config
-mini-rag config set ollama.model all-MiniLM-L6-v2   # Update configuration
+lil-rag config init                                 # Initialize profile config
+lil-rag config show                                 # Show current config
+lil-rag config set ollama.model all-MiniLM-L6-v2   # Update configuration
 ```
 
 ### Flags
@@ -178,10 +178,10 @@ mini-rag config set ollama.model all-MiniLM-L6-v2   # Update configuration
 
 ```bash
 # Start with default settings (localhost:8080)
-./bin/mini-rag-server
+./bin/lil-rag-server
 
 # Start with custom host/port  
-./bin/mini-rag-server --host 0.0.0.0 --port 9000
+./bin/lil-rag-server --host 0.0.0.0 --port 9000
 ```
 
 Visit http://localhost:8080 for the web interface with API documentation.
@@ -285,16 +285,16 @@ curl http://localhost:8080/api/metrics
 
 ## Configuration
 
-MiniRag uses a profile-based configuration system that stores settings in a JSON file in your user profile directory (`~/.minirag/config.json`).
+LilRag uses a profile-based configuration system that stores settings in a JSON file in your user profile directory (`~/.lilrag/config.json`).
 
 ### Initial Setup
 
 ```bash
 # Initialize profile configuration with defaults
-./bin/mini-rag config init
+./bin/lil-rag config init
 
 # View current configuration
-./bin/mini-rag config show
+./bin/lil-rag config show
 ```
 
 ### Configuration Options
@@ -305,7 +305,7 @@ The configuration includes:
 - **Storage**: Database path and data directory for indexed content
 - **Server**: HTTP server host and port
 
-Example profile configuration (`~/.minirag/config.json`):
+Example profile configuration (`~/.lilrag/config.json`):
 
 ```json
 {
@@ -314,8 +314,8 @@ Example profile configuration (`~/.minirag/config.json`):
     "embedding_model": "nomic-embed-text",
     "vector_size": 768
   },
-  "storage_path": "/home/user/.minirag/data/minirag.db",
-  "data_dir": "/home/user/.minirag/data",
+  "storage_path": "/home/user/.lilrag/data/minirag.db",
+  "data_dir": "/home/user/.lilrag/data",
   "server": {
     "host": "localhost",
     "port": 8080
@@ -327,19 +327,19 @@ Example profile configuration (`~/.minirag/config.json`):
 
 ```bash
 # Set Ollama endpoint
-./bin/mini-rag config set ollama.endpoint http://192.168.1.100:11434
+./bin/lil-rag config set ollama.endpoint http://192.168.1.100:11434
 
 # Change embedding model
-./bin/mini-rag config set ollama.model all-MiniLM-L6-v2
+./bin/lil-rag config set ollama.model all-MiniLM-L6-v2
 
 # Update vector size (must match model)
-./bin/mini-rag config set ollama.vector-size 384
+./bin/lil-rag config set ollama.vector-size 384
 
 # Change data directory
-./bin/mini-rag config set data.dir /path/to/my/data
+./bin/lil-rag config set data.dir /path/to/my/data
 
 # Update server settings
-./bin/mini-rag config set server.port 9000
+./bin/lil-rag config set server.port 9000
 ```
 
 ## Library Usage
@@ -354,13 +354,13 @@ import (
     "os"
     "path/filepath"
 
-    "mini-rag/pkg/minirag"
+    "lil-rag/pkg/minirag"
 )
 
 func main() {
     // Create configuration
     homeDir, _ := os.UserHomeDir()
-    dataDir := filepath.Join(homeDir, ".minirag", "data")
+    dataDir := filepath.Join(homeDir, ".lilrag", "data")
     
     config := &minirag.Config{
         DatabasePath: filepath.Join(dataDir, "test.db"),
@@ -370,7 +370,7 @@ func main() {
         VectorSize:   768,
     }
 
-    // Initialize MiniRag
+    // Initialize LilRag
     rag, err := minirag.New(config)
     if err != nil {
         log.Fatal(err)
@@ -424,10 +424,10 @@ make install
 ## 🏗️ Architecture
 
 ```
-mini-rag/
+lil-rag/
 ├── cmd/                    # Main applications
-│   ├── mini-rag/          # CLI application
-│   └── mini-rag-server/   # HTTP API server
+│   ├── lil-rag/          # CLI application
+│   └── lil-rag-server/   # HTTP API server
 ├── pkg/                    # Public library packages
 │   ├── minirag/           # Core RAG functionality
 │   │   ├── storage.go     # SQLite + sqlite-vec storage
@@ -459,10 +459,10 @@ mini-rag/
 ## Troubleshooting
 
 ### Configuration Issues
-- Profile config location: `~/.minirag/config.json`
-- Initialize config if missing: `mini-rag config init`
-- Check config values: `mini-rag config show`
-- Reset to defaults: Delete config file and run `mini-rag config init`
+- Profile config location: `~/.lilrag/config.json`
+- Initialize config if missing: `lil-rag config init`
+- Check config values: `lil-rag config show`
+- Reset to defaults: Delete config file and run `lil-rag config init`
 
 ### sqlite-vec Extension Not Found
 - Ensure sqlite-vec is installed and available in your SQLite
@@ -470,19 +470,19 @@ mini-rag/
 
 ### Ollama Connection Issues  
 - Verify Ollama is running: `ollama list`
-- Check the Ollama URL: `mini-rag config show`
-- Update endpoint: `mini-rag config set ollama.endpoint http://localhost:11434`
+- Check the Ollama URL: `lil-rag config show`
+- Update endpoint: `lil-rag config set ollama.endpoint http://localhost:11434`
 - Ensure the embedding model is pulled: `ollama pull nomic-embed-text`
 
 ### Vector Size Mismatch
 - Different models have different vector sizes
 - Common sizes: 768 (nomic-embed-text), 384 (all-MiniLM-L6-v2), 1536 (text-embedding-ada-002)
-- Update vector size: `mini-rag config set ollama.vector-size 768`
+- Update vector size: `lil-rag config set ollama.vector-size 768`
 
 ### Data Directory Issues
 - Files are stored in the configured data directory
-- Check location: `mini-rag config show`
-- Change location: `mini-rag config set data.dir /path/to/data`
+- Check location: `lil-rag config show`
+- Change location: `lil-rag config set data.dir /path/to/data`
 - Ensure write permissions to the directory
 
 ## License
