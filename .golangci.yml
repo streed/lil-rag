@@ -36,7 +36,7 @@ linters-settings:
     simplify: true
 
   goimports:
-    local-prefixes: mini-rag
+    local-prefixes: lil-rag
 
   golint:
     min-confidence: 0.8

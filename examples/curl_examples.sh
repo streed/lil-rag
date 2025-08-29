@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# MiniRag API Examples using curl
+# LilRag API Examples using curl
 
 BASE_URL="http://localhost:8080"
 
-echo "=== MiniRag API Examples ==="
+echo "=== LilRag API Examples ==="
 echo ""
 
 # Health check

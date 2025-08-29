@@ -40,8 +40,8 @@ jobs:
         GOARCH: amd64
         CGO_ENABLED: 1
       run: |
-        go build -ldflags="-s -w" -o dist/mini-rag-linux-amd64 ./cmd/mini-rag
-        go build -ldflags="-s -w" -o dist/mini-rag-server-linux-amd64 ./cmd/mini-rag-server
+        go build -ldflags="-s -w" -o dist/lil-rag-linux-amd64 ./cmd/lil-rag
+        go build -ldflags="-s -w" -o dist/lil-rag-server-linux-amd64 ./cmd/lil-rag-server
 
     - name: Build for Linux ARM64
       env:
@@ -51,8 +51,8 @@ jobs:
         CC: aarch64-linux-gnu-gcc
       run: |
         sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-        go build -ldflags="-s -w" -o dist/mini-rag-linux-arm64 ./cmd/mini-rag
-        go build -ldflags="-s -w" -o dist/mini-rag-server-linux-arm64 ./cmd/mini-rag-server
+        go build -ldflags="-s -w" -o dist/lil-rag-linux-arm64 ./cmd/lil-rag
+        go build -ldflags="-s -w" -o dist/lil-rag-server-linux-arm64 ./cmd/lil-rag-server
 
     - name: Build for macOS AMD64
       env:
@@ -60,8 +60,8 @@ jobs:
         GOARCH: amd64
         CGO_ENABLED: 1
       run: |
-        go build -ldflags="-s -w" -o dist/mini-rag-darwin-amd64 ./cmd/mini-rag
-        go build -ldflags="-s -w" -o dist/mini-rag-server-darwin-amd64 ./cmd/mini-rag-server
+        go build -ldflags="-s -w" -o dist/lil-rag-darwin-amd64 ./cmd/lil-rag
+        go build -ldflags="-s -w" -o dist/lil-rag-server-darwin-amd64 ./cmd/lil-rag-server
 
     - name: Build for macOS ARM64
       env:
@@ -69,8 +69,8 @@ jobs:
         GOARCH: arm64
         CGO_ENABLED: 1
       run: |
-        go build -ldflags="-s -w" -o dist/mini-rag-darwin-arm64 ./cmd/mini-rag
-        go build -ldflags="-s -w" -o dist/mini-rag-server-darwin-arm64 ./cmd/mini-rag-server
+        go build -ldflags="-s -w" -o dist/lil-rag-darwin-arm64 ./cmd/lil-rag
+        go build -ldflags="-s -w" -o dist/lil-rag-server-darwin-arm64 ./cmd/lil-rag-server
 
     - name: Build for Windows AMD64
       env:
@@ -80,25 +80,25 @@ jobs:
         CC: x86_64-w64-mingw32-gcc
       run: |
         sudo apt-get install -y gcc-mingw-w64
-        go build -ldflags="-s -w" -o dist/mini-rag-windows-amd64.exe ./cmd/mini-rag
-        go build -ldflags="-s -w" -o dist/mini-rag-server-windows-amd64.exe ./cmd/mini-rag-server
+        go build -ldflags="-s -w" -o dist/lil-rag-windows-amd64.exe ./cmd/lil-rag
+        go build -ldflags="-s -w" -o dist/lil-rag-server-windows-amd64.exe ./cmd/lil-rag-server
 
     - name: Create archives
       run: |
         # Linux AMD64
-        tar -czf dist/mini-rag-linux-amd64.tar.gz -C dist mini-rag-linux-amd64 mini-rag-server-linux-amd64
+        tar -czf dist/lil-rag-linux-amd64.tar.gz -C dist lil-rag-linux-amd64 lil-rag-server-linux-amd64
         
         # Linux ARM64
-        tar -czf dist/mini-rag-linux-arm64.tar.gz -C dist mini-rag-linux-arm64 mini-rag-server-linux-arm64
+        tar -czf dist/lil-rag-linux-arm64.tar.gz -C dist lil-rag-linux-arm64 lil-rag-server-linux-arm64
         
         # macOS AMD64
-        tar -czf dist/mini-rag-darwin-amd64.tar.gz -C dist mini-rag-darwin-amd64 mini-rag-server-darwin-amd64
+        tar -czf dist/lil-rag-darwin-amd64.tar.gz -C dist lil-rag-darwin-amd64 lil-rag-server-darwin-amd64
         
         # macOS ARM64
-        tar -czf dist/mini-rag-darwin-arm64.tar.gz -C dist mini-rag-darwin-arm64 mini-rag-server-darwin-arm64
+        tar -czf dist/lil-rag-darwin-arm64.tar.gz -C dist lil-rag-darwin-arm64 lil-rag-server-darwin-arm64
         
         # Windows AMD64
-        zip -j dist/mini-rag-windows-amd64.zip dist/mini-rag-windows-amd64.exe dist/mini-rag-server-windows-amd64.exe
+        zip -j dist/lil-rag-windows-amd64.zip dist/lil-rag-windows-amd64.exe dist/lil-rag-server-windows-amd64.exe
 
     - name: Generate checksums
       run: |

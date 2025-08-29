@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"mini-rag/internal/handlers"
-	"mini-rag/pkg/config"
-	"mini-rag/pkg/minirag"
+	"lil-rag/internal/handlers"
+	"lil-rag/pkg/config"
+	"lil-rag/pkg/minirag"
 )
 
 func main() {

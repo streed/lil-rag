@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"mini-rag/pkg/config"
-	"mini-rag/pkg/minirag"
+	"lil-rag/pkg/config"
+	"lil-rag/pkg/minirag"
 )
 
 func main() {
@@ -107,7 +107,7 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *minirag.MiniRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mini-rag index <id> [text|file|-]")
+		return fmt.Errorf("usage: lil-rag index <id> [text|file|-]")
 	}
 
 	id := args[0]
@@ -201,7 +201,7 @@ func handleIndex(ctx context.Context, rag *minirag.MiniRag, args []string) error
 
 func handleSearch(ctx context.Context, rag *minirag.MiniRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mini-rag search <query> [limit]")
+		return fmt.Errorf("usage: lil-rag search <query> [limit]")
 	}
 
 	query := args[0]
@@ -252,7 +252,7 @@ func handleSearch(ctx context.Context, rag *minirag.MiniRag, args []string) erro
 
 func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mini-rag config <init|show|set>")
+		return fmt.Errorf("usage: lil-rag config <init|show|set>")
 	}
 
 	command := args[0]
@@ -291,7 +291,7 @@ func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
 
 func handleConfigSet(profileConfig *config.ProfileConfig, args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: mini-rag config set <key> <value>")
+		return fmt.Errorf("usage: lil-rag config set <key> <value>")
 	}
 
 	key, value := args[0], args[1]
@@ -345,7 +345,7 @@ func handleConfigSet(profileConfig *config.ProfileConfig, args []string) error {
 
 func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 	if len(args) > 0 && args[0] == "--help" {
-		fmt.Println("Usage: mini-rag reset [--force]")
+		fmt.Println("Usage: lil-rag reset [--force]")
 		fmt.Println("")
 		fmt.Println("Delete the current database and all indexed data.")
 		fmt.Println("")
@@ -450,7 +450,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 	}
 
 	fmt.Println("\n✓ Database reset completed successfully.")
-	fmt.Println("You can now start fresh with 'mini-rag index' command.")
+	fmt.Println("You can now start fresh with 'lil-rag index' command.")
 
 	return nil
 }
@@ -498,10 +498,10 @@ func isPDFFile(filePath string) bool {
 }
 
 func printUsage() {
-	fmt.Println("MiniRag - A simple RAG system with SQLite and Ollama")
+	fmt.Println("LilRag - A simple RAG system with SQLite and Ollama")
 	fmt.Println("")
 	fmt.Println("Usage:")
-	fmt.Println("  mini-rag [flags] <command> [args]")
+	fmt.Println("  lil-rag [flags] <command> [args]")
 	fmt.Println("")
 	fmt.Println("Commands:")
 	fmt.Println("  index <id> [text|file|-]  Index text, file, or stdin with given ID")
@@ -534,13 +534,13 @@ func printUsage() {
 	fmt.Println("  chunking.overlap                Token overlap between chunks")
 	fmt.Println("")
 	fmt.Println("Examples:")
-	fmt.Println("  mini-rag config init")
-	fmt.Println("  mini-rag config set ollama.endpoint http://localhost:11434")
-	fmt.Println("  mini-rag config set ollama.model nomic-embed-text")
-	fmt.Println("  mini-rag index doc1 \"Hello world\"")
-	fmt.Println("  mini-rag index doc2 document.txt")
-	fmt.Println("  echo \"Hello world\" | mini-rag index doc3 -")
-	fmt.Println("  mini-rag search \"hello\" 5")
-	fmt.Println("  mini-rag reset                   # Reset database (with confirmation)")
-	fmt.Println("  mini-rag reset --force           # Reset database (skip confirmation)")
+	fmt.Println("  lil-rag config init")
+	fmt.Println("  lil-rag config set ollama.endpoint http://localhost:11434")
+	fmt.Println("  lil-rag config set ollama.model nomic-embed-text")
+	fmt.Println("  lil-rag index doc1 \"Hello world\"")
+	fmt.Println("  lil-rag index doc2 document.txt")
+	fmt.Println("  echo \"Hello world\" | lil-rag index doc3 -")
+	fmt.Println("  lil-rag search \"hello\" 5")
+	fmt.Println("  lil-rag reset                   # Reset database (with confirmation)")
+	fmt.Println("  lil-rag reset --force           # Reset database (skip confirmation)")
 }

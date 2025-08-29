@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"mini-rag/pkg/minirag"
+	"lil-rag/pkg/minirag"
 )
 
 func TestNew(t *testing.T) {

@@ -47,8 +47,8 @@ Enhancement suggestions are welcome! Please:
 
 ```bash
 # Clone your fork
-git clone https://github.com/your-username/mini-rag.git
-cd mini-rag
+git clone https://github.com/your-username/lil-rag.git
+cd lil-rag
 
 # Install dependencies
 make deps
@@ -96,10 +96,10 @@ make dev
 ### Project Structure
 
 ```
-mini-rag/
+lil-rag/
 ├── cmd/                    # Main applications
-│   ├── mini-rag/          # CLI application
-│   └── mini-rag-server/   # HTTP server
+│   ├── lil-rag/          # CLI application
+│   └── lil-rag-server/   # HTTP server
 ├── pkg/                    # Public library code
 │   ├── minirag/           # Core RAG functionality
 │   └── config/            # Configuration management
