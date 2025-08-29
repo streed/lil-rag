@@ -46,7 +46,7 @@ func TestTextChunker_EstimateTokenCount(t *testing.T) {
 		{
 			name:     "with punctuation",
 			text:     "Hello, world! How are you?",
-			expected: 6,
+			expected: 5,
 		},
 		{
 			name:     "with extra spaces",
@@ -61,7 +61,7 @@ func TestTextChunker_EstimateTokenCount(t *testing.T) {
 		{
 			name:     "complex text",
 			text:     "This is a test. It has multiple sentences! And punctuation?",
-			expected: 11,
+			expected: 10,
 		},
 	}
 

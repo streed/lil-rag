@@ -116,6 +116,10 @@ func (s *SQLiteStorage) createTables() error {
 
 // IndexChunks indexes a document with its chunks and embeddings
 func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text string, chunks []Chunk, embeddings [][]float32) error {
+	if s.db == nil {
+		return fmt.Errorf("storage not initialized - call Initialize() first")
+	}
+	
 	if len(chunks) != len(embeddings) {
 		return fmt.Errorf("chunk count (%d) doesn't match embedding count (%d)", len(chunks), len(embeddings))
 	}
@@ -244,6 +248,14 @@ func (s *SQLiteStorage) storeContent(id, text, contentHash string) (string, erro
 }
 
 func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("storage not initialized - call Initialize() first")
+	}
+	
+	if len(embedding) == 0 {
+		return nil, fmt.Errorf("embedding cannot be empty")
+	}
+	
 	embeddingJSON, err := json.Marshal(embedding)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal query embedding: %w", err)
