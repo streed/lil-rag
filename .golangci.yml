@@ -58,10 +58,10 @@ linters:
   disable-all: true
   enable:
     - bodyclose
+    - copyloopvar  # replaces exportloopref
     - depguard
     - dogsled
     - errcheck
-    - exportloopref
     - exhaustive
     - goconst
     - gocritic
@@ -105,6 +105,7 @@ issues:
   new: false
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
