@@ -23,7 +23,7 @@ type Chunk struct {
 }
 
 func NewTextChunker(maxTokens, overlap int) *TextChunker {
-	// Simple tokenization regex - splits on whitespace and punctuation
+	// Simple tokenization regex - splits on whitespace
 	tokenRegex := regexp.MustCompile(`\S+`)
 
 	return &TextChunker{
@@ -182,25 +182,26 @@ func (tc *TextChunker) getOverlapText(sentences []string, currentIndex, overlapT
 		return ""
 	}
 
-	var overlapBuilder strings.Builder
+	var overlapSentences []string
 	tokenCount := 0
 
-	// Go backwards from current index to build overlap
+	// Go backwards from current index to collect overlap sentences
 	for i := currentIndex - 1; i >= 0 && tokenCount < overlapTokens; i-- {
 		sentenceTokens := tc.EstimateTokenCount(sentences[i])
 		if tokenCount+sentenceTokens <= overlapTokens {
-			if overlapBuilder.Len() > 0 {
-				overlapBuilder.WriteString(" " + sentences[i])
-			} else {
-				overlapBuilder.WriteString(sentences[i])
-			}
+			overlapSentences = append(overlapSentences, sentences[i])
 			tokenCount += sentenceTokens
 		} else {
 			break
 		}
 	}
 
-	return overlapBuilder.String()
+	// Reverse the sentences to maintain chronological order
+	for i, j := 0, len(overlapSentences)-1; i < j; i, j = i+1, j-1 {
+		overlapSentences[i], overlapSentences[j] = overlapSentences[j], overlapSentences[i]
+	}
+
+	return strings.Join(overlapSentences, " ")
 }
 
 func (tc *TextChunker) findStartPosition(text, sentence string) int {

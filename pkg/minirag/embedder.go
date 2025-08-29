@@ -92,12 +92,27 @@ func (tp *TextPreprocessor) preprocess(text string) string {
 	// Normalize unicode and clean text
 	text = strings.ToValidUTF8(text, "")
 
-	// Normalize whitespace
+	// Normalize whitespace - preserve leading/trailing spaces if removeExtraSpaces is false
 	if tp.normalizeWhitespace {
+		// Match leading spaces, internal whitespace, and trailing spaces separately
+		leadingSpaces := regexp.MustCompile(`^\s*`).FindString(text)
+		trailingSpaces := regexp.MustCompile(`\s*$`).FindString(text)
+		
+		// Normalize internal whitespace only
 		text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+		
+		// If we're not removing extra spaces, restore the original leading/trailing patterns
+		if !tp.removeExtraSpaces {
+			if leadingSpaces != "" {
+				text = regexp.MustCompile(`^\s*`).ReplaceAllString(text, leadingSpaces)
+			}
+			if trailingSpaces != "" {
+				text = regexp.MustCompile(`\s*$`).ReplaceAllString(text, trailingSpaces)
+			}
+		}
 	}
 
-	// Remove extra spaces
+	// Remove extra spaces (trim leading/trailing)
 	if tp.removeExtraSpaces {
 		text = strings.TrimSpace(text)
 	}
