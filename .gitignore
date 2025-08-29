@@ -9,6 +9,10 @@
 /bin/
 /dist/
 
+# Example binaries
+examples/library/library
+examples/profile/profile
+
 # Test binary, built with `go test -c`
 *.test
 
