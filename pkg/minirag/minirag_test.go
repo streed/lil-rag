@@ -69,7 +69,7 @@ func (m *MockStorage) Search(ctx context.Context, embedding []float32, limit int
 		if score < 0 {
 			score = 0.1
 		}
-		
+
 		result := SearchResult{
 			ID:    id,
 			Text:  text,
@@ -79,7 +79,7 @@ func (m *MockStorage) Search(ctx context.Context, embedding []float32, limit int
 			},
 		}
 		results = append(results, result)
-		
+
 		if len(results) >= limit {
 			break
 		}
@@ -106,12 +106,12 @@ func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 	if text == "" {
 		return nil, fmt.Errorf("empty text")
 	}
-	
+
 	// Simple content-aware embedding based on keywords
 	text = strings.ToLower(text)
-	
+
 	var embedding [3]float32
-	
+
 	// Check for specific keywords and assign higher weights
 	if strings.Contains(text, "test") {
 		embedding[0] += 0.7
@@ -136,20 +136,20 @@ func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 	if strings.Contains(text, "content") {
 		embedding[2] += 0.2
 	}
-	
+
 	// Add some base variation based on text length to avoid zeros
 	length := len(text)
 	embedding[0] += float32(length%100) / 1000.0
 	embedding[1] += float32(length%200) / 2000.0
 	embedding[2] += float32(length%300) / 3000.0
-	
+
 	// Normalize to 0-1 range
 	for i := range embedding {
 		if embedding[i] > 1.0 {
 			embedding[i] = 1.0
 		}
 	}
-	
+
 	return embedding[:], nil
 }
 
@@ -706,7 +706,7 @@ func TestMiniRag_Integration(t *testing.T) {
 	// Initialize with real storage but mock embedder
 	mockStorage := NewMockStorage()
 	miniRag.storage = mockStorage
-	
+
 	err = miniRag.storage.Initialize()
 	if err != nil {
 		t.Fatalf("Failed to initialize storage: %v", err)

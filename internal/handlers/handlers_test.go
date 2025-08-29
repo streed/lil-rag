@@ -28,7 +28,7 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create MiniRag: %v", err)
 	}
-	
+
 	handler := New(ragInstance)
 
 	if handler == nil {
@@ -48,12 +48,12 @@ func createTestHandler(t *testing.T) *Handler {
 		MaxTokens:    100,
 		Overlap:      20,
 	}
-	
+
 	ragInstance, err := minirag.New(config)
 	if err != nil {
 		t.Fatalf("Failed to create MiniRag: %v", err)
 	}
-	
+
 	return New(ragInstance)
 }
 

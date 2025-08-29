@@ -345,7 +345,7 @@ func TestSQLiteStorage_IndexChunks(t *testing.T) {
 	ctx := context.Background()
 	documentID := "test-chunks-doc"
 	text := "This is the original document text that was chunked"
-	
+
 	chunks := []Chunk{
 		{
 			Text:       "This is chunk 0",
@@ -445,7 +445,7 @@ func TestSQLiteStorage_IndexChunks_MismatchedCounts(t *testing.T) {
 	ctx := context.Background()
 	documentID := "mismatch-doc"
 	text := "Test document"
-	
+
 	chunks := []Chunk{
 		{Text: "Chunk 1", Index: 0},
 		{Text: "Chunk 2", Index: 1},
@@ -492,7 +492,7 @@ func TestSQLiteStorage_Search(t *testing.T) {
 			embedding: []float32{0.8, 0.1, 0.1},
 		},
 		{
-			id:        "doc2", 
+			id:        "doc2",
 			text:      "This discusses natural language processing",
 			embedding: []float32{0.1, 0.8, 0.1},
 		},
@@ -574,7 +574,7 @@ func TestSQLiteStorage_Search(t *testing.T) {
 
 				// Check that scores are in descending order
 				if i > 0 && results[i-1].Score < result.Score {
-					t.Errorf("Results not sorted by score: result %d score (%.3f) > result %d score (%.3f)", 
+					t.Errorf("Results not sorted by score: result %d score (%.3f) > result %d score (%.3f)",
 						i-1, results[i-1].Score, i, result.Score)
 				}
 			}
@@ -603,7 +603,7 @@ func TestSQLiteStorage_hasMultipleChunks(t *testing.T) {
 		t.Fatalf("Failed to index single chunk document: %v", err)
 	}
 
-	// Index a multi-chunk document  
+	// Index a multi-chunk document
 	chunks := []Chunk{
 		{Text: "Chunk 1", Index: 0},
 		{Text: "Chunk 2", Index: 1},
@@ -682,7 +682,7 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 	// Step 1: Index a document with multiple chunks
 	documentID := "full-workflow-doc"
 	originalText := "This is a comprehensive document about artificial intelligence. It covers machine learning algorithms and their applications in various domains."
-	
+
 	chunks := []Chunk{
 		{
 			Text:       "This is a comprehensive document about artificial intelligence.",
@@ -750,7 +750,7 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 		}
 	}
 
-	// Step 3: Search for ML-related content  
+	// Step 3: Search for ML-related content
 	mlQuery := []float32{0.05, 0.9, 0.05}
 	results, err = storage.Search(ctx, mlQuery, 1)
 	if err != nil {

@@ -42,6 +42,7 @@ jobs:
         file: ./coverage.out
         flags: unittests
         name: codecov-umbrella
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     name: Build
@@ -133,7 +134,7 @@ jobs:
         cache: true
 
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@v1
+      uses: securecodewarrior/github-action-gosec@v1.3.0
       with:
         args: '-no-fail -fmt sarif -out results.sarif ./...'
 

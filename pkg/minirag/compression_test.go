@@ -10,10 +10,10 @@ import (
 
 func TestCompressText(t *testing.T) {
 	tests := []struct {
-		name         string
-		text         string
-		expectError  bool
-		expectNil    bool
+		name        string
+		text        string
+		expectError bool
+		expectNil   bool
 	}{
 		{
 			name:        "empty string",
@@ -72,7 +72,7 @@ func TestCompressText(t *testing.T) {
 
 			// For non-empty text, compressed data should be smaller than original (usually)
 			if !tt.expectNil && len(tt.text) > 100 && len(compressed) >= len(tt.text) {
-				t.Logf("Note: Compressed size (%d) >= original size (%d) for text: %s", 
+				t.Logf("Note: Compressed size (%d) >= original size (%d) for text: %s",
 					len(compressed), len(tt.text), tt.text[:min(50, len(tt.text))])
 				// This is not necessarily an error for small texts
 			}
@@ -82,9 +82,9 @@ func TestCompressText(t *testing.T) {
 
 func TestDecompressText(t *testing.T) {
 	tests := []struct {
-		name          string
-		originalText  string
-		expectError   bool
+		name         string
+		originalText string
+		expectError  bool
 	}{
 		{
 			name:         "empty string",
@@ -137,7 +137,7 @@ func TestDecompressText(t *testing.T) {
 			}
 
 			if decompressed != tt.originalText {
-				t.Errorf("Decompressed text doesn't match original:\nOriginal:    %q\nDecompressed: %q", 
+				t.Errorf("Decompressed text doesn't match original:\nOriginal:    %q\nDecompressed: %q",
 					tt.originalText, decompressed)
 			}
 		})
@@ -262,7 +262,7 @@ func TestCompressFile(t *testing.T) {
 				if err != nil {
 					t.Errorf("Failed to decompress file: %v", err)
 				} else if string(decompressed) != tt.content {
-					t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q", 
+					t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q",
 						tt.content, string(decompressed))
 				}
 			}
@@ -324,7 +324,7 @@ func TestDecompressFile(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	originalContent := "This is test content for file decompression testing."
-	
+
 	// Create and compress a test file
 	inputPath := filepath.Join(tempDir, "input.txt")
 	compressedPath := filepath.Join(tempDir, "compressed.gz")
@@ -346,7 +346,7 @@ func TestDecompressFile(t *testing.T) {
 	}
 
 	if string(decompressed) != originalContent {
-		t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q", 
+		t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q",
 			originalContent, string(decompressed))
 	}
 }
@@ -421,7 +421,7 @@ func TestGetCompressionRatio(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ratio := GetCompressionRatio(tt.originalSize, tt.compressedSize)
 			if ratio != tt.expected {
-				t.Errorf("GetCompressionRatio(%d, %d) = %.2f, want %.2f", 
+				t.Errorf("GetCompressionRatio(%d, %d) = %.2f, want %.2f",
 					tt.originalSize, tt.compressedSize, ratio, tt.expected)
 			}
 		})
@@ -485,7 +485,7 @@ func main() {
 			originalSize := len(tt.data)
 			compressedSize := len(compressed)
 			ratio := GetCompressionRatio(originalSize, compressedSize)
-			t.Logf("Compression ratio: %.1f%% (original: %d bytes, compressed: %d bytes)", 
+			t.Logf("Compression ratio: %.1f%% (original: %d bytes, compressed: %d bytes)",
 				ratio, originalSize, compressedSize)
 		})
 	}
