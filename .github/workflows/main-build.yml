@@ -1,0 +1,142 @@
+name: Main Branch Build
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  build-and-version:
+    name: Build Cross-Platform Binaries
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Run tests
+      run: go test -v ./...
+
+    - name: Read current version
+      id: version
+      run: |
+        CURRENT_VERSION=$(cat VERSION)
+        echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        
+        # Increment patch version for main branch builds
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]}
+        
+        NEW_PATCH=$((PATCH + 1))
+        NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+        
+        echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "$NEW_VERSION" > VERSION
+
+    - name: Commit version update
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add VERSION
+        git commit -m "Bump version to ${{ steps.version.outputs.new }}" || echo "No changes to commit"
+        git push
+
+    - name: Create release directory
+      run: mkdir -p dist
+
+    - name: Build for Linux AMD64
+      env:
+        GOOS: linux
+        GOARCH: amd64
+        CGO_ENABLED: 1
+      run: |
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-linux-amd64 ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-linux-amd64 ./cmd/lil-rag-server
+
+    - name: Build for Linux ARM64
+      env:
+        GOOS: linux
+        GOARCH: arm64
+        CGO_ENABLED: 1
+        CC: aarch64-linux-gnu-gcc
+      run: |
+        sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-linux-arm64 ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-linux-arm64 ./cmd/lil-rag-server
+
+    - name: Build for macOS AMD64
+      env:
+        GOOS: darwin
+        GOARCH: amd64
+        CGO_ENABLED: 1
+      run: |
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-darwin-amd64 ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-darwin-amd64 ./cmd/lil-rag-server
+
+    - name: Build for macOS ARM64
+      env:
+        GOOS: darwin
+        GOARCH: arm64
+        CGO_ENABLED: 1
+      run: |
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-darwin-arm64 ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-darwin-arm64 ./cmd/lil-rag-server
+
+    - name: Build for Windows AMD64
+      env:
+        GOOS: windows
+        GOARCH: amd64
+        CGO_ENABLED: 1
+        CC: x86_64-w64-mingw32-gcc
+      run: |
+        sudo apt-get install -y gcc-mingw-w64
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-windows-amd64.exe ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-windows-amd64.exe ./cmd/lil-rag-server
+
+    - name: Create archives
+      run: |
+        # Linux AMD64
+        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-amd64.tar.gz -C dist lil-rag-linux-amd64 lil-rag-server-linux-amd64
+        
+        # Linux ARM64
+        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-arm64.tar.gz -C dist lil-rag-linux-arm64 lil-rag-server-linux-arm64
+        
+        # macOS AMD64
+        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-darwin-amd64.tar.gz -C dist lil-rag-darwin-amd64 lil-rag-server-darwin-amd64
+        
+        # macOS ARM64
+        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-darwin-arm64.tar.gz -C dist lil-rag-darwin-arm64 lil-rag-server-darwin-arm64
+        
+        # Windows AMD64
+        zip -j dist/lil-rag-${{ steps.version.outputs.new }}-windows-amd64.zip dist/lil-rag-windows-amd64.exe dist/lil-rag-server-windows-amd64.exe
+
+    - name: Generate checksums
+      run: |
+        cd dist
+        sha256sum *.tar.gz *.zip > checksums.txt
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: lil-rag-${{ steps.version.outputs.new }}-binaries
+        path: |
+          dist/*.tar.gz
+          dist/*.zip
+          dist/checksums.txt
+        retention-days: 30

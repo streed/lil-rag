@@ -39,6 +39,16 @@ func TestNew(t *testing.T) {
 	if handler.rag != ragInstance {
 		t.Error("Expected handler to store the provided MiniRag instance")
 	}
+
+	if handler.version != "dev" {
+		t.Error("Expected default version to be 'dev'")
+	}
+
+	// Test versioned constructor
+	versionedHandler := NewWithVersion(ragInstance, "1.2.3")
+	if versionedHandler.version != "1.2.3" {
+		t.Error("Expected version to be '1.2.3'")
+	}
 }
 
 func createTestHandler(t *testing.T) *Handler {
@@ -347,8 +357,8 @@ func TestHandler_Health(t *testing.T) {
 				if _, ok := response["timestamp"]; !ok {
 					t.Error("Expected timestamp field in response")
 				}
-				if version, ok := response["version"]; !ok || version != "1.0.0" {
-					t.Errorf("Expected version field to be '1.0.0', got %v", version)
+				if version, ok := response["version"]; !ok || version != "dev" {
+					t.Errorf("Expected version field to be 'dev', got %v", version)
 				}
 			}
 		})
