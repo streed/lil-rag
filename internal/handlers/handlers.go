@@ -16,7 +16,8 @@ import (
 )
 
 type Handler struct {
-	rag *minirag.MiniRag
+	rag     *minirag.MiniRag
+	version string
 }
 
 type IndexRequest struct {
@@ -39,7 +40,11 @@ type ErrorResponse struct {
 }
 
 func New(rag *minirag.MiniRag) *Handler {
-	return &Handler{rag: rag}
+	return &Handler{rag: rag, version: "dev"}
+}
+
+func NewWithVersion(rag *minirag.MiniRag, version string) *Handler {
+	return &Handler{rag: rag, version: version}
 }
 
 func (h *Handler) Index() http.HandlerFunc {
@@ -176,7 +181,7 @@ func (h *Handler) Health() http.HandlerFunc {
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":    "healthy",
 			"timestamp": time.Now().UTC(),
-			"version":   "1.0.0",
+			"version":   h.version,
 		}); err != nil {
 			// Log error but don't change response at this point
 			fmt.Printf("Error encoding response: %v\n", err)

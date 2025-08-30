@@ -15,6 +15,9 @@ import (
 	"lil-rag/pkg/minirag"
 )
 
+// version is set during build time via ldflags
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -30,8 +33,14 @@ func run() error {
 		model      = flag.String("model", "", "Embedding model (overrides profile config)")
 		vectorSize = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
 		help       = flag.Bool("help", false, "Show help")
+		showVersion = flag.Bool("version", false, "Show version")
 	)
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("lil-rag version %s\n", version)
+		return nil
+	}
 
 	if *help {
 		printUsage()
@@ -504,7 +513,7 @@ func isPDFFile(filePath string) bool {
 }
 
 func printUsage() {
-	fmt.Println("LilRag - A simple RAG system with SQLite and Ollama")
+	fmt.Printf("LilRag - A simple RAG system with SQLite and Ollama (version %s)\n", version)
 	fmt.Println("")
 	fmt.Println("Usage:")
 	fmt.Println("  lil-rag [flags] <command> [args]")
@@ -522,6 +531,7 @@ func printUsage() {
 	fmt.Println("  -model string        Embedding model (overrides profile config)")
 	fmt.Println("  -vector-size int     Vector size (overrides profile config)")
 	fmt.Println("  -help               Show this help")
+	fmt.Println("  -version            Show version")
 	fmt.Println("")
 	fmt.Println("Configuration:")
 	fmt.Println("  config init                     Initialize profile configuration")
