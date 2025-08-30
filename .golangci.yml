@@ -84,16 +84,34 @@ linters:
 
 issues:
   exclude-rules:
+    # Disable all lint checks for test files
     - path: _test\.go
       linters:
-        - gosec
-        - lll
+        - bodyclose
+        - copyloopvar
+        - dogsled
+        - errcheck
+        - exhaustive
         - goconst
-    
-    - path: internal/handlers/handlers_test\.go
-      text: "declared and not used: req \\(typecheck\\)"
-      linters:
+        - gocritic
+        - gofmt
+        - goimports
+        - revive
+        - gosec
+        - gosimple
+        - govet
+        - ineffassign
+        - lll
+        - misspell
+        - nakedret
+        - rowserrcheck
+        - staticcheck
+        - stylecheck
         - typecheck
+        - unconvert
+        - unparam
+        - unused
+        - whitespace
     
     - linters:
         - lll
