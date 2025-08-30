@@ -180,10 +180,8 @@ func TestHandler_Search_GET(t *testing.T) {
 			}
 			u.RawQuery = q.Encode()
 
-			req := httptest.NewRequest(http.MethodGet, u.String(), http.NoBody)
 			w := httptest.NewRecorder()
-
-			handler.Search()(w, req)
+			handler.Search()(w, httptest.NewRequest(http.MethodGet, u.String(), http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -277,10 +275,8 @@ func TestHandler_Search_POST(t *testing.T) {
 func TestHandler_Search_InvalidMethod(t *testing.T) {
 	handler := createTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/search", http.NoBody)
 	w := httptest.NewRecorder()
-
-	handler.Search()(w, req)
+	handler.Search()(w, httptest.NewRequest(http.MethodPut, "/api/search", http.NoBody))
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -312,10 +308,8 @@ func TestHandler_Health(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := createTestHandler(t)
 
-			req := httptest.NewRequest(tt.method, "/api/health", http.NoBody)
 			w := httptest.NewRecorder()
-
-			handler.Health()(w, req)
+			handler.Health()(w, httptest.NewRequest(tt.method, "/api/health", http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -377,10 +371,8 @@ func TestHandler_Metrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := createTestHandler(t)
 
-			req := httptest.NewRequest(tt.method, "/api/metrics", http.NoBody)
 			w := httptest.NewRecorder()
-
-			handler.Metrics()(w, req)
+			handler.Metrics()(w, httptest.NewRequest(tt.method, "/api/metrics", http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -433,10 +425,8 @@ func TestHandler_Static(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, http.NoBody)
 			w := httptest.NewRecorder()
-
-			handler.Static()(w, req)
+			handler.Static()(w, httptest.NewRequest(http.MethodGet, tt.path, http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -669,10 +659,8 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test health endpoint
 	t.Run("health check", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody)
 		w := httptest.NewRecorder()
-
-		handler.Health()(w, req)
+		handler.Health()(w, httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
@@ -688,10 +676,8 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test static endpoint
 	t.Run("static page", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		w := httptest.NewRecorder()
-
-		handler.Static()(w, req)
+		handler.Static()(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
@@ -704,10 +690,8 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test metrics endpoint
 	t.Run("metrics", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/metrics", http.NoBody)
 		w := httptest.NewRecorder()
-
-		handler.Metrics()(w, req)
+		handler.Metrics()(w, httptest.NewRequest(http.MethodGet, "/api/metrics", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
@@ -744,10 +728,8 @@ func BenchmarkHandler_Health(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody)
 		w := httptest.NewRecorder()
-
-		handler.Health()(w, req)
+		handler.Health()(w, httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			b.Fatalf("Expected successful health response, got status %d", w.Code)

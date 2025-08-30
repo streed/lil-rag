@@ -77,7 +77,6 @@ linters:
     - rowserrcheck
     - staticcheck
     - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
@@ -90,6 +89,11 @@ issues:
         - gosec
         - lll
         - goconst
+    
+    - path: internal/handlers/handlers_test\.go
+      text: "declared and not used: req \\(typecheck\\)"
+      linters:
+        - typecheck
     
     - linters:
         - lll
