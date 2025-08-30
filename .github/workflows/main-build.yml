@@ -7,6 +7,10 @@ on:
 env:
   GO_VERSION: '1.23'
 
+permissions:
+  contents: write  # Needed to push VERSION file changes
+  actions: read
+
 jobs:
   build-and-version:
     name: Build Cross-Platform Binaries
@@ -31,7 +35,7 @@ jobs:
     - name: Run tests
       run: go test -v ./...
 
-    - name: Read current version
+    - name: Read current version and increment
       id: version
       run: |
         CURRENT_VERSION=$(cat VERSION)
@@ -48,14 +52,20 @@ jobs:
         
         echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
         echo "$NEW_VERSION" > VERSION
+        
+        echo "Version incremented from $CURRENT_VERSION to $NEW_VERSION"
 
     - name: Commit version update
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add VERSION
-        git commit -m "Bump version to ${{ steps.version.outputs.new }}" || echo "No changes to commit"
-        git push
+        if git diff --staged --quiet; then
+          echo "No version changes to commit"
+        else
+          git commit -m "Bump version to ${{ steps.version.outputs.new }} [skip ci]"
+          git push
+        fi
 
     - name: Create release directory
       run: mkdir -p dist
@@ -140,3 +150,13 @@ jobs:
           dist/*.zip
           dist/checksums.txt
         retention-days: 30
+
+    - name: Display build summary
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "**Version:** ${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Platforms:** Linux (AMD64, ARM64), macOS (AMD64, ARM64), Windows (AMD64)" >> $GITHUB_STEP_SUMMARY
+        echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
+        ls -la dist/ >> $GITHUB_STEP_SUMMARY

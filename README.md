@@ -408,6 +408,12 @@ func main() {
 # Run tests
 make test
 
+# Build for current platform
+make build
+
+# Build for all platforms (Linux, macOS, Windows)
+make build-cross
+
 # Format code
 make fmt
 
@@ -419,6 +425,32 @@ make clean
 
 # Install binaries to $GOPATH/bin
 make install
+
+# Show current version
+make version
+```
+
+### Version Management
+
+The project uses semantic versioning stored in the `VERSION` file. When code is merged to the main branch, the build system automatically:
+
+1. **Increments the patch version** (e.g., 1.0.0 → 1.0.1)
+2. **Builds cross-platform binaries** for Linux, macOS, and Windows
+3. **Embeds the version** into the binaries at build time
+4. **Creates release archives** with checksums
+5. **Updates the VERSION file** in the repository
+
+### Cross-Platform Builds
+
+The CI/CD system builds binaries for:
+- **Linux**: AMD64, ARM64
+- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon)
+- **Windows**: AMD64
+
+All binaries include the version information and can be checked with:
+```bash
+./lil-rag --version
+./lil-rag-server --version
 ```
 
 ## 🏗️ Architecture

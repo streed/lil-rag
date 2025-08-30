@@ -209,11 +209,27 @@ Mini-RAG follows [Semantic Versioning](https://semver.org/):
 
 ### Creating Releases
 
-1. **Update version numbers** in relevant files
-2. **Update CHANGELOG.md** with release notes
-3. **Create git tag** with version number
-4. **Create GitHub release** with binaries
-5. **Update documentation** if needed
+The project uses an automated build system for releases:
+
+#### Automatic Builds (Main Branch)
+When code is merged to the `main` branch, the CI/CD system automatically:
+1. **Increments the patch version** in the `VERSION` file
+2. **Builds cross-platform binaries** (Linux, macOS, Windows)
+3. **Creates versioned archives** with checksums
+4. **Uploads build artifacts** to GitHub Actions
+
+#### Manual Releases (Tags)
+For official releases, create a Git tag:
+1. **Update CHANGELOG.md** with release notes
+2. **Create git tag** with version number (e.g., `v1.0.0`)
+3. **Push the tag** to trigger the release workflow
+4. **Create GitHub release** with binaries from the tag workflow
+
+#### Version Management
+- Version is stored in the `VERSION` file at the repository root
+- All binaries include embedded version information
+- Use `--version` flag to check binary version
+- Follow [Semantic Versioning](https://semver.org/) conventions
 
 ## 💡 Feature Development
 
