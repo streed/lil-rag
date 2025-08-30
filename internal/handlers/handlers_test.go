@@ -33,6 +33,7 @@ func TestNew(t *testing.T) {
 
 	if handler == nil {
 		t.Error("Expected non-nil handler")
+		return
 	}
 
 	if handler.rag != ragInstance {

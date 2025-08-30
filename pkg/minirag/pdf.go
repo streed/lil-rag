@@ -53,10 +53,7 @@ func (p *PDFParser) ParsePDF(filePath string) (*PDFDocument, error) {
 			continue
 		}
 
-		pageText, err := p.extractPageText(page)
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract text from page %d: %w", pageNum, err)
-		}
+		pageText := p.extractPageText(page)
 
 		wordCount := len(strings.Fields(pageText))
 
@@ -70,7 +67,7 @@ func (p *PDFParser) ParsePDF(filePath string) (*PDFDocument, error) {
 	return doc, nil
 }
 
-func (p *PDFParser) extractPageText(page pdf.Page) (string, error) {
+func (p *PDFParser) extractPageText(page pdf.Page) string {
 	var textBuilder strings.Builder
 
 	// Try to get text by rows first (better formatting)
@@ -83,7 +80,7 @@ func (p *PDFParser) extractPageText(page pdf.Page) (string, error) {
 			plainTextBuilder.WriteString(text.S)
 			plainTextBuilder.WriteString(" ")
 		}
-		return strings.TrimSpace(plainTextBuilder.String()), nil
+		return strings.TrimSpace(plainTextBuilder.String())
 	}
 
 	// Process rows and words
@@ -102,7 +99,7 @@ func (p *PDFParser) extractPageText(page pdf.Page) (string, error) {
 		}
 	}
 
-	return strings.TrimSpace(textBuilder.String()), nil
+	return strings.TrimSpace(textBuilder.String())
 }
 
 // GetPageID generates a chunk ID for a PDF page

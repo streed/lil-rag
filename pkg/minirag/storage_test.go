@@ -412,6 +412,10 @@ func TestSQLiteStorage_IndexChunks(t *testing.T) {
 		}{chunkID, index})
 	}
 
+	if err := rows.Err(); err != nil {
+		t.Errorf("Error iterating over rows: %v", err)
+	}
+
 	if len(storedChunks) != 2 {
 		t.Errorf("Expected 2 chunks, got %d", len(storedChunks))
 	}

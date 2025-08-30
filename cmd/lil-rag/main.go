@@ -263,13 +263,21 @@ func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
 		if err := defaultConfig.Save(); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		configPath, _ := config.GetProfileConfigPath()
-		fmt.Printf("Profile config initialized at: %s\n", configPath)
+		configPath, err := config.GetProfileConfigPath()
+		if err != nil {
+			fmt.Println("Profile config initialized successfully")
+		} else {
+			fmt.Printf("Profile config initialized at: %s\n", configPath)
+		}
 		return nil
 
 	case "show":
-		configPath, _ := config.GetProfileConfigPath()
-		fmt.Printf("Config file: %s\n", configPath)
+		configPath, err := config.GetProfileConfigPath()
+		if err != nil {
+			fmt.Printf("Config file: <error getting path: %v>\n", err)
+		} else {
+			fmt.Printf("Config file: %s\n", configPath)
+		}
 		fmt.Printf("Storage Path: %s\n", profileConfig.StoragePath)
 		fmt.Printf("Data Directory: %s\n", profileConfig.DataDir)
 		fmt.Printf("Ollama Endpoint: %s\n", profileConfig.Ollama.Endpoint)
@@ -398,7 +406,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
 		if response != "y" && response != "yes" {
-			fmt.Println("Operation cancelled.")
+			fmt.Println("Operation canceled.")
 			return nil
 		}
 	}

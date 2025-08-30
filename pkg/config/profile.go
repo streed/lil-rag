@@ -32,7 +32,11 @@ type ChunkConfig struct {
 }
 
 func DefaultProfile() *ProfileConfig {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to current directory if home directory cannot be determined
+		homeDir = "."
+	}
 	dataDir := filepath.Join(homeDir, ".lilrag", "data")
 
 	return &ProfileConfig{
@@ -74,10 +78,10 @@ func LoadProfile() (*ProfileConfig, error) {
 		return nil, err
 	}
 
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
 		config := DefaultProfile()
-		if err := config.Save(); err != nil {
-			return nil, fmt.Errorf("failed to create default config: %w", err)
+		if saveErr := config.Save(); saveErr != nil {
+			return nil, fmt.Errorf("failed to create default config: %w", saveErr)
 		}
 		return config, nil
 	}
@@ -105,8 +109,8 @@ func (p *ProfileConfig) Save() error {
 		return err
 	}
 
-	if err := p.ensureDirectories(); err != nil {
-		return err
+	if saveErr := p.ensureDirectories(); saveErr != nil {
+		return saveErr
 	}
 
 	data, err := json.MarshalIndent(p, "", "  ")

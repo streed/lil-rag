@@ -134,7 +134,11 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			// Log rollback error if needed, but don't override the main error
+		}
+	}()
 
 	// Compress original text for storage
 	compressedText, err := CompressText(text)
