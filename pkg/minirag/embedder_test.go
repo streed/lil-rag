@@ -217,7 +217,7 @@ func createMockOllamaServer(t *testing.T, responses map[string][]float32, errorR
 
 		if errorResponse {
 			w.WriteHeader(statusCode)
-			w.Write([]byte("Mock error response"))
+			_, _ = w.Write([]byte("Mock error response")) // Test mock, error intentionally ignored
 			return
 		}
 
@@ -231,7 +231,7 @@ func createMockOllamaServer(t *testing.T, responses map[string][]float32, errorR
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response) // Test mock, error intentionally ignored
 	}))
 }
 
@@ -335,7 +335,8 @@ func TestOllamaEmbedder_Embed_Caching(t *testing.T) {
 
 	// Verify cache stats
 	stats := embedder.GetCacheStats()
-	if stats["cache_size"].(int) != 1 {
+	cacheSize, ok := stats["cache_size"].(int)
+	if !ok || cacheSize != 1 {
 		t.Errorf("Expected cache size 1, got %v", stats["cache_size"])
 	}
 }
@@ -395,7 +396,10 @@ func TestOllamaEmbedder_EmbedQuery(t *testing.T) {
 }
 
 func TestOllamaEmbedder_preprocessQuery(t *testing.T) {
-	embedder, _ := NewOllamaEmbedder("http://localhost:11434", "test-model")
+	embedder, err := NewOllamaEmbedder("http://localhost:11434", "test-model")
+	if err != nil {
+		t.Fatalf("Failed to create embedder: %v", err)
+	}
 
 	tests := []struct {
 		name     string
@@ -482,12 +486,12 @@ func TestOllamaEmbedder_Error_Handling(t *testing.T) {
 
 func TestOllamaEmbedder_Timeout(t *testing.T) {
 	// Create a server that delays response
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		response := OllamaEmbedResponse{
 			Embedding: []float32{0.1, 0.2, 0.3},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response) // Test mock, error intentionally ignored
 	}))
 	defer server.Close()
 
@@ -508,18 +512,18 @@ func TestOllamaEmbedder_Timeout(t *testing.T) {
 
 func TestOllamaEmbedder_RetryLogic(t *testing.T) {
 	callCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		if callCount < 3 {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
+			_, _ = w.Write([]byte("Server error")) // Test mock, error intentionally ignored
 			return
 		}
 		// Succeed on third attempt
 		response := OllamaEmbedResponse{
 			Embedding: []float32{0.1, 0.2, 0.3},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response) // Test mock, error intentionally ignored
 	}))
 	defer server.Close()
 
@@ -553,7 +557,8 @@ func TestOllamaEmbedder_CacheManagement(t *testing.T) {
 
 	// Test initial cache stats
 	stats := embedder.GetCacheStats()
-	if stats["cache_size"].(int) != 0 {
+	cacheSize, ok := stats["cache_size"].(int)
+	if !ok || cacheSize != 0 {
 		t.Errorf("Expected initial cache size 0, got %v", stats["cache_size"])
 	}
 
@@ -570,7 +575,8 @@ func TestOllamaEmbedder_CacheManagement(t *testing.T) {
 
 	// Check cache size
 	stats = embedder.GetCacheStats()
-	if stats["cache_size"].(int) != 5 {
+	cacheSize, ok = stats["cache_size"].(int)
+	if !ok || cacheSize != 5 {
 		t.Errorf("Expected cache size 5, got %v", stats["cache_size"])
 	}
 
@@ -579,7 +585,8 @@ func TestOllamaEmbedder_CacheManagement(t *testing.T) {
 
 	// Check cache is empty
 	stats = embedder.GetCacheStats()
-	if stats["cache_size"].(int) != 0 {
+	cacheSize, ok = stats["cache_size"].(int)
+	if !ok || cacheSize != 0 {
 		t.Errorf("Expected cache size 0 after clear, got %v", stats["cache_size"])
 	}
 }
@@ -608,7 +615,8 @@ func TestOllamaEmbedder_CacheLRU(t *testing.T) {
 	}
 
 	stats := embedder.GetCacheStats()
-	if stats["cache_size"].(int) != 3 {
+	cacheSize, ok := stats["cache_size"].(int)
+	if !ok || cacheSize != 3 {
 		t.Errorf("Expected cache size 3, got %v", stats["cache_size"])
 	}
 
@@ -619,17 +627,18 @@ func TestOllamaEmbedder_CacheLRU(t *testing.T) {
 	}
 
 	stats = embedder.GetCacheStats()
-	if stats["cache_size"].(int) != 3 {
+	cacheSize, ok = stats["cache_size"].(int)
+	if !ok || cacheSize != 3 {
 		t.Errorf("Expected cache size to stay 3 after LRU, got %v", stats["cache_size"])
 	}
 }
 
 func TestOllamaEmbedder_EmptyEmbedding(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		response := OllamaEmbedResponse{
 			Embedding: []float32{}, // Empty embedding
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response) // Test mock, error intentionally ignored
 	}))
 	defer server.Close()
 
@@ -650,9 +659,9 @@ func TestOllamaEmbedder_EmptyEmbedding(t *testing.T) {
 }
 
 func TestOllamaEmbedder_InvalidJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json")) // Test mock, error intentionally ignored
 	}))
 	defer server.Close()
 
@@ -676,11 +685,14 @@ func BenchmarkOllamaEmbedder_Embed_WithCache(b *testing.B) {
 	}, false, http.StatusOK)
 	defer server.Close()
 
-	embedder, _ := NewOllamaEmbedder(server.URL, "test-model")
+	embedder, err := NewOllamaEmbedder(server.URL, "test-model")
+	if err != nil {
+		b.Fatalf("Failed to create embedder: %v", err)
+	}
 	ctx := context.Background()
 
 	// Prime the cache
-	embedder.Embed(ctx, "benchmark text")
+	_, _ = embedder.Embed(ctx, "benchmark text") // Prime call, error intentionally ignored
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -707,7 +719,10 @@ func BenchmarkTextPreprocessor_preprocess(b *testing.B) {
 }
 
 func BenchmarkOllamaEmbedder_preprocessQuery(b *testing.B) {
-	embedder, _ := NewOllamaEmbedder("http://localhost:11434", "test-model")
+	embedder, err := NewOllamaEmbedder("http://localhost:11434", "test-model")
+	if err != nil {
+		b.Fatalf("Failed to create embedder: %v", err)
+	}
 	query := "machine learning algorithms"
 	b.ResetTimer()
 

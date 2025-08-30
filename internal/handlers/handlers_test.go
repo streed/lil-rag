@@ -111,7 +111,10 @@ func TestHandler_Index_JSON(t *testing.T) {
 			if bodyStr, ok := tt.body.(string); ok {
 				body = strings.NewReader(bodyStr)
 			} else {
-				bodyBytes, _ := json.Marshal(tt.body)
+				bodyBytes, err := json.Marshal(tt.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal body: %v", err)
+				}
 				body = bytes.NewReader(bodyBytes)
 			}
 
@@ -173,7 +176,10 @@ func TestHandler_Search_GET(t *testing.T) {
 			handler := createTestHandler(t)
 
 			// Build URL with query parameters
-			u, _ := url.Parse("/api/search")
+			u, err := url.Parse("/api/search")
+			if err != nil {
+				t.Fatalf("Failed to parse URL: %v", err)
+			}
 			q := u.Query()
 			for key, value := range tt.queryParams {
 				q.Set(key, value)
@@ -243,7 +249,10 @@ func TestHandler_Search_POST(t *testing.T) {
 			if bodyStr, ok := tt.body.(string); ok {
 				body = strings.NewReader(bodyStr)
 			} else {
-				bodyBytes, _ := json.Marshal(tt.body)
+				bodyBytes, err := json.Marshal(tt.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal body: %v", err)
+				}
 				body = bytes.NewReader(bodyBytes)
 			}
 
@@ -483,7 +492,9 @@ func TestHandler_FileUpload(t *testing.T) {
 			setupForm: func() (*bytes.Buffer, string, error) {
 				var b bytes.Buffer
 				writer := multipart.NewWriter(&b)
-				writer.WriteField("id", "test-doc")
+				if err := writer.WriteField("id", "test-doc"); err != nil {
+					return nil, "", err
+				}
 				writer.Close()
 				return &b, writer.FormDataContentType(), nil
 			},
@@ -667,7 +678,9 @@ func TestHandler_BasicIntegration(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.NewDecoder(w.Body).Decode(&response)
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
 
 		if status, ok := response["status"]; !ok || status != "healthy" {
 			t.Error("Expected healthy status response")
@@ -698,7 +711,9 @@ func TestHandler_BasicIntegration(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.NewDecoder(w.Body).Decode(&response)
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
 
 		if _, ok := response["status"]; !ok {
 			t.Error("Expected status field in metrics response")

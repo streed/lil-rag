@@ -741,13 +741,13 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 	} else {
 		if chunkIndex, ok := metadata["chunk_index"]; !ok {
 			t.Error("Expected chunk_index in metadata")
-		} else if chunkIndex.(int) != 0 { // Should match first chunk (AI content)
+		} else if idx, ok := chunkIndex.(int); !ok || idx != 0 { // Should match first chunk (AI content)
 			t.Errorf("Expected chunk_index 0, got %v", chunkIndex)
 		}
 
 		if isChunk, ok := metadata["is_chunk"]; !ok {
 			t.Error("Expected is_chunk in metadata")
-		} else if !isChunk.(bool) {
+		} else if chunk, ok := isChunk.(bool); !ok || !chunk {
 			t.Error("Expected is_chunk to be true for multi-chunk document")
 		}
 	}

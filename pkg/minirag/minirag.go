@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+const (
+	// Default configuration values
+	DefaultOllamaURL = "http://localhost:11434"
+	DefaultModel     = "nomic-embed-text"
+)
+
 type MiniRag struct {
 	storage   Storage
 	embedder  Embedder
@@ -53,10 +59,10 @@ func New(config *Config) (*MiniRag, error) {
 		config.DatabasePath = "minirag.db"
 	}
 	if config.OllamaURL == "" {
-		config.OllamaURL = "http://localhost:11434"
+		config.OllamaURL = DefaultOllamaURL
 	}
 	if config.Model == "" {
-		config.Model = "nomic-embed-text"
+		config.Model = DefaultModel
 	}
 	if config.VectorSize == 0 {
 		config.VectorSize = 768

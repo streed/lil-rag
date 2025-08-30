@@ -73,7 +73,7 @@ func TestCompressText(t *testing.T) {
 			// For non-empty text, compressed data should be smaller than original (usually)
 			if !tt.expectNil && len(tt.text) > 100 && len(compressed) >= len(tt.text) {
 				t.Logf("Note: Compressed size (%d) >= original size (%d) for text: %s",
-					len(compressed), len(tt.text), tt.text[:min(50, len(tt.text))])
+					len(compressed), len(tt.text), tt.text[:minInt(50, len(tt.text))])
 				// This is not necessarily an error for small texts
 			}
 		})
@@ -559,7 +559,7 @@ func BenchmarkDecompressText_Large(b *testing.B) {
 }
 
 // Helper function for Go versions that don't have built-in min
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

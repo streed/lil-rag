@@ -32,7 +32,7 @@ func (m *MockStorage) Initialize() error {
 	return nil
 }
 
-func (m *MockStorage) Index(ctx context.Context, id string, text string, embedding []float32) error {
+func (m *MockStorage) Index(_ context.Context, id, text string, embedding []float32) error {
 	if !m.initialized {
 		return fmt.Errorf("storage not initialized")
 	}
@@ -41,7 +41,7 @@ func (m *MockStorage) Index(ctx context.Context, id string, text string, embeddi
 	return nil
 }
 
-func (m *MockStorage) IndexChunks(ctx context.Context, documentID string, text string, chunks []Chunk, embeddings [][]float32) error {
+func (m *MockStorage) IndexChunks(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32) error {
 	if !m.initialized {
 		return fmt.Errorf("storage not initialized")
 	}
@@ -57,7 +57,7 @@ func (m *MockStorage) IndexChunks(ctx context.Context, documentID string, text s
 	return nil
 }
 
-func (m *MockStorage) Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error) {
+func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]SearchResult, error) {
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
 	}
@@ -102,7 +102,7 @@ func NewMockEmbedder() *MockEmbedder {
 	}
 }
 
-func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (m *MockEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	if text == "" {
 		return nil, fmt.Errorf("empty text")
 	}
@@ -369,7 +369,7 @@ func TestMiniRag_Index_WithMocks(t *testing.T) {
 		config:   &Config{MaxTokens: 100},
 	}
 
-	err := miniRag.storage.Initialize()
+	err := miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize mock storage: %v", err)
 	}
@@ -420,7 +420,10 @@ func TestMiniRag_Index_WithMocks(t *testing.T) {
 
 			if !tt.expectError {
 				// Verify document was stored
-				mockStorage := miniRag.storage.(*MockStorage)
+				mockStorage, ok := miniRag.storage.(*MockStorage)
+				if !ok {
+					t.Fatal("Expected MockStorage")
+				}
 				if _, exists := mockStorage.documents[tt.id]; !exists {
 					t.Errorf("Document %s was not stored", tt.id)
 				}
@@ -447,7 +450,7 @@ func TestMiniRag_IndexFile(t *testing.T) {
 		config:    &Config{},
 	}
 
-	err = miniRag.storage.Initialize()
+	err = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize mock storage: %v", err)
 	}
@@ -506,7 +509,10 @@ func TestMiniRag_IndexFile(t *testing.T) {
 
 			if !tt.expectError {
 				// Verify document was stored
-				mockStorage := miniRag.storage.(*MockStorage)
+				mockStorage, ok := miniRag.storage.(*MockStorage)
+				if !ok {
+					t.Fatal("Expected MockStorage")
+				}
 				if storedText, exists := mockStorage.documents[tt.id]; !exists {
 					t.Errorf("Document %s was not stored", tt.id)
 				} else if storedText != textContent {
@@ -525,7 +531,7 @@ func TestMiniRag_Search(t *testing.T) {
 		config:   &Config{MaxTokens: 1000, Overlap: 200},
 	}
 
-	err := miniRag.storage.Initialize()
+	err := miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize mock storage: %v", err)
 	}
@@ -636,7 +642,7 @@ func TestMiniRag_Close(t *testing.T) {
 			name: "close with initialized storage",
 			setupRag: func() *MiniRag {
 				mockStorage := NewMockStorage()
-				mockStorage.Initialize()
+				_ = mockStorage.Initialize() // Test setup, error intentionally ignored
 				return &MiniRag{storage: mockStorage}
 			},
 			expectError: false,
@@ -707,7 +713,7 @@ func TestMiniRag_Integration(t *testing.T) {
 	mockStorage := NewMockStorage()
 	miniRag.storage = mockStorage
 
-	err = miniRag.storage.Initialize()
+	err = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize storage: %v", err)
 	}
@@ -840,7 +846,7 @@ func BenchmarkMiniRag_Index_Short(b *testing.B) {
 		chunker:  NewTextChunker(1000, 200),
 		config:   &Config{},
 	}
-	miniRag.storage.Initialize()
+	_ = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 
 	ctx := context.Background()
 	text := "This is a short text for benchmarking"
@@ -862,7 +868,7 @@ func BenchmarkMiniRag_Index_Long(b *testing.B) {
 		chunker:  NewTextChunker(100, 20), // Force chunking
 		config:   &Config{},
 	}
-	miniRag.storage.Initialize()
+	_ = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 
 	ctx := context.Background()
 	text := strings.Repeat("This is a long text that will be chunked for benchmarking. ", 50)
@@ -883,7 +889,7 @@ func BenchmarkMiniRag_Search(b *testing.B) {
 		embedder: NewMockEmbedder(),
 		config:   &Config{},
 	}
-	miniRag.storage.Initialize()
+	_ = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 
 	ctx := context.Background()
 
@@ -891,7 +897,7 @@ func BenchmarkMiniRag_Search(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		text := fmt.Sprintf("Document %d about various topics including machine learning", i)
 		id := fmt.Sprintf("doc-%d", i)
-		miniRag.Index(ctx, text, id)
+		_ = miniRag.Index(ctx, text, id) // Benchmark setup, error intentionally ignored
 	}
 
 	query := "machine learning"
