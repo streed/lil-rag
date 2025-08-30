@@ -34,7 +34,6 @@ type EmbedderMetrics struct {
 	CacheHits      int64
 	AverageLatency time.Duration
 	ErrorCount     int64
-	mutex          sync.RWMutex
 }
 
 type OllamaEmbedRequest struct {

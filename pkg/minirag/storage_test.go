@@ -381,10 +381,8 @@ func TestSQLiteStorage_IndexChunks(t *testing.T) {
 	err = storage.db.QueryRowContext(ctx, "SELECT id, chunk_count FROM documents WHERE id = ?", documentID).Scan(&storedDocID, &chunkCount)
 	if err != nil {
 		t.Errorf("Document not found in database: %v", err)
-	} else {
-		if chunkCount != 2 {
-			t.Errorf("Expected chunk count 2, got %d", chunkCount)
-		}
+	} else if chunkCount != 2 {
+		t.Errorf("Expected chunk count 2, got %d", chunkCount)
 	}
 
 	// Verify chunks were stored

@@ -99,7 +99,7 @@ func (m *MiniRag) Initialize() error {
 	return m.storage.Initialize()
 }
 
-func (m *MiniRag) Index(ctx context.Context, text string, id string) error {
+func (m *MiniRag) Index(ctx context.Context, text, id string) error {
 	if text == "" {
 		return fmt.Errorf("text cannot be empty")
 	}
@@ -144,7 +144,7 @@ func (m *MiniRag) Index(ctx context.Context, text string, id string) error {
 }
 
 // IndexPDF indexes a PDF file with page-based chunking
-func (m *MiniRag) IndexPDF(ctx context.Context, filePath string, id string) error {
+func (m *MiniRag) IndexPDF(ctx context.Context, filePath, id string) error {
 	if filePath == "" {
 		return fmt.Errorf("file path cannot be empty")
 	}
@@ -205,7 +205,7 @@ func (m *MiniRag) IndexPDF(ctx context.Context, filePath string, id string) erro
 }
 
 // IndexFile indexes a file, automatically detecting if it's a PDF or text file
-func (m *MiniRag) IndexFile(ctx context.Context, filePath string, id string) error {
+func (m *MiniRag) IndexFile(ctx context.Context, filePath, id string) error {
 	if IsPDFFile(filePath) {
 		return m.IndexPDF(ctx, filePath, id)
 	}

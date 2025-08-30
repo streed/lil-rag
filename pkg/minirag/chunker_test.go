@@ -177,7 +177,7 @@ func TestTextChunker_ChunkText_WithOverlap(t *testing.T) {
 	// Should have some overlap between consecutive chunks
 	// This is a basic check - the exact overlap depends on sentence structure
 	for i := 1; i < len(chunks); i++ {
-		if len(chunks[i].Text) == 0 {
+		if chunks[i].Text == "" {
 			t.Errorf("Chunk %d should not be empty", i)
 		}
 	}

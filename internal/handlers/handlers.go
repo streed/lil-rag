@@ -84,11 +84,14 @@ func (h *Handler) Index() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"id":      req.ID,
 			"message": fmt.Sprintf("Successfully indexed %d characters", len(req.Text)),
-		})
+		}); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
 	}
 }
 
@@ -156,7 +159,10 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 
 	response := SearchResponse{Results: results}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Log error but don't change response at this point
+		fmt.Printf("Error encoding response: %v\n", err)
+	}
 }
 
 func (h *Handler) Health() http.HandlerFunc {
@@ -167,11 +173,14 @@ func (h *Handler) Health() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":    "healthy",
 			"timestamp": time.Now().UTC(),
 			"version":   "1.0.0",
-		})
+		}); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
 	}
 }
 
@@ -194,7 +203,10 @@ func (h *Handler) Metrics() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(metrics)
+		if err := json.NewEncoder(w).Encode(metrics); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
 	}
 }
 
@@ -260,7 +272,8 @@ Content-Type: multipart/form-data</pre>
     </div>
 
     <h2>PDF Support</h2>
-    <p>PDF files are automatically chunked by page. Search results will show page numbers like <code>[Page 1]</code> to help you locate content within the document.</p>
+    <p>PDF files are automatically chunked by page. Search results will show page numbers like 
+    <code>[Page 1]</code> to help you locate content within the document.</p>
     
     <h2>Performance Features</h2>
     <p>The system includes several performance optimizations:</p>
@@ -274,7 +287,10 @@ Content-Type: multipart/form-data</pre>
 </html>`
 
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(html))
+		if _, err := w.Write([]byte(html)); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error writing response: %v\n", err)
+		}
 	}
 }
 
@@ -332,13 +348,16 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":  true,
 			"id":       id,
 			"type":     "pdf",
 			"filename": header.Filename,
 			"message":  fmt.Sprintf("Successfully indexed PDF file '%s'", header.Filename),
-		})
+		}); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
 	} else {
 		// Read as text file
 		content, err := os.ReadFile(tempFile.Name())
@@ -360,13 +379,16 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":  true,
 			"id":       id,
 			"type":     "text",
 			"filename": header.Filename,
 			"message":  fmt.Sprintf("Successfully indexed %d characters from '%s'", len(text), header.Filename),
-		})
+		}); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
 	}
 }
 
@@ -375,14 +397,17 @@ func isPDFFile(filename string) bool {
 	return ext == ".pdf" || ext == ".PDF"
 }
 
-func (h *Handler) writeError(w http.ResponseWriter, status int, error, message string) {
+func (h *Handler) writeError(w http.ResponseWriter, status int, errType, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	response := ErrorResponse{
-		Error:   error,
+		Error:   errType,
 		Message: message,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Log error but don't change response at this point
+		fmt.Printf("Error encoding error response: %v\n", err)
+	}
 }

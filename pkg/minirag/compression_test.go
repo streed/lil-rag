@@ -175,11 +175,9 @@ func TestDecompressText_InvalidData(t *testing.T) {
 				if result != "" {
 					t.Errorf("Expected empty string for empty data, got %q", result)
 				}
-			} else {
+			} else if err == nil {
 				// Invalid data should return error
-				if err == nil {
-					t.Error("Expected error for invalid data but got none")
-				}
+				t.Error("Expected error for invalid data but got none")
 			}
 		})
 	}
@@ -231,7 +229,7 @@ func TestCompressFile(t *testing.T) {
 			outputPath := filepath.Join(tempDir, "output.gz")
 
 			// Create input file
-			err := os.WriteFile(inputPath, []byte(tt.content), 0644)
+			err := os.WriteFile(inputPath, []byte(tt.content), 0o644)
 			if err != nil {
 				t.Fatalf("Failed to create input file: %v", err)
 			}
@@ -251,10 +249,8 @@ func TestCompressFile(t *testing.T) {
 				info, err := os.Stat(outputPath)
 				if err != nil {
 					t.Errorf("Output file doesn't exist: %v", err)
-				} else {
-					if tt.content == "" && info.Size() > 50 { // Gzip has some overhead even for empty files
-						t.Errorf("Expected small output file for empty input, got size %d", info.Size())
-					}
+				} else if tt.content == "" && info.Size() > 50 { // Gzip has some overhead even for empty files
+					t.Errorf("Expected small output file for empty input, got size %d", info.Size())
 				}
 
 				// Verify we can decompress it back
@@ -300,7 +296,9 @@ func TestCompressFile_InvalidPaths(t *testing.T) {
 
 	// Create valid input file for some tests
 	validInput := filepath.Join(tempDir, "input.txt")
-	os.WriteFile(validInput, []byte("test content"), 0644)
+	if err := os.WriteFile(validInput, []byte("test content"), 0o644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -329,7 +327,7 @@ func TestDecompressFile(t *testing.T) {
 	inputPath := filepath.Join(tempDir, "input.txt")
 	compressedPath := filepath.Join(tempDir, "compressed.gz")
 
-	err = os.WriteFile(inputPath, []byte(originalContent), 0644)
+	err = os.WriteFile(inputPath, []byte(originalContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create input file: %v", err)
 	}
@@ -530,7 +528,10 @@ func BenchmarkCompressText_Large(b *testing.B) {
 
 func BenchmarkDecompressText_Small(b *testing.B) {
 	text := "This is a small text for compression testing."
-	compressed, _ := CompressText(text)
+	compressed, err := CompressText(text)
+	if err != nil {
+		b.Fatalf("Failed to compress text: %v", err)
+	}
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -543,7 +544,10 @@ func BenchmarkDecompressText_Small(b *testing.B) {
 
 func BenchmarkDecompressText_Large(b *testing.B) {
 	text := strings.Repeat("This is a large text for compression testing. ", 1000)
-	compressed, _ := CompressText(text)
+	compressed, err := CompressText(text)
+	if err != nil {
+		b.Fatalf("Failed to compress text: %v", err)
+	}
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

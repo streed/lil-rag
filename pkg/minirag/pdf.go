@@ -108,7 +108,7 @@ func GetPDFPageID(documentID string, pageNumber int) string {
 }
 
 // ParsePDFWithPageChunks parses PDF and returns page-based chunks
-func (p *PDFParser) ParsePDFWithPageChunks(filePath, documentID string) ([]Chunk, error) {
+func (p *PDFParser) ParsePDFWithPageChunks(filePath, _ string) ([]Chunk, error) {
 	doc, err := p.ParsePDF(filePath)
 	if err != nil {
 		return nil, err

@@ -601,9 +601,9 @@ func TestOllamaEmbedder_CacheLRU(t *testing.T) {
 	// Fill cache to capacity
 	for i := 0; i < 3; i++ {
 		text := fmt.Sprintf("text %d", i)
-		_, err := embedder.Embed(ctx, text)
-		if err != nil {
-			t.Fatalf("Failed to embed text: %v", err)
+		_, embedErr := embedder.Embed(ctx, text)
+		if embedErr != nil {
+			t.Fatalf("Failed to embed text: %v", embedErr)
 		}
 	}
 

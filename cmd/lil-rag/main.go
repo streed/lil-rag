@@ -163,33 +163,18 @@ func handleIndex(ctx context.Context, rag *minirag.MiniRag, args []string) error
 			}
 			fmt.Printf("Successfully indexed PDF file '%s' with ID '%s'\n", input, id)
 			return nil
-		} else {
-			// Regular text file
-			text, err := readFromFile(input)
-			if err != nil {
-				return fmt.Errorf("failed to read from file: %w", err)
-			}
-
-			if strings.TrimSpace(text) == "" {
-				return fmt.Errorf("no text to index")
-			}
-
-			fmt.Printf("Indexing text file '%s' with ID '%s'...\n", input, id)
-			if err := rag.Index(ctx, text, id); err != nil {
-				return fmt.Errorf("failed to index: %w", err)
-			}
-
-			fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
-			return nil
 		}
-	} else {
-		// Treat as direct text input
-		text := input
+		// Regular text file
+		text, err := readFromFile(input)
+		if err != nil {
+			return fmt.Errorf("failed to read from file: %w", err)
+		}
+
 		if strings.TrimSpace(text) == "" {
 			return fmt.Errorf("no text to index")
 		}
 
-		fmt.Printf("Indexing text with ID '%s'...\n", id)
+		fmt.Printf("Indexing text file '%s' with ID '%s'...\n", input, id)
 		if err := rag.Index(ctx, text, id); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
@@ -197,6 +182,19 @@ func handleIndex(ctx context.Context, rag *minirag.MiniRag, args []string) error
 		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
 		return nil
 	}
+	// Treat as direct text input
+	text := input
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("no text to index")
+	}
+
+	fmt.Printf("Indexing text with ID '%s'...\n", id)
+	if err := rag.Index(ctx, text, id); err != nil {
+		return fmt.Errorf("failed to index: %w", err)
+	}
+
+	fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
+	return nil
 }
 
 func handleSearch(ctx context.Context, rag *minirag.MiniRag, args []string) error {

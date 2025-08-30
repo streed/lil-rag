@@ -180,7 +180,7 @@ func TestHandler_Search_GET(t *testing.T) {
 			}
 			u.RawQuery = q.Encode()
 
-			req := httptest.NewRequest(http.MethodGet, u.String(), nil)
+			req := httptest.NewRequest(http.MethodGet, u.String(), http.NoBody)
 			w := httptest.NewRecorder()
 
 			handler.Search()(w, req)
@@ -277,7 +277,7 @@ func TestHandler_Search_POST(t *testing.T) {
 func TestHandler_Search_InvalidMethod(t *testing.T) {
 	handler := createTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/search", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/search", http.NoBody)
 	w := httptest.NewRecorder()
 
 	handler.Search()(w, req)
@@ -312,7 +312,7 @@ func TestHandler_Health(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := createTestHandler(t)
 
-			req := httptest.NewRequest(tt.method, "/api/health", nil)
+			req := httptest.NewRequest(tt.method, "/api/health", http.NoBody)
 			w := httptest.NewRecorder()
 
 			handler.Health()(w, req)
@@ -377,7 +377,7 @@ func TestHandler_Metrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := createTestHandler(t)
 
-			req := httptest.NewRequest(tt.method, "/api/metrics", nil)
+			req := httptest.NewRequest(tt.method, "/api/metrics", http.NoBody)
 			w := httptest.NewRecorder()
 
 			handler.Metrics()(w, req)
@@ -433,7 +433,7 @@ func TestHandler_Static(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req := httptest.NewRequest(http.MethodGet, tt.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			handler.Static()(w, req)
@@ -468,7 +468,7 @@ func TestHandler_FileUpload(t *testing.T) {
 	// Create test files
 	txtFile := filepath.Join(tempDir, "test.txt")
 	txtContent := "This is test text content"
-	err := os.WriteFile(txtFile, []byte(txtContent), 0644)
+	err := os.WriteFile(txtFile, []byte(txtContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -669,7 +669,7 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test health endpoint
 	t.Run("health check", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody)
 		w := httptest.NewRecorder()
 
 		handler.Health()(w, req)
@@ -688,7 +688,7 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test static endpoint
 	t.Run("static page", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		w := httptest.NewRecorder()
 
 		handler.Static()(w, req)
@@ -704,7 +704,7 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test metrics endpoint
 	t.Run("metrics", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/metrics", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/metrics", http.NoBody)
 		w := httptest.NewRecorder()
 
 		handler.Metrics()(w, req)
@@ -744,7 +744,7 @@ func BenchmarkHandler_Health(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody)
 		w := httptest.NewRecorder()
 
 		handler.Health()(w, req)

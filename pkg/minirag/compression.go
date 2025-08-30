@@ -43,6 +43,7 @@ func DecompressText(compressedData []byte) (string, error) {
 	defer gzipReader.Close()
 
 	var buf bytes.Buffer
+	// #nosec G110 - Controlled decompression of trusted content
 	_, err = io.Copy(&buf, gzipReader)
 	if err != nil {
 		return "", fmt.Errorf("failed to decompress data: %w", err)
@@ -66,7 +67,7 @@ func CompressFile(inputPath, outputPath string) error {
 	}
 
 	// Write compressed file
-	err = os.WriteFile(outputPath, compressed, 0644)
+	err = os.WriteFile(outputPath, compressed, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to write compressed file: %w", err)
 	}

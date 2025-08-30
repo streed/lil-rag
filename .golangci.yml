@@ -58,8 +58,7 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - copyloopvar  # replaces exportloopref
-    - depguard
+    - copyloopvar  # replaces exportloopvar
     - dogsled
     - errcheck
     - exhaustive

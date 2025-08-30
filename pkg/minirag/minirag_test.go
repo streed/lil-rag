@@ -455,7 +455,7 @@ func TestMiniRag_IndexFile(t *testing.T) {
 	// Create test files
 	textFile := filepath.Join(tempDir, "test.txt")
 	textContent := "This is a test text file content for indexing."
-	err = os.WriteFile(textFile, []byte(textContent), 0644)
+	err = os.WriteFile(textFile, []byte(textContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test text file: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestMiniRag_Integration(t *testing.T) {
 	t.Run("index text file", func(t *testing.T) {
 		testFile := filepath.Join(tempDir, "test.txt")
 		fileContent := "This is test file content for integration testing."
-		err := os.WriteFile(testFile, []byte(fileContent), 0644)
+		err := os.WriteFile(testFile, []byte(fileContent), 0o644)
 		if err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
