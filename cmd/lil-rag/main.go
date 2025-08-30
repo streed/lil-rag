@@ -163,33 +163,18 @@ func handleIndex(ctx context.Context, rag *minirag.MiniRag, args []string) error
 			}
 			fmt.Printf("Successfully indexed PDF file '%s' with ID '%s'\n", input, id)
 			return nil
-		} else {
-			// Regular text file
-			text, err := readFromFile(input)
-			if err != nil {
-				return fmt.Errorf("failed to read from file: %w", err)
-			}
-
-			if strings.TrimSpace(text) == "" {
-				return fmt.Errorf("no text to index")
-			}
-
-			fmt.Printf("Indexing text file '%s' with ID '%s'...\n", input, id)
-			if err := rag.Index(ctx, text, id); err != nil {
-				return fmt.Errorf("failed to index: %w", err)
-			}
-
-			fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
-			return nil
 		}
-	} else {
-		// Treat as direct text input
-		text := input
+		// Regular text file
+		text, err := readFromFile(input)
+		if err != nil {
+			return fmt.Errorf("failed to read from file: %w", err)
+		}
+
 		if strings.TrimSpace(text) == "" {
 			return fmt.Errorf("no text to index")
 		}
 
-		fmt.Printf("Indexing text with ID '%s'...\n", id)
+		fmt.Printf("Indexing text file '%s' with ID '%s'...\n", input, id)
 		if err := rag.Index(ctx, text, id); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
@@ -197,6 +182,19 @@ func handleIndex(ctx context.Context, rag *minirag.MiniRag, args []string) error
 		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
 		return nil
 	}
+	// Treat as direct text input
+	text := input
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("no text to index")
+	}
+
+	fmt.Printf("Indexing text with ID '%s'...\n", id)
+	if err := rag.Index(ctx, text, id); err != nil {
+		return fmt.Errorf("failed to index: %w", err)
+	}
+
+	fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
+	return nil
 }
 
 func handleSearch(ctx context.Context, rag *minirag.MiniRag, args []string) error {
@@ -263,13 +261,21 @@ func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
 		if err := defaultConfig.Save(); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		configPath, _ := config.GetProfileConfigPath()
-		fmt.Printf("Profile config initialized at: %s\n", configPath)
+		configPath, err := config.GetProfileConfigPath()
+		if err != nil {
+			fmt.Println("Profile config initialized successfully")
+		} else {
+			fmt.Printf("Profile config initialized at: %s\n", configPath)
+		}
 		return nil
 
 	case "show":
-		configPath, _ := config.GetProfileConfigPath()
-		fmt.Printf("Config file: %s\n", configPath)
+		configPath, err := config.GetProfileConfigPath()
+		if err != nil {
+			fmt.Printf("Config file: <error getting path: %v>\n", err)
+		} else {
+			fmt.Printf("Config file: %s\n", configPath)
+		}
 		fmt.Printf("Storage Path: %s\n", profileConfig.StoragePath)
 		fmt.Printf("Data Directory: %s\n", profileConfig.DataDir)
 		fmt.Printf("Ollama Endpoint: %s\n", profileConfig.Ollama.Endpoint)
@@ -398,7 +404,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
 		if response != "y" && response != "yes" {
-			fmt.Println("Operation cancelled.")
+			fmt.Println("Operation canceled.")
 			return nil
 		}
 	}

@@ -10,10 +10,10 @@ import (
 
 func TestCompressText(t *testing.T) {
 	tests := []struct {
-		name         string
-		text         string
-		expectError  bool
-		expectNil    bool
+		name        string
+		text        string
+		expectError bool
+		expectNil   bool
 	}{
 		{
 			name:        "empty string",
@@ -72,8 +72,8 @@ func TestCompressText(t *testing.T) {
 
 			// For non-empty text, compressed data should be smaller than original (usually)
 			if !tt.expectNil && len(tt.text) > 100 && len(compressed) >= len(tt.text) {
-				t.Logf("Note: Compressed size (%d) >= original size (%d) for text: %s", 
-					len(compressed), len(tt.text), tt.text[:min(50, len(tt.text))])
+				t.Logf("Note: Compressed size (%d) >= original size (%d) for text: %s",
+					len(compressed), len(tt.text), tt.text[:minInt(50, len(tt.text))])
 				// This is not necessarily an error for small texts
 			}
 		})
@@ -82,9 +82,9 @@ func TestCompressText(t *testing.T) {
 
 func TestDecompressText(t *testing.T) {
 	tests := []struct {
-		name          string
-		originalText  string
-		expectError   bool
+		name         string
+		originalText string
+		expectError  bool
 	}{
 		{
 			name:         "empty string",
@@ -137,7 +137,7 @@ func TestDecompressText(t *testing.T) {
 			}
 
 			if decompressed != tt.originalText {
-				t.Errorf("Decompressed text doesn't match original:\nOriginal:    %q\nDecompressed: %q", 
+				t.Errorf("Decompressed text doesn't match original:\nOriginal:    %q\nDecompressed: %q",
 					tt.originalText, decompressed)
 			}
 		})
@@ -175,11 +175,9 @@ func TestDecompressText_InvalidData(t *testing.T) {
 				if result != "" {
 					t.Errorf("Expected empty string for empty data, got %q", result)
 				}
-			} else {
+			} else if err == nil {
 				// Invalid data should return error
-				if err == nil {
-					t.Error("Expected error for invalid data but got none")
-				}
+				t.Error("Expected error for invalid data but got none")
 			}
 		})
 	}
@@ -231,7 +229,7 @@ func TestCompressFile(t *testing.T) {
 			outputPath := filepath.Join(tempDir, "output.gz")
 
 			// Create input file
-			err := os.WriteFile(inputPath, []byte(tt.content), 0644)
+			err := os.WriteFile(inputPath, []byte(tt.content), 0o644)
 			if err != nil {
 				t.Fatalf("Failed to create input file: %v", err)
 			}
@@ -251,10 +249,8 @@ func TestCompressFile(t *testing.T) {
 				info, err := os.Stat(outputPath)
 				if err != nil {
 					t.Errorf("Output file doesn't exist: %v", err)
-				} else {
-					if tt.content == "" && info.Size() > 50 { // Gzip has some overhead even for empty files
-						t.Errorf("Expected small output file for empty input, got size %d", info.Size())
-					}
+				} else if tt.content == "" && info.Size() > 50 { // Gzip has some overhead even for empty files
+					t.Errorf("Expected small output file for empty input, got size %d", info.Size())
 				}
 
 				// Verify we can decompress it back
@@ -262,7 +258,7 @@ func TestCompressFile(t *testing.T) {
 				if err != nil {
 					t.Errorf("Failed to decompress file: %v", err)
 				} else if string(decompressed) != tt.content {
-					t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q", 
+					t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q",
 						tt.content, string(decompressed))
 				}
 			}
@@ -300,7 +296,9 @@ func TestCompressFile_InvalidPaths(t *testing.T) {
 
 	// Create valid input file for some tests
 	validInput := filepath.Join(tempDir, "input.txt")
-	os.WriteFile(validInput, []byte("test content"), 0644)
+	if err := os.WriteFile(validInput, []byte("test content"), 0o644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -324,12 +322,12 @@ func TestDecompressFile(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	originalContent := "This is test content for file decompression testing."
-	
+
 	// Create and compress a test file
 	inputPath := filepath.Join(tempDir, "input.txt")
 	compressedPath := filepath.Join(tempDir, "compressed.gz")
 
-	err = os.WriteFile(inputPath, []byte(originalContent), 0644)
+	err = os.WriteFile(inputPath, []byte(originalContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create input file: %v", err)
 	}
@@ -346,7 +344,7 @@ func TestDecompressFile(t *testing.T) {
 	}
 
 	if string(decompressed) != originalContent {
-		t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q", 
+		t.Errorf("Decompressed content doesn't match original:\nOriginal:    %q\nDecompressed: %q",
 			originalContent, string(decompressed))
 	}
 }
@@ -421,7 +419,7 @@ func TestGetCompressionRatio(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ratio := GetCompressionRatio(tt.originalSize, tt.compressedSize)
 			if ratio != tt.expected {
-				t.Errorf("GetCompressionRatio(%d, %d) = %.2f, want %.2f", 
+				t.Errorf("GetCompressionRatio(%d, %d) = %.2f, want %.2f",
 					tt.originalSize, tt.compressedSize, ratio, tt.expected)
 			}
 		})
@@ -485,7 +483,7 @@ func main() {
 			originalSize := len(tt.data)
 			compressedSize := len(compressed)
 			ratio := GetCompressionRatio(originalSize, compressedSize)
-			t.Logf("Compression ratio: %.1f%% (original: %d bytes, compressed: %d bytes)", 
+			t.Logf("Compression ratio: %.1f%% (original: %d bytes, compressed: %d bytes)",
 				ratio, originalSize, compressedSize)
 		})
 	}
@@ -530,7 +528,10 @@ func BenchmarkCompressText_Large(b *testing.B) {
 
 func BenchmarkDecompressText_Small(b *testing.B) {
 	text := "This is a small text for compression testing."
-	compressed, _ := CompressText(text)
+	compressed, err := CompressText(text)
+	if err != nil {
+		b.Fatalf("Failed to compress text: %v", err)
+	}
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -543,7 +544,10 @@ func BenchmarkDecompressText_Small(b *testing.B) {
 
 func BenchmarkDecompressText_Large(b *testing.B) {
 	text := strings.Repeat("This is a large text for compression testing. ", 1000)
-	compressed, _ := CompressText(text)
+	compressed, err := CompressText(text)
+	if err != nil {
+		b.Fatalf("Failed to compress text: %v", err)
+	}
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -555,7 +559,7 @@ func BenchmarkDecompressText_Large(b *testing.B) {
 }
 
 // Helper function for Go versions that don't have built-in min
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

@@ -28,11 +28,12 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create MiniRag: %v", err)
 	}
-	
+
 	handler := New(ragInstance)
 
 	if handler == nil {
 		t.Error("Expected non-nil handler")
+		return
 	}
 
 	if handler.rag != ragInstance {
@@ -48,12 +49,12 @@ func createTestHandler(t *testing.T) *Handler {
 		MaxTokens:    100,
 		Overlap:      20,
 	}
-	
+
 	ragInstance, err := minirag.New(config)
 	if err != nil {
 		t.Fatalf("Failed to create MiniRag: %v", err)
 	}
-	
+
 	return New(ragInstance)
 }
 
@@ -110,7 +111,10 @@ func TestHandler_Index_JSON(t *testing.T) {
 			if bodyStr, ok := tt.body.(string); ok {
 				body = strings.NewReader(bodyStr)
 			} else {
-				bodyBytes, _ := json.Marshal(tt.body)
+				bodyBytes, err := json.Marshal(tt.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal body: %v", err)
+				}
 				body = bytes.NewReader(bodyBytes)
 			}
 
@@ -172,17 +176,18 @@ func TestHandler_Search_GET(t *testing.T) {
 			handler := createTestHandler(t)
 
 			// Build URL with query parameters
-			u, _ := url.Parse("/api/search")
+			u, err := url.Parse("/api/search")
+			if err != nil {
+				t.Fatalf("Failed to parse URL: %v", err)
+			}
 			q := u.Query()
 			for key, value := range tt.queryParams {
 				q.Set(key, value)
 			}
 			u.RawQuery = q.Encode()
 
-			req := httptest.NewRequest(http.MethodGet, u.String(), nil)
 			w := httptest.NewRecorder()
-
-			handler.Search()(w, req)
+			handler.Search()(w, httptest.NewRequest(http.MethodGet, u.String(), http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -244,7 +249,10 @@ func TestHandler_Search_POST(t *testing.T) {
 			if bodyStr, ok := tt.body.(string); ok {
 				body = strings.NewReader(bodyStr)
 			} else {
-				bodyBytes, _ := json.Marshal(tt.body)
+				bodyBytes, err := json.Marshal(tt.body)
+				if err != nil {
+					t.Fatalf("Failed to marshal body: %v", err)
+				}
 				body = bytes.NewReader(bodyBytes)
 			}
 
@@ -276,10 +284,8 @@ func TestHandler_Search_POST(t *testing.T) {
 func TestHandler_Search_InvalidMethod(t *testing.T) {
 	handler := createTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/search", nil)
 	w := httptest.NewRecorder()
-
-	handler.Search()(w, req)
+	handler.Search()(w, httptest.NewRequest(http.MethodPut, "/api/search", http.NoBody))
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
@@ -311,10 +317,8 @@ func TestHandler_Health(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := createTestHandler(t)
 
-			req := httptest.NewRequest(tt.method, "/api/health", nil)
 			w := httptest.NewRecorder()
-
-			handler.Health()(w, req)
+			handler.Health()(w, httptest.NewRequest(tt.method, "/api/health", http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -376,10 +380,8 @@ func TestHandler_Metrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := createTestHandler(t)
 
-			req := httptest.NewRequest(tt.method, "/api/metrics", nil)
 			w := httptest.NewRecorder()
-
-			handler.Metrics()(w, req)
+			handler.Metrics()(w, httptest.NewRequest(tt.method, "/api/metrics", http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -432,10 +434,8 @@ func TestHandler_Static(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			w := httptest.NewRecorder()
-
-			handler.Static()(w, req)
+			handler.Static()(w, httptest.NewRequest(http.MethodGet, tt.path, http.NoBody))
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -467,7 +467,7 @@ func TestHandler_FileUpload(t *testing.T) {
 	// Create test files
 	txtFile := filepath.Join(tempDir, "test.txt")
 	txtContent := "This is test text content"
-	err := os.WriteFile(txtFile, []byte(txtContent), 0644)
+	err := os.WriteFile(txtFile, []byte(txtContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -492,7 +492,9 @@ func TestHandler_FileUpload(t *testing.T) {
 			setupForm: func() (*bytes.Buffer, string, error) {
 				var b bytes.Buffer
 				writer := multipart.NewWriter(&b)
-				writer.WriteField("id", "test-doc")
+				if err := writer.WriteField("id", "test-doc"); err != nil {
+					return nil, "", err
+				}
 				writer.Close()
 				return &b, writer.FormDataContentType(), nil
 			},
@@ -668,17 +670,17 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test health endpoint
 	t.Run("health check", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 		w := httptest.NewRecorder()
-
-		handler.Health()(w, req)
+		handler.Health()(w, httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 		}
 
 		var response map[string]interface{}
-		json.NewDecoder(w.Body).Decode(&response)
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
 
 		if status, ok := response["status"]; !ok || status != "healthy" {
 			t.Error("Expected healthy status response")
@@ -687,10 +689,8 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test static endpoint
 	t.Run("static page", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
-
-		handler.Static()(w, req)
+		handler.Static()(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
@@ -703,17 +703,17 @@ func TestHandler_BasicIntegration(t *testing.T) {
 
 	// Test metrics endpoint
 	t.Run("metrics", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/metrics", nil)
 		w := httptest.NewRecorder()
-
-		handler.Metrics()(w, req)
+		handler.Metrics()(w, httptest.NewRequest(http.MethodGet, "/api/metrics", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 		}
 
 		var response map[string]interface{}
-		json.NewDecoder(w.Body).Decode(&response)
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
 
 		if _, ok := response["status"]; !ok {
 			t.Error("Expected status field in metrics response")
@@ -743,10 +743,8 @@ func BenchmarkHandler_Health(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 		w := httptest.NewRecorder()
-
-		handler.Health()(w, req)
+		handler.Health()(w, httptest.NewRequest(http.MethodGet, "/api/health", http.NoBody))
 
 		if w.Code != http.StatusOK {
 			b.Fatalf("Expected successful health response, got status %d", w.Code)

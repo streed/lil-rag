@@ -34,7 +34,6 @@ type EmbedderMetrics struct {
 	CacheHits      int64
 	AverageLatency time.Duration
 	ErrorCount     int64
-	mutex          sync.RWMutex
 }
 
 type OllamaEmbedRequest struct {
@@ -97,10 +96,10 @@ func (tp *TextPreprocessor) preprocess(text string) string {
 		// Match leading spaces, internal whitespace, and trailing spaces separately
 		leadingSpaces := regexp.MustCompile(`^\s*`).FindString(text)
 		trailingSpaces := regexp.MustCompile(`\s*$`).FindString(text)
-		
+
 		// Normalize internal whitespace only
 		text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
-		
+
 		// If we're not removing extra spaces, restore the original leading/trailing patterns
 		if !tp.removeExtraSpaces {
 			if leadingSpaces != "" {
@@ -180,7 +179,10 @@ func (o *OllamaEmbedder) embedDirect(ctx context.Context, text string) ([]float3
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("ollama API returned status %d and failed to read error response: %w", resp.StatusCode, err)
+		}
 		return nil, fmt.Errorf("ollama API returned status %d: %s", resp.StatusCode, string(body))
 	}
 

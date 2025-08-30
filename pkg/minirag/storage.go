@@ -13,7 +13,7 @@ import (
 	"time"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // Register SQLite3 driver
 )
 
 type SQLiteStorage struct {
@@ -24,7 +24,7 @@ type SQLiteStorage struct {
 }
 
 func NewSQLiteStorage(path string, vectorSize int, dataDir string) (*SQLiteStorage, error) {
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
@@ -115,11 +115,12 @@ func (s *SQLiteStorage) createTables() error {
 }
 
 // IndexChunks indexes a document with its chunks and embeddings
-func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text string, chunks []Chunk, embeddings [][]float32) error {
+func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string,
+	chunks []Chunk, embeddings [][]float32) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
 	}
-	
+
 	if len(chunks) != len(embeddings) {
 		return fmt.Errorf("chunk count (%d) doesn't match embedding count (%d)", len(chunks), len(embeddings))
 	}
@@ -134,7 +135,12 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			// Log rollback error if needed, but don't override the main error
+			fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+		}
+	}()
 
 	// Compress original text for storage
 	compressedText, err := CompressText(text)
@@ -169,6 +175,10 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text
 		// Insert chunk with page metadata
 		pageNumber := sql.NullInt32{}
 		if chunk.PageNumber != nil {
+			if *chunk.PageNumber > 2147483647 { // Max int32 value
+				return fmt.Errorf("page number %d exceeds maximum allowed value", *chunk.PageNumber)
+			}
+			// #nosec G115 - Page number range already validated above
 			pageNumber.Int32 = int32(*chunk.PageNumber)
 			pageNumber.Valid = true
 		}
@@ -185,9 +195,11 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text
 		}
 
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO chunks (chunk_id, document_id, chunk_index, chunk_text_compressed, start_pos, end_pos, token_count, page_number, chunk_type) 
+			INSERT INTO chunks (chunk_id, document_id, chunk_index, chunk_text_compressed, 
+			                   start_pos, end_pos, token_count, page_number, chunk_type) 
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, chunkID, documentID, chunk.Index, compressedChunkText, chunk.StartPos, chunk.EndPos, chunk.TokenCount, pageNumber, chunkType)
+		`, chunkID, documentID, chunk.Index, compressedChunkText, chunk.StartPos, chunk.EndPos,
+			chunk.TokenCount, pageNumber, chunkType)
 		if err != nil {
 			return fmt.Errorf("failed to insert chunk %d: %w", i, err)
 		}
@@ -210,7 +222,7 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID string, text
 }
 
 // Index maintains backward compatibility for single-text indexing
-func (s *SQLiteStorage) Index(ctx context.Context, id string, text string, embedding []float32) error {
+func (s *SQLiteStorage) Index(ctx context.Context, id, text string, embedding []float32) error {
 	// Create a single chunk for backward compatibility
 	chunk := Chunk{
 		Text:       text,
@@ -240,7 +252,7 @@ func (s *SQLiteStorage) storeContent(id, text, contentHash string) (string, erro
 		return "", fmt.Errorf("failed to compress content: %w", err)
 	}
 
-	if err := os.WriteFile(filePath, compressedText, 0644); err != nil {
+	if err := os.WriteFile(filePath, compressedText, 0o600); err != nil {
 		return "", fmt.Errorf("failed to write compressed content file: %w", err)
 	}
 
@@ -251,11 +263,11 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 	if s.db == nil {
 		return nil, fmt.Errorf("storage not initialized - call Initialize() first")
 	}
-	
+
 	if len(embedding) == 0 {
 		return nil, fmt.Errorf("embedding cannot be empty")
 	}
-	
+
 	embeddingJSON, err := json.Marshal(embedding)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal query embedding: %w", err)
@@ -298,7 +310,8 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		var chunkType string
 		var filePath sql.NullString
 
-		if err := rows.Scan(&result.ID, &compressedChunkText, &chunkIndex, &pageNumber, &chunkType, &compressedOriginalText, &filePath, &distance); err != nil {
+		if err := rows.Scan(&result.ID, &compressedChunkText, &chunkIndex, &pageNumber,
+			&chunkType, &compressedOriginalText, &filePath, &distance); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 func TestDefault(t *testing.T) {
@@ -105,7 +105,7 @@ func TestLoad_JSONFile(t *testing.T) {
 		t.Fatalf("Failed to marshal test config: %v", err)
 	}
 
-	err = os.WriteFile(configPath, data, 0644)
+	err = os.WriteFile(configPath, data, 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
@@ -152,7 +152,7 @@ chunking:
 `
 
 	configPath := filepath.Join(tempDir, "config.yaml")
-	err = os.WriteFile(configPath, []byte(yamlContent), 0644)
+	err = os.WriteFile(configPath, []byte(yamlContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test YAML config: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestLoad_UnsupportedFormat(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	configPath := filepath.Join(tempDir, "config.txt")
-	err = os.WriteFile(configPath, []byte("test content"), 0644)
+	err = os.WriteFile(configPath, []byte("test content"), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	configPath := filepath.Join(tempDir, "config.json")
-	err = os.WriteFile(configPath, []byte("invalid json"), 0644)
+	err = os.WriteFile(configPath, []byte("invalid json"), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write invalid JSON: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestLoad_InvalidYAML(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	configPath := filepath.Join(tempDir, "config.yaml")
-	err = os.WriteFile(configPath, []byte("invalid: yaml: content: ["), 0644)
+	err = os.WriteFile(configPath, []byte("invalid: yaml: content: ["), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write invalid YAML: %v", err)
 	}

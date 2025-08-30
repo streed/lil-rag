@@ -177,7 +177,7 @@ func TestTextChunker_ChunkText_WithOverlap(t *testing.T) {
 	// Should have some overlap between consecutive chunks
 	// This is a basic check - the exact overlap depends on sentence structure
 	for i := 1; i < len(chunks); i++ {
-		if len(chunks[i].Text) == 0 {
+		if chunks[i].Text == "" {
 			t.Errorf("Chunk %d should not be empty", i)
 		}
 	}
@@ -247,34 +247,34 @@ func TestTextChunker_getOverlapText(t *testing.T) {
 	sentences := []string{"First sentence", "Second sentence", "Third sentence", "Fourth sentence"}
 
 	tests := []struct {
-		name         string
-		currentIndex int
+		name          string
+		currentIndex  int
 		overlapTokens int
-		expected     string
+		expected      string
 	}{
 		{
-			name:         "no overlap at start",
-			currentIndex: 0,
+			name:          "no overlap at start",
+			currentIndex:  0,
 			overlapTokens: 2,
-			expected:     "",
+			expected:      "",
 		},
 		{
-			name:         "zero overlap tokens",
-			currentIndex: 2,
+			name:          "zero overlap tokens",
+			currentIndex:  2,
 			overlapTokens: 0,
-			expected:     "",
+			expected:      "",
 		},
 		{
-			name:         "single sentence overlap",
-			currentIndex: 2,
+			name:          "single sentence overlap",
+			currentIndex:  2,
 			overlapTokens: 2,
-			expected:     "Second sentence",
+			expected:      "Second sentence",
 		},
 		{
-			name:         "multiple sentence overlap",
-			currentIndex: 3,
+			name:          "multiple sentence overlap",
+			currentIndex:  3,
 			overlapTokens: 4,
-			expected:     "Second sentence Third sentence",
+			expected:      "Second sentence Third sentence",
 		},
 	}
 
@@ -292,7 +292,7 @@ func TestTextChunker_findStartPosition(t *testing.T) {
 	chunker := NewTextChunker(100, 20)
 
 	text := "This is a test sentence. This is another sentence."
-	
+
 	tests := []struct {
 		name     string
 		sentence string
@@ -366,7 +366,7 @@ func TestTextChunker_splitLongChunkByWords(t *testing.T) {
 	reconstructedWords := strings.Fields(allText.String())
 
 	if len(reconstructedWords) < len(originalWords)-2 { // Allow some variation due to overlap
-		t.Errorf("Lost too many words during splitting: original %d, reconstructed %d", 
+		t.Errorf("Lost too many words during splitting: original %d, reconstructed %d",
 			len(originalWords), len(reconstructedWords))
 	}
 }
@@ -395,10 +395,10 @@ func TestTextChunker_splitLongChunkByWords_ShortChunk(t *testing.T) {
 
 func TestGetChunkID(t *testing.T) {
 	tests := []struct {
-		name        string
-		documentID  string
-		chunkIndex  int
-		expected    string
+		name       string
+		documentID string
+		chunkIndex int
+		expected   string
 	}{
 		{
 			name:       "first chunk",

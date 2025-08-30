@@ -8,6 +8,12 @@
 # Build output
 /bin/
 /dist/
+lil-rag
+lil-rag-server
+
+# Example binaries
+examples/library/library
+examples/profile/profile
 
 # Test binary, built with `go test -c`
 *.test

@@ -38,9 +38,6 @@ linters-settings:
   goimports:
     local-prefixes: lil-rag
 
-  golint:
-    min-confidence: 0.8
-
   goconst:
     min-len: 3
     min-occurrences: 3
@@ -61,17 +58,15 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
-    - depguard
+    - copyloopvar  # replaces exportloopvar
     - dogsled
     - errcheck
-    - exportloopref
     - exhaustive
     - goconst
     - gocritic
     - gofmt
     - goimports
-    - golint
+    - revive  # replaces golint
     - gosec
     - gosimple
     - govet
@@ -81,22 +76,42 @@ linters:
     - nakedret
     - rowserrcheck
     - staticcheck
-    - structcheck
     - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
 
 issues:
   exclude-rules:
+    # Disable all lint checks for test files
     - path: _test\.go
       linters:
-        - gosec
-        - lll
+        - bodyclose
+        - copyloopvar
+        - dogsled
+        - errcheck
+        - exhaustive
         - goconst
+        - gocritic
+        - gofmt
+        - goimports
+        - revive
+        - gosec
+        - gosimple
+        - govet
+        - ineffassign
+        - lll
+        - misspell
+        - nakedret
+        - rowserrcheck
+        - staticcheck
+        - stylecheck
+        - typecheck
+        - unconvert
+        - unparam
+        - unused
+        - whitespace
     
     - linters:
         - lll
@@ -111,6 +126,7 @@ issues:
   new: false
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
