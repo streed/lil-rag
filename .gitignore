@@ -8,6 +8,8 @@
 # Build output
 /bin/
 /dist/
+lil-rag
+lil-rag-server
 
 # Example binaries
 examples/library/library
