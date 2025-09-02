@@ -65,6 +65,15 @@ func createTestHandler(t *testing.T) *Handler {
 		t.Fatalf("Failed to create MiniRag: %v", err)
 	}
 
+	// Try to initialize the MiniRag instance
+	if err := ragInstance.Initialize(); err != nil {
+		// If sqlite-vec is not available, skip tests that require real functionality
+		if strings.Contains(err.Error(), "sqlite-vec extension not available") {
+			t.Skip("Skipping test: sqlite-vec extension not available")
+		}
+		t.Fatalf("Failed to initialize MiniRag: %v", err)
+	}
+
 	return New(ragInstance)
 }
 
@@ -84,11 +93,11 @@ func TestHandler_Index_JSON(t *testing.T) {
 			expectError:    true,
 		},
 		{
-			name:           "missing ID",
+			name:           "auto-generated ID (missing ID in request)",
 			method:         http.MethodPost,
 			body:           IndexRequest{Text: "Test content"},
-			expectedStatus: http.StatusBadRequest,
-			expectError:    true,
+			expectedStatus: http.StatusCreated,
+			expectError:    false,
 		},
 		{
 			name:           "missing text",
@@ -135,7 +144,15 @@ func TestHandler_Index_JSON(t *testing.T) {
 			handler.Index()(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+				// If we got a 500 error due to Ollama connection, check if it's the expected error
+				if w.Code == 500 && tt.expectedStatus == 201 {
+					responseBody := w.Body.String()
+					if (strings.Contains(responseBody, "connection refused") && strings.Contains(responseBody, "11434")) ||
+						strings.Contains(responseBody, "context deadline exceeded") {
+						t.Skipf("Skipping test due to Ollama connection error (expected in test environment): %s", responseBody)
+					}
+				}
+				t.Errorf("Expected status %d, got %d. Response body: %s", tt.expectedStatus, w.Code, w.Body.String())
 			}
 
 			// Check response content type
@@ -490,12 +507,13 @@ func TestHandler_FileUpload(t *testing.T) {
 		expectedType   string
 	}{
 		{
-			name: "missing ID",
+			name: "auto-generated ID (missing ID in form)",
 			setupForm: func() (*bytes.Buffer, string, error) {
 				return createMultipartFormWithoutID(txtFile, txtContent)
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectError:    true,
+			expectedStatus: http.StatusCreated,
+			expectError:    false,
+			expectedType:   "text",
 		},
 		{
 			name: "missing file",
@@ -542,7 +560,15 @@ func TestHandler_FileUpload(t *testing.T) {
 			handler.Index()(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+				// If we got a 500 error due to Ollama connection, check if it's the expected error
+				if w.Code == 500 && tt.expectedStatus == 201 {
+					responseBody := w.Body.String()
+					if (strings.Contains(responseBody, "connection refused") && strings.Contains(responseBody, "11434")) ||
+						strings.Contains(responseBody, "context deadline exceeded") {
+						t.Skipf("Skipping test due to Ollama connection error (expected in test environment): %s", responseBody)
+					}
+				}
+				t.Errorf("Expected status %d, got %d. Response body: %s", tt.expectedStatus, w.Code, w.Body.String())
 			}
 
 			// Check response content type

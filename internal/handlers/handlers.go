@@ -69,9 +69,9 @@ func (h *Handler) Index() http.HandlerFunc {
 			return
 		}
 
+		// Generate ID if not provided
 		if req.ID == "" {
-			h.writeError(w, http.StatusBadRequest, "id is required", "")
-			return
+			req.ID = minirag.GenerateDocumentID()
 		}
 
 		if req.Text == "" {
@@ -241,15 +241,17 @@ func (h *Handler) Static() http.HandlerFunc {
     
     <div class="endpoint">
         <h3><span class="method post">POST</span> /api/index</h3>
-        <p>Index text content with a unique ID</p>
-        <pre>{"id": "doc1", "text": "Your text content here"}</pre>
+        <p>Index text content with an optional ID (auto-generated if not provided)</p>
+        <pre>{"id": "doc1", "text": "Your text content here"}
+or
+{"text": "Your text content here"}</pre>
     </div>
     
     <div class="endpoint">
         <h3><span class="method post">POST</span> /api/index (File Upload)</h3>
         <p>Upload and index files (text or PDF) with multipart/form-data</p>
         <pre>Form fields:
-- id: Document ID (required)
+- id: Document ID (optional - auto-generated if not provided)
 - file: File to upload (required)
 
 Content-Type: multipart/form-data</pre>
@@ -306,11 +308,10 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the ID from form data
+	// Get the ID from form data, generate if not provided
 	id := r.FormValue("id")
 	if id == "" {
-		h.writeError(w, http.StatusBadRequest, "id is required", "")
-		return
+		id = minirag.GenerateDocumentID()
 	}
 
 	// Get the uploaded file

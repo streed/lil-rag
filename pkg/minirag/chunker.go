@@ -2,8 +2,10 @@ package minirag
 
 import (
 	"fmt"
+	"math/rand"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type TextChunker struct {
@@ -257,4 +259,30 @@ func GetChunkID(documentID string, chunkIndex int) string {
 		return documentID
 	}
 	return fmt.Sprintf("%s_chunk_%d", documentID, chunkIndex)
+}
+
+// GenerateDocumentID generates a human-readable document ID when none is provided
+func GenerateDocumentID() string {
+	// List of friendly adjectives and nouns for human-readable IDs
+	adjectives := []string{
+		"happy", "bright", "swift", "clever", "gentle", "bold", "calm", "wise",
+		"brave", "quick", "sharp", "smart", "clean", "fresh", "light", "clear",
+	}
+	
+	nouns := []string{
+		"doc", "file", "text", "note", "page", "item", "data", "content",
+		"record", "entry", "memo", "paper", "sheet", "digest", "brief", "piece",
+	}
+	
+	// Use current time for uniqueness and randomness for variety
+	now := time.Now()
+	r := rand.New(rand.NewSource(now.UnixNano()))
+	
+	adjective := adjectives[r.Intn(len(adjectives))]
+	noun := nouns[r.Intn(len(nouns))]
+	
+	// Create timestamp suffix for uniqueness (YYMMDD-HHMM format for brevity)
+	timestamp := now.Format("060102-1504")
+	
+	return fmt.Sprintf("%s-%s-%s", adjective, noun, timestamp)
 }
