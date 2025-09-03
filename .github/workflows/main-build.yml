@@ -78,6 +78,7 @@ jobs:
       run: |
         go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-linux-amd64 ./cmd/lil-rag
         go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-linux-amd64 ./cmd/lil-rag-server
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-mcp-linux-amd64 ./cmd/lil-rag-mcp
 
     - name: Build for Linux ARM64
       env:
@@ -89,24 +90,11 @@ jobs:
         sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
         go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-linux-arm64 ./cmd/lil-rag
         go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-linux-arm64 ./cmd/lil-rag-server
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-mcp-linux-arm64 ./cmd/lil-rag-mcp
 
-    - name: Build for macOS AMD64
-      env:
-        GOOS: darwin
-        GOARCH: amd64
-        CGO_ENABLED: 1
-      run: |
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-darwin-amd64 ./cmd/lil-rag
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-darwin-amd64 ./cmd/lil-rag-server
-
-    - name: Build for macOS ARM64
-      env:
-        GOOS: darwin
-        GOARCH: arm64
-        CGO_ENABLED: 1
-      run: |
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-darwin-arm64 ./cmd/lil-rag
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-darwin-arm64 ./cmd/lil-rag-server
+    # Note: macOS builds are temporarily disabled due to CGO cross-compilation complexity
+    # Users can build locally on macOS with: go build ./cmd/lil-rag
+    # TODO: Add proper macOS runners or osxcross toolchain setup
 
     - name: Build for Windows AMD64
       env:
@@ -118,23 +106,18 @@ jobs:
         sudo apt-get install -y gcc-mingw-w64
         go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-windows-amd64.exe ./cmd/lil-rag
         go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-windows-amd64.exe ./cmd/lil-rag-server
+        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-mcp-windows-amd64.exe ./cmd/lil-rag-mcp
 
     - name: Create archives
       run: |
         # Linux AMD64
-        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-amd64.tar.gz -C dist lil-rag-linux-amd64 lil-rag-server-linux-amd64
+        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-amd64.tar.gz -C dist lil-rag-linux-amd64 lil-rag-server-linux-amd64 lil-rag-mcp-linux-amd64
         
         # Linux ARM64
-        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-arm64.tar.gz -C dist lil-rag-linux-arm64 lil-rag-server-linux-arm64
-        
-        # macOS AMD64
-        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-darwin-amd64.tar.gz -C dist lil-rag-darwin-amd64 lil-rag-server-darwin-amd64
-        
-        # macOS ARM64
-        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-darwin-arm64.tar.gz -C dist lil-rag-darwin-arm64 lil-rag-server-darwin-arm64
+        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-arm64.tar.gz -C dist lil-rag-linux-arm64 lil-rag-server-linux-arm64 lil-rag-mcp-linux-arm64
         
         # Windows AMD64
-        zip -j dist/lil-rag-${{ steps.version.outputs.new }}-windows-amd64.zip dist/lil-rag-windows-amd64.exe dist/lil-rag-server-windows-amd64.exe
+        zip -j dist/lil-rag-${{ steps.version.outputs.new }}-windows-amd64.zip dist/lil-rag-windows-amd64.exe dist/lil-rag-server-windows-amd64.exe dist/lil-rag-mcp-windows-amd64.exe
 
     - name: Generate checksums
       run: |
@@ -155,7 +138,8 @@ jobs:
       run: |
         echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "**Version:** ${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Platforms:** Linux (AMD64, ARM64), macOS (AMD64, ARM64), Windows (AMD64)" >> $GITHUB_STEP_SUMMARY
+        echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64)" >> $GITHUB_STEP_SUMMARY
+        echo "**Note:** macOS builds available via local compilation" >> $GITHUB_STEP_SUMMARY
         echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY

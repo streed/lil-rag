@@ -67,6 +67,9 @@ jobs:
     - name: Build Server
       run: go build -v -o bin/lil-rag-server ./cmd/lil-rag-server
 
+    - name: Build MCP Server
+      run: go build -v -o bin/lil-rag-mcp ./cmd/lil-rag-mcp
+
     - name: Test CLI build
       run: ./bin/lil-rag --help
 

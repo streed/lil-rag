@@ -1,6 +1,8 @@
 module lil-rag
 
-go 1.23
+go 1.23.0
+
+toolchain go1.24.6
 
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6

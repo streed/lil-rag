@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-username/lil-rag)
 
-A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides both CLI and HTTP API interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
+A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides CLI, HTTP API, and MCP server interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
 
 ## ✨ Features
 
@@ -12,7 +12,7 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 - 📄 **Document Deduplication** - Intelligent result deduplication for multi-chunk documents  
 - 🗜️ **Automatic Compression** - Transparent gzip compression for optimal storage
 - 📚 **PDF Support** - Native PDF parsing with page-based chunking
-- 🔧 **Dual Interface** - Both CLI and HTTP API for maximum flexibility
+- 🔧 **Triple Interface** - CLI, HTTP API, and MCP server for maximum flexibility
 - 🤖 **Ollama Integration** - Configurable embedding models via Ollama
 - ⚡ **High Performance** - Optimized Go implementation with efficient SQLite storage
 - 🎛️ **Profile Configuration** - User-friendly configuration management
@@ -55,9 +55,13 @@ make build
 # Or build individually
 make build-cli      # builds bin/lil-rag
 make build-server   # builds bin/lil-rag-server
+make build-mcp      # builds bin/lil-rag-mcp
 
 # Install to $GOPATH/bin (optional)
 make install
+
+# Note: Pre-built binaries are available for Linux and Windows
+# macOS users should build from source using the commands above
 ```
 
 ### Using Go
@@ -68,6 +72,9 @@ go install github.com/your-username/lil-rag/cmd/lil-rag@latest
 
 # Install server directly  
 go install github.com/your-username/lil-rag/cmd/lil-rag-server@latest
+
+# Install MCP server directly
+go install github.com/your-username/lil-rag/cmd/lil-rag-mcp@latest
 ```
 
 ## 🎯 Quick Start
