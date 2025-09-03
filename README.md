@@ -27,9 +27,29 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ### Installing Dependencies
 
-1. **Install Go**: Download from [golang.org](https://golang.org/dl/)
+1. **Install Go 1.21+**: Download from [golang.org](https://golang.org/dl/)
+   - Ensure CGO is enabled (default on most systems)
 
-2. **Install Ollama**: Follow instructions at [ollama.ai](https://ollama.ai)
+2. **Install SQLite Development Headers**:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get update && sudo apt-get install -y libsqlite3-dev gcc
+   
+   # CentOS/RHEL/Fedora
+   sudo yum install -y sqlite-devel gcc
+   # or on newer versions: sudo dnf install -y sqlite-devel gcc
+   
+   # Arch Linux
+   sudo pacman -S sqlite gcc
+   
+   # macOS (with Homebrew)
+   brew install sqlite
+   
+   # Alpine Linux
+   apk add --no-cache sqlite-dev gcc musl-dev
+   ```
+
+3. **Install Ollama**: Follow instructions at [ollama.ai](https://ollama.ai)
    ```bash
    # Start Ollama
    ollama serve
@@ -38,7 +58,18 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
    ollama pull nomic-embed-text
    ```
 
-3. **SQLite-vec Extension**: The Go bindings handle this automatically via CGO
+4. **SQLite-vec Extension**: The Go bindings handle this automatically via CGO
+
+### Troubleshooting Build Issues
+
+**Error: `sqlite3.h: No such file or directory`**
+- Install SQLite development headers (see above)
+- Ensure CGO is enabled: `export CGO_ENABLED=1`
+- On some systems, you may need to set: `export CGO_CFLAGS="-I/usr/include"`
+
+**Cross-compilation issues:**
+- Cross-compilation with CGO requires appropriate toolchains
+- For easier deployment, use the pre-built binaries or install script
 
 ## 🚀 Installation
 
