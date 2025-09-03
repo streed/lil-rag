@@ -442,28 +442,28 @@ func TestGenerateDocumentID(t *testing.T) {
 	// Test that the function generates valid IDs
 	for i := 0; i < 10; i++ {
 		id := GenerateDocumentID()
-		
+
 		// Check format: should be adjective-noun-YYMMDD-HHMM (4 parts)
 		parts := strings.Split(id, "-")
 		if len(parts) != 4 {
 			t.Errorf("Expected ID to have 4 parts separated by hyphens, got %d parts: %s", len(parts), id)
 		}
-		
+
 		// Check that it's not empty
 		if id == "" {
 			t.Error("Generated ID should not be empty")
 		}
-		
+
 		// Check that it contains only valid characters (alphanumeric and hyphens)
 		if matched, _ := regexp.MatchString("^[a-z0-9-]+$", id); !matched {
 			t.Errorf("Generated ID contains invalid characters: %s", id)
 		}
-		
+
 		// Check length is reasonable (should be under 30 characters for readability)
 		if len(id) > 30 {
 			t.Errorf("Generated ID is too long (%d chars): %s", len(id), id)
 		}
-		
+
 		// Check that first part is from adjectives list
 		adjective := parts[0]
 		adjectives := []string{
@@ -481,7 +481,7 @@ func TestGenerateDocumentID(t *testing.T) {
 			t.Errorf("Generated ID adjective '%s' not in expected list", adjective)
 		}
 	}
-	
+
 	// Test uniqueness: generate multiple IDs and ensure they are different
 	// (given timestamp precision and randomness, they should be unique)
 	ids := make(map[string]bool)
@@ -491,7 +491,7 @@ func TestGenerateDocumentID(t *testing.T) {
 			t.Errorf("Generated duplicate ID: %s", id)
 		}
 		ids[id] = true
-		
+
 		// Sleep a tiny bit to ensure timestamp differences
 		time.Sleep(time.Millisecond)
 	}

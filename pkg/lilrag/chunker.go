@@ -268,21 +268,21 @@ func GenerateDocumentID() string {
 		"happy", "bright", "swift", "clever", "gentle", "bold", "calm", "wise",
 		"brave", "quick", "sharp", "smart", "clean", "fresh", "light", "clear",
 	}
-	
+
 	nouns := []string{
 		"doc", "file", "text", "note", "page", "item", "data", "content",
 		"record", "entry", "memo", "paper", "sheet", "digest", "brief", "piece",
 	}
-	
+
 	// Use current time for uniqueness and randomness for variety
 	now := time.Now()
 	r := rand.New(rand.NewSource(now.UnixNano()))
-	
+
 	adjective := adjectives[r.Intn(len(adjectives))]
 	noun := nouns[r.Intn(len(nouns))]
-	
+
 	// Create timestamp suffix for uniqueness (YYMMDD-HHMM format for brevity)
 	timestamp := now.Format("060102-1504")
-	
+
 	return fmt.Sprintf("%s-%s-%s", adjective, noun, timestamp)
 }

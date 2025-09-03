@@ -27,12 +27,12 @@ func main() {
 
 func run() error {
 	var (
-		dbPath     = flag.String("db", "", "Database path (overrides profile config)")
-		dataDir    = flag.String("data-dir", "", "Data directory (overrides profile config)")
-		ollamaURL  = flag.String("ollama", "", "Ollama URL (overrides profile config)")
-		model      = flag.String("model", "", "Embedding model (overrides profile config)")
-		vectorSize = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
-		help       = flag.Bool("help", false, "Show help")
+		dbPath      = flag.String("db", "", "Database path (overrides profile config)")
+		dataDir     = flag.String("data-dir", "", "Data directory (overrides profile config)")
+		ollamaURL   = flag.String("ollama", "", "Ollama URL (overrides profile config)")
+		model       = flag.String("model", "", "Embedding model (overrides profile config)")
+		vectorSize  = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
+		help        = flag.Bool("help", false, "Show help")
 		showVersion = flag.Bool("version", false, "Show version")
 	)
 	flag.Parse()
