@@ -189,7 +189,7 @@ verify_installation() {
     log "Verifying installation..."
     
     local binaries=("lil-rag" "lil-rag-server")
-    if [[ "$(uname -s)" == *"Windows"* ]]; then
+    if [[ "$platform" == "windows" ]]; then
         binaries=("lil-rag.exe" "lil-rag-server.exe")
     fi
     
