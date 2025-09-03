@@ -472,6 +472,13 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             padding: 0;
         }
 
+        /* Style document references in square brackets */
+        .doc-ref {
+            color: #888;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+
         .message.system {
             background: #fff3cd;
             color: #856404;
@@ -497,36 +504,82 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             color: #495057;
         }
 
-        .sources {
-            margin-top: 10px;
+        .sources-section {
+            margin-top: 12px;
             padding-top: 10px;
-            border-top: 1px solid #dee2e6;
-            font-size: 0.85rem;
+            border-top: 1px solid #e0e0e0;
         }
 
-        .source-item {
-            margin: 5px 0;
-            padding: 8px 12px;
-            background: #e3f2fd;
+        .sources-header {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .sources-compact {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .source-button {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            padding: 4px 12px;
+            font-size: 0.8rem;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: 'JetBrainsMono NL Nerd Font Propo', 'JetBrains Mono NL', 
+                         'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+        }
+
+        .source-button:hover {
+            background: #e8e8e8;
+            border-color: #bbb;
+            color: #444;
+        }
+
+        .source-expandable {
+            margin: 8px 0;
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
-            border-left: 3px solid #2196F3;
+            background: #fafafa;
+        }
+
+        .source-content {
+            padding: 12px;
+        }
+
+        .source-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e8e8e8;
         }
 
         .source-id {
-            font-weight: bold;
-            color: #1976D2;
+            font-weight: 600;
+            color: #555;
+            font-size: 0.9rem;
         }
 
         .source-score {
             font-size: 0.8rem;
-            color: #666;
-            float: right;
+            color: #888;
+            font-style: italic;
         }
 
         .source-text {
-            margin-top: 5px;
-            font-style: italic;
-            color: #555;
+            color: #666;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
         }
 
         .chat-input {
@@ -729,14 +782,33 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             // Render markdown for assistant messages, keep plain text for user messages
             let html = (type === 'assistant' && typeof marked !== 'undefined') ? marked.parse(content) : content;
             
+            // Style document references in square brackets for assistant messages
+            if (type === 'assistant') {
+                html = html.replace(/\[([a-zA-Z0-9_-]+)\]/g, '<span class="doc-ref">[$1]</span>');
+            }
+            
             if (sources && sources.length > 0) {
-                html += '<div class="sources"><strong>📚 Sources:</strong>';
+                html += '<div class="sources-section">';
+                html += '<div class="sources-header">📚 Sources (' + sources.length + '):</div>';
+                html += '<div class="sources-compact">';
                 sources.forEach((source, index) => {
-                    html += '<div class="source-item">';
+                    const sourceId = 'source-' + Date.now() + '-' + index;
+                    html += '<button class="source-button" onclick="toggleSource(\'' + sourceId + '\')">';
+                    html += source.ID + ' (' + (source.Score * 100).toFixed(1) + '%)';
+                    html += '</button>';
+                });
+                html += '</div>';
+                
+                sources.forEach((source, index) => {
+                    const sourceId = 'source-' + Date.now() + '-' + index;
+                    html += '<div id="' + sourceId + '" class="source-expandable" style="display: none;">';
+                    html += '<div class="source-content">';
+                    html += '<div class="source-header">';
                     html += '<span class="source-id">' + source.ID + '</span>';
-                    html += '<span class="source-score">Score: ' + source.Score.toFixed(3) + '</span>';
-                    html += '<div class="source-text">' + 
-                        (source.Text.substring(0, 200) + (source.Text.length > 200 ? '...' : '')) + '</div>';
+                    html += '<span class="source-score">' + (source.Score * 100).toFixed(1) + '% relevance</span>';
+                    html += '</div>';
+                    html += '<div class="source-text">' + source.Text + '</div>';
+                    html += '</div>';
                     html += '</div>';
                 });
                 html += '</div>';
@@ -755,6 +827,14 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
 
         function hideTyping() {
             typingIndicator.style.display = 'none';
+        }
+
+        function toggleSource(sourceId) {
+            const element = document.getElementById(sourceId);
+            if (element) {
+                const isVisible = element.style.display !== 'none';
+                element.style.display = isVisible ? 'none' : 'block';
+            }
         }
 
         function showError(message) {
@@ -905,45 +985,16 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Search for relevant documents
-	results, err := h.rag.Search(ctx, req.Message, req.Limit)
+	// Generate LLM response using retrieved documents as context
+	response, searchResults, err := h.rag.Chat(ctx, req.Message, req.Limit)
 	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, "search failed", err.Error())
+		h.writeError(w, http.StatusInternalServerError, "chat failed", err.Error())
 		return
-	}
-
-	// Generate response based on search results
-	var response string
-	if len(results) == 0 {
-		response = "I couldn't find any relevant information in your indexed documents to answer " +
-			"that question. You may want to:\n\n• Check if you've indexed documents related " +
-			"to this topic\n• Try rephrasing your question\n• Add more relevant documents to the system"
-	} else {
-		// Create a contextual response
-		response = "Based on your indexed documents, here's what I found:\n\n"
-
-		for i, result := range results {
-			if i < 3 { // Limit to top 3 results in response text
-				response += fmt.Sprintf("📄 **From %s** (relevance: %.1f%%):\n%s\n\n",
-					result.ID, result.Score*100,
-					result.Text[:minInt(300, len(result.Text))]+
-						func() string {
-							if len(result.Text) > 300 {
-								return "..."
-							}
-							return ""
-						}())
-			}
-		}
-
-		if len(results) > 3 {
-			response += fmt.Sprintf("💡 *Found %d additional relevant sources (see sources below)*", len(results)-3)
-		}
 	}
 
 	chatResp := ChatResponse{
 		Response: response,
-		Sources:  results,
+		Sources:  searchResults,
 		Query:    req.Message,
 	}
 

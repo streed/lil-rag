@@ -1,0 +1,216 @@
+package lilrag
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// OllamaChatClient handles chat interactions with Ollama
+type OllamaChatClient struct {
+	baseURL string
+	model   string
+	client  *http.Client
+}
+
+// NewOllamaChatClient creates a new Ollama chat client
+func NewOllamaChatClient(baseURL, model string) *OllamaChatClient {
+	if baseURL == "" {
+		baseURL = "http://localhost:11434"
+	}
+	if model == "" {
+		model = "gemma3:4b"
+	}
+
+	return &OllamaChatClient{
+		baseURL: baseURL,
+		model:   model,
+		client: &http.Client{
+			Timeout: 120 * time.Second, // Longer timeout for chat generation
+		},
+	}
+}
+
+// ChatRequest represents a request to Ollama's chat API
+type ChatRequest struct {
+	Model   string        `json:"model"`
+	Messages []ChatMessage `json:"messages"`
+	Stream   bool          `json:"stream"`
+	Options  *ChatOptions  `json:"options,omitempty"`
+}
+
+// ChatMessage represents a single message in a chat conversation
+type ChatMessage struct {
+	Role    string `json:"role"`    // "system", "user", or "assistant"
+	Content string `json:"content"`
+}
+
+// ChatOptions for controlling chat generation
+type ChatOptions struct {
+	Temperature float64 `json:"temperature,omitempty"`
+	TopP        float64 `json:"top_p,omitempty"`
+	TopK        int     `json:"top_k,omitempty"`
+}
+
+// ChatResponse represents Ollama's chat response
+type ChatResponse struct {
+	Model     string      `json:"model"`
+	CreatedAt time.Time   `json:"created_at"`
+	Message   ChatMessage `json:"message"`
+	Done      bool        `json:"done"`
+}
+
+// GenerateResponse generates a chat response using the provided context and user message
+func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage string, searchResults []SearchResult) (string, error) {
+	// Create system prompt with search results context
+	systemPrompt := c.createSystemPrompt(searchResults)
+	
+	// Build chat messages
+	messages := []ChatMessage{
+		{
+			Role:    "system",
+			Content: systemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: userMessage,
+		},
+	}
+
+	// Create request
+	requestBody := ChatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Stream:   false,
+		Options: &ChatOptions{
+			Temperature: 0.7,
+			TopP:        0.9,
+		},
+	}
+
+	// Marshal request
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal chat request: %w", err)
+	}
+
+	// Create HTTP request
+	url := fmt.Sprintf("%s/api/chat", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send chat request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("chat request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var chatResp ChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return "", fmt.Errorf("failed to decode chat response: %w", err)
+	}
+
+	return chatResp.Message.Content, nil
+}
+
+// createSystemPrompt creates a system prompt with search results context
+func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) string {
+	var prompt strings.Builder
+	
+	prompt.WriteString("You are a helpful AI assistant that answers questions based on provided document context. ")
+	prompt.WriteString("Use the following documents to answer the user's question. ")
+	prompt.WriteString("Be accurate, concise, and cite which documents you're referencing.\n\n")
+	
+	if len(searchResults) == 0 {
+		prompt.WriteString("No relevant documents were found. Please inform the user that you don't have enough context to answer their question and suggest they provide more relevant documents or rephrase their query.")
+		return prompt.String()
+	}
+	
+	prompt.WriteString("RELEVANT DOCUMENTS:\n\n")
+	
+	for i, result := range searchResults {
+		prompt.WriteString(fmt.Sprintf("Document %d (ID: %s, Relevance: %.1f%%):\n", 
+			i+1, result.ID, result.Score*100))
+		
+		// Use a reasonable excerpt length
+		text := result.Text
+		if len(text) > 2000 {
+			text = text[:2000] + "..."
+		}
+		
+		prompt.WriteString(text)
+		prompt.WriteString("\n\n")
+	}
+	
+	prompt.WriteString("Please answer the user's question based on these documents. ")
+	prompt.WriteString("If the documents don't contain relevant information, say so clearly. ")
+	prompt.WriteString("When referencing information from a document, cite it using square brackets with the document ID: [document-id]. ")
+	prompt.WriteString("For example: \"According to [lilrag-overview]...\" or \"As mentioned in [vector-search]...\". ")
+	prompt.WriteString("Use only the document ID inside the brackets, not \"Document 1\" or similar.")
+	
+	return prompt.String()
+}
+
+// TestConnection tests if the Ollama server is reachable and the model is available
+func (c *OllamaChatClient) TestConnection(ctx context.Context) error {
+	// Check if the server is reachable
+	url := fmt.Sprintf("%s/api/tags", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create test request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Ollama server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Ollama server returned status %d", resp.StatusCode)
+	}
+
+	// Parse response to check if model is available
+	var tagsResp struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&tagsResp); err != nil {
+		return fmt.Errorf("failed to decode tags response: %w", err)
+	}
+
+	// Check if the chat model is available
+	modelFound := false
+	for _, model := range tagsResp.Models {
+		if strings.HasPrefix(model.Name, strings.Split(c.model, ":")[0]) {
+			modelFound = true
+			break
+		}
+	}
+
+	if !modelFound {
+		return fmt.Errorf("chat model '%s' not found in Ollama. Available models: %v", 
+			c.model, tagsResp.Models)
+	}
+
+	return nil
+}
