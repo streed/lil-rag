@@ -1,4 +1,4 @@
-package minirag
+package lilrag
 
 import (
 	"context"
@@ -13,7 +13,7 @@ const (
 	DefaultModel     = "nomic-embed-text"
 )
 
-type MiniRag struct {
+type LilRag struct {
 	storage   Storage
 	embedder  Embedder
 	chunker   *TextChunker
@@ -50,13 +50,13 @@ type SearchResult struct {
 	Metadata map[string]interface{}
 }
 
-func New(config *Config) (*MiniRag, error) {
+func New(config *Config) (*LilRag, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
 
 	if config.DatabasePath == "" {
-		config.DatabasePath = "minirag.db"
+		config.DatabasePath = "lilrag.db"
 	}
 	if config.OllamaURL == "" {
 		config.OllamaURL = DefaultOllamaURL
@@ -74,12 +74,12 @@ func New(config *Config) (*MiniRag, error) {
 		config.Overlap = 200
 	}
 
-	return &MiniRag{
+	return &LilRag{
 		config: config,
 	}, nil
 }
 
-func (m *MiniRag) Initialize() error {
+func (m *LilRag) Initialize() error {
 	if m.config.DataDir == "" {
 		m.config.DataDir = "data"
 	}
@@ -105,7 +105,7 @@ func (m *MiniRag) Initialize() error {
 	return m.storage.Initialize()
 }
 
-func (m *MiniRag) Index(ctx context.Context, text, id string) error {
+func (m *LilRag) Index(ctx context.Context, text, id string) error {
 	if text == "" {
 		return fmt.Errorf("text cannot be empty")
 	}
@@ -113,7 +113,7 @@ func (m *MiniRag) Index(ctx context.Context, text, id string) error {
 		return fmt.Errorf("id cannot be empty")
 	}
 	if m.chunker == nil || m.embedder == nil || m.storage == nil {
-		return fmt.Errorf("MiniRag not properly initialized")
+		return fmt.Errorf("LilRag not properly initialized")
 	}
 
 	// Check if text needs chunking
@@ -150,7 +150,7 @@ func (m *MiniRag) Index(ctx context.Context, text, id string) error {
 }
 
 // IndexPDF indexes a PDF file with page-based chunking
-func (m *MiniRag) IndexPDF(ctx context.Context, filePath, id string) error {
+func (m *LilRag) IndexPDF(ctx context.Context, filePath, id string) error {
 	if filePath == "" {
 		return fmt.Errorf("file path cannot be empty")
 	}
@@ -211,7 +211,7 @@ func (m *MiniRag) IndexPDF(ctx context.Context, filePath, id string) error {
 }
 
 // IndexFile indexes a file, automatically detecting if it's a PDF or text file
-func (m *MiniRag) IndexFile(ctx context.Context, filePath, id string) error {
+func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 	if IsPDFFile(filePath) {
 		return m.IndexPDF(ctx, filePath, id)
 	}
@@ -225,7 +225,7 @@ func (m *MiniRag) IndexFile(ctx context.Context, filePath, id string) error {
 	return m.Index(ctx, string(content), id)
 }
 
-func (m *MiniRag) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query cannot be empty")
 	}
@@ -233,7 +233,7 @@ func (m *MiniRag) Search(ctx context.Context, query string, limit int) ([]Search
 		limit = 10
 	}
 	if m.embedder == nil || m.storage == nil {
-		return nil, fmt.Errorf("MiniRag not properly initialized")
+		return nil, fmt.Errorf("LilRag not properly initialized")
 	}
 
 	var embedding []float32
@@ -253,7 +253,7 @@ func (m *MiniRag) Search(ctx context.Context, query string, limit int) ([]Search
 	return m.storage.Search(ctx, embedding, limit)
 }
 
-func (m *MiniRag) Close() error {
+func (m *LilRag) Close() error {
 	if m.storage != nil {
 		return m.storage.Close()
 	}

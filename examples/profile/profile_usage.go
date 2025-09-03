@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"lil-rag/pkg/config"
-	"lil-rag/pkg/minirag"
+	"lil-rag/pkg/lilrag"
 )
 
 func main() {
@@ -17,8 +17,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Convert to MiniRag config
-	ragConfig := &minirag.Config{
+	// Convert to LilRag config
+	ragConfig := &lilrag.Config{
 		DatabasePath: profileConfig.StoragePath,
 		DataDir:      profileConfig.DataDir,
 		OllamaURL:    profileConfig.Ollama.Endpoint,
@@ -26,7 +26,7 @@ func main() {
 		VectorSize:   profileConfig.Ollama.VectorSize,
 	}
 
-	rag, err := minirag.New(ragConfig)
+	rag, err := lilrag.New(ragConfig)
 	if err != nil {
 		log.Fatal(err)
 	}

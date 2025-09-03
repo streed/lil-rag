@@ -13,7 +13,7 @@ import (
 
 	"lil-rag/internal/handlers"
 	"lil-rag/pkg/config"
-	"lil-rag/pkg/minirag"
+	"lil-rag/pkg/lilrag"
 )
 
 // version is set during build time via ldflags
@@ -71,7 +71,7 @@ func run() error {
 		profileConfig.Server.Port = *port
 	}
 
-	miniragConfig := &minirag.Config{
+	lilragConfig := &lilrag.Config{
 		DatabasePath: profileConfig.StoragePath,
 		DataDir:      profileConfig.DataDir,
 		OllamaURL:    profileConfig.Ollama.Endpoint,
@@ -81,7 +81,7 @@ func run() error {
 		Overlap:      profileConfig.Chunking.Overlap,
 	}
 
-	rag, err := minirag.New(miniragConfig)
+	rag, err := lilrag.New(lilragConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create MiniRag: %w", err)
 	}

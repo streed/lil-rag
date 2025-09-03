@@ -15,18 +15,18 @@ import (
 	"testing"
 	"time"
 
-	"lil-rag/pkg/minirag"
+	"lil-rag/pkg/lilrag"
 )
 
 func TestNew(t *testing.T) {
-	// Create a real MiniRag instance for the handler
-	config := &minirag.Config{
+	// Create a real LilRag instance for the handler
+	config := &lilrag.Config{
 		DatabasePath: "test.db",
 		VectorSize:   3,
 	}
-	ragInstance, err := minirag.New(config)
+	ragInstance, err := lilrag.New(config)
 	if err != nil {
-		t.Fatalf("Failed to create MiniRag: %v", err)
+		t.Fatalf("Failed to create LilRag: %v", err)
 	}
 
 	handler := New(ragInstance)
@@ -37,7 +37,7 @@ func TestNew(t *testing.T) {
 	}
 
 	if handler.rag != ragInstance {
-		t.Error("Expected handler to store the provided MiniRag instance")
+		t.Error("Expected handler to store the provided LilRag instance")
 	}
 
 	if handler.version != "dev" {
@@ -52,7 +52,7 @@ func TestNew(t *testing.T) {
 }
 
 func createTestHandler(t *testing.T) *Handler {
-	config := &minirag.Config{
+	config := &lilrag.Config{
 		DatabasePath: filepath.Join(t.TempDir(), "test.db"),
 		DataDir:      filepath.Join(t.TempDir(), "data"),
 		VectorSize:   3,
@@ -60,18 +60,18 @@ func createTestHandler(t *testing.T) *Handler {
 		Overlap:      20,
 	}
 
-	ragInstance, err := minirag.New(config)
+	ragInstance, err := lilrag.New(config)
 	if err != nil {
-		t.Fatalf("Failed to create MiniRag: %v", err)
+		t.Fatalf("Failed to create LilRag: %v", err)
 	}
 
-	// Try to initialize the MiniRag instance
+	// Try to initialize the LilRag instance
 	if err := ragInstance.Initialize(); err != nil {
 		// If sqlite-vec is not available, skip tests that require real functionality
 		if strings.Contains(err.Error(), "sqlite-vec extension not available") {
 			t.Skip("Skipping test: sqlite-vec extension not available")
 		}
-		t.Fatalf("Failed to initialize MiniRag: %v", err)
+		t.Fatalf("Failed to initialize LilRag: %v", err)
 	}
 
 	return New(ragInstance)
@@ -480,8 +480,8 @@ func TestHandler_Static(t *testing.T) {
 				if !strings.Contains(body, "<!DOCTYPE html>") {
 					t.Error("Expected HTML document in response")
 				}
-				if !strings.Contains(body, "MiniRag API") {
-					t.Error("Expected 'MiniRag API' in HTML response")
+				if !strings.Contains(body, "LilRag API") {
+					t.Error("Expected 'LilRag API' in HTML response")
 				}
 			}
 		})
@@ -766,14 +766,14 @@ func BenchmarkHandler_Health(b *testing.B) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := &minirag.Config{
+	config := &lilrag.Config{
 		DatabasePath: filepath.Join(tempDir, "bench.db"),
 		DataDir:      filepath.Join(tempDir, "data"),
 		VectorSize:   3,
 	}
-	ragInstance, err := minirag.New(config)
+	ragInstance, err := lilrag.New(config)
 	if err != nil {
-		b.Fatalf("Failed to create MiniRag: %v", err)
+		b.Fatalf("Failed to create LilRag: %v", err)
 	}
 	handler := New(ragInstance)
 

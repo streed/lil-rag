@@ -17,8 +17,8 @@ func TestDefault(t *testing.T) {
 	}
 
 	// Test default values
-	if config.Database.Path != "minirag.db" {
-		t.Errorf("Expected database path 'minirag.db', got %q", config.Database.Path)
+	if config.Database.Path != "lilrag.db" {
+		t.Errorf("Expected database path 'lilrag.db', got %q", config.Database.Path)
 	}
 	if config.Database.VectorSize != 768 {
 		t.Errorf("Expected vector size 768, got %d", config.Database.VectorSize)

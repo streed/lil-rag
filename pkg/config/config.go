@@ -39,7 +39,7 @@ type Chunk struct {
 func Default() *Config {
 	return &Config{
 		Database: Database{
-			Path:       "minirag.db",
+			Path:       "lilrag.db",
 			VectorSize: 768,
 		},
 		Ollama: Ollama{

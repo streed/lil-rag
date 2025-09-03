@@ -50,7 +50,7 @@ Thumbs.db
 *.db-wal
 *.db-shm
 data/
-.minirag/
+.lilrag/
 
 # Test files
 test_document.txt

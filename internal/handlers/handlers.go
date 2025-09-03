@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"lil-rag/pkg/minirag"
+	"lil-rag/pkg/lilrag"
 )
 
 type Handler struct {
-	rag     *minirag.MiniRag
+	rag     *lilrag.LilRag
 	version string
 }
 
@@ -31,7 +31,7 @@ type SearchRequest struct {
 }
 
 type SearchResponse struct {
-	Results []minirag.SearchResult `json:"results"`
+	Results []lilrag.SearchResult `json:"results"`
 }
 
 type ErrorResponse struct {
@@ -39,11 +39,11 @@ type ErrorResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-func New(rag *minirag.MiniRag) *Handler {
+func New(rag *lilrag.LilRag) *Handler {
 	return &Handler{rag: rag, version: "dev"}
 }
 
-func NewWithVersion(rag *minirag.MiniRag, version string) *Handler {
+func NewWithVersion(rag *lilrag.LilRag, version string) *Handler {
 	return &Handler{rag: rag, version: version}
 }
 
@@ -71,7 +71,7 @@ func (h *Handler) Index() http.HandlerFunc {
 
 		// Generate ID if not provided
 		if req.ID == "" {
-			req.ID = minirag.GenerateDocumentID()
+			req.ID = lilrag.GenerateDocumentID()
 		}
 
 		if req.Text == "" {
@@ -201,8 +201,8 @@ func (h *Handler) Metrics() http.HandlerFunc {
 		}
 
 		// Try to get cache stats from embedder if it's an OllamaEmbedder
-		if _, ok := interface{}(h.rag).(*minirag.MiniRag); ok {
-			// Access the embedder (this would need to be exposed in MiniRag)
+		if _, ok := interface{}(h.rag).(*lilrag.LilRag); ok {
+			// Access the embedder (this would need to be exposed in LilRag)
 			metrics["message"] = "Cache statistics available in enhanced embedder"
 			metrics["embedding_features"] = []string{"caching", "preprocessing", "query_enhancement", "retry_logic"}
 		}
@@ -225,7 +225,7 @@ func (h *Handler) Static() http.HandlerFunc {
 		html := `<!DOCTYPE html>
 <html>
 <head>
-    <title>MiniRag API</title>
+    <title>LilRag API</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
         .endpoint { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
@@ -236,7 +236,7 @@ func (h *Handler) Static() http.HandlerFunc {
     </style>
 </head>
 <body>
-    <h1>MiniRag API</h1>
+    <h1>LilRag API</h1>
     <p>A simple RAG (Retrieval Augmented Generation) API using SQLite and Ollama</p>
     
     <div class="endpoint">
@@ -311,7 +311,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	// Get the ID from form data, generate if not provided
 	id := r.FormValue("id")
 	if id == "" {
-		id = minirag.GenerateDocumentID()
+		id = lilrag.GenerateDocumentID()
 	}
 
 	// Get the uploaded file
@@ -324,7 +324,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Create temporary file to save uploaded content
 	tempDir := os.TempDir()
-	tempFile, err := os.CreateTemp(tempDir, "minirag_upload_*"+filepath.Ext(header.Filename))
+	tempFile, err := os.CreateTemp(tempDir, "lilrag_upload_*"+filepath.Ext(header.Filename))
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to create temp file", err.Error())
 		return

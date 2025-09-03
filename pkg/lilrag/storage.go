@@ -1,4 +1,4 @@
-package minirag
+package lilrag
 
 import (
 	"context"

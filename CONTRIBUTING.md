@@ -1,6 +1,6 @@
-# Contributing to Mini-RAG
+# Contributing to Lil-RAG
 
-Thank you for your interest in contributing to Mini-RAG! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Lil-RAG! This document provides guidelines and information for contributors.
 
 ## 🤝 How to Contribute
 
@@ -101,7 +101,7 @@ lil-rag/
 │   ├── lil-rag/          # CLI application
 │   └── lil-rag-server/   # HTTP server
 ├── pkg/                    # Public library code
-│   ├── minirag/           # Core RAG functionality
+│   ├── lilrag/           # Core RAG functionality
 │   └── config/            # Configuration management
 ├── internal/               # Private application code
 │   └── handlers/          # HTTP handlers

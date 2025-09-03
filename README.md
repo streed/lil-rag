@@ -314,7 +314,7 @@ Example profile configuration (`~/.lilrag/config.json`):
     "embedding_model": "nomic-embed-text",
     "vector_size": 768
   },
-  "storage_path": "/home/user/.lilrag/data/minirag.db",
+  "storage_path": "/home/user/.lilrag/data/lilrag.db",
   "data_dir": "/home/user/.lilrag/data",
   "server": {
     "host": "localhost",
@@ -354,7 +354,7 @@ import (
     "os"
     "path/filepath"
 
-    "lil-rag/pkg/minirag"
+    "lil-rag/pkg/lilrag"
 )
 
 func main() {
@@ -362,7 +362,7 @@ func main() {
     homeDir, _ := os.UserHomeDir()
     dataDir := filepath.Join(homeDir, ".lilrag", "data")
     
-    config := &minirag.Config{
+    config := &lilrag.Config{
         DatabasePath: filepath.Join(dataDir, "test.db"),
         DataDir:      dataDir,
         OllamaURL:    "http://localhost:11434",
@@ -371,7 +371,7 @@ func main() {
     }
 
     // Initialize LilRag
-    rag, err := minirag.New(config)
+    rag, err := lilrag.New(config)
     if err != nil {
         log.Fatal(err)
     }
@@ -461,13 +461,13 @@ lil-rag/
 │   ├── lil-rag/          # CLI application
 │   └── lil-rag-server/   # HTTP API server
 ├── pkg/                    # Public library packages
-│   ├── minirag/           # Core RAG functionality
+│   ├── lilrag/           # Core RAG functionality
 │   │   ├── storage.go     # SQLite + sqlite-vec storage
 │   │   ├── embedder.go    # Ollama integration
 │   │   ├── chunker.go     # Text chunking logic
 │   │   ├── compression.go # Gzip compression
 │   │   ├── pdf.go         # PDF parsing
-│   │   └── minirag.go     # Main library interface
+│   │   └── lilrag.go     # Main library interface
 │   └── config/            # Configuration management
 ├── internal/               # Private application code
 │   └── handlers/          # HTTP request handlers

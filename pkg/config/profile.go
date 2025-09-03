@@ -142,7 +142,7 @@ func (p *ProfileConfig) ensureDirectories() error {
 	return nil
 }
 
-func (p *ProfileConfig) ToMiniRagConfig() *Config {
+func (p *ProfileConfig) ToLilRagConfig() *Config {
 	return &Config{
 		Database: Database{
 			Path:       p.StoragePath,

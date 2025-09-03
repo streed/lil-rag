@@ -6,12 +6,12 @@ import (
 	"log"
 	"strings"
 
-	"lil-rag/pkg/minirag"
+	"lil-rag/pkg/lilrag"
 )
 
 func main() {
 	// You can either load from profile config or create manually
-	config := &minirag.Config{
+	config := &lilrag.Config{
 		DatabasePath: "example.db",
 		DataDir:      "./data",
 		OllamaURL:    "http://localhost:11434",
@@ -19,7 +19,7 @@ func main() {
 		VectorSize:   768,
 	}
 
-	rag, err := minirag.New(config)
+	rag, err := lilrag.New(config)
 	if err != nil {
 		log.Fatal(err)
 	}

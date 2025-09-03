@@ -1,4 +1,4 @@
-package minirag
+package lilrag
 
 import (
 	"context"
@@ -170,8 +170,8 @@ func TestNew(t *testing.T) {
 			config:      &Config{},
 			expectError: false,
 			checkConfig: func(c *Config) error {
-				if c.DatabasePath != "minirag.db" {
-					return fmt.Errorf("expected default database path 'minirag.db', got %q", c.DatabasePath)
+				if c.DatabasePath != "lilrag.db" {
+					return fmt.Errorf("expected default database path 'lilrag.db', got %q", c.DatabasePath)
 				}
 				if c.OllamaURL != "http://localhost:11434" {
 					return fmt.Errorf("expected default Ollama URL 'http://localhost:11434', got %q", c.OllamaURL)
@@ -246,7 +246,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			miniRag, err := New(tt.config)
+			lilRag, err := New(tt.config)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -256,25 +256,25 @@ func TestNew(t *testing.T) {
 			}
 
 			if !tt.expectError {
-				if miniRag == nil {
-					t.Error("Expected non-nil MiniRag instance")
+				if lilRag == nil {
+					t.Error("Expected non-nil LilRag instance")
 				} else {
-					if miniRag.config == nil {
+					if lilRag.config == nil {
 						t.Error("Expected non-nil config")
 					} else if tt.checkConfig != nil {
-						if err := tt.checkConfig(miniRag.config); err != nil {
+						if err := tt.checkConfig(lilRag.config); err != nil {
 							t.Errorf("Config validation failed: %v", err)
 						}
 					}
 
 					// Verify components are not initialized yet
-					if miniRag.storage != nil {
+					if lilRag.storage != nil {
 						t.Error("Expected storage to be nil before initialization")
 					}
-					if miniRag.embedder != nil {
+					if lilRag.embedder != nil {
 						t.Error("Expected embedder to be nil before initialization")
 					}
-					if miniRag.chunker != nil {
+					if lilRag.chunker != nil {
 						t.Error("Expected chunker to be nil before initialization")
 					}
 				}
@@ -283,8 +283,8 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestMiniRag_Initialize(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "minirag_test")
+func TestLilRag_Initialize(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lilrag_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -316,12 +316,12 @@ func TestMiniRag_Initialize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			miniRag, err := New(tt.config)
+			lilRag, err := New(tt.config)
 			if err != nil {
-				t.Fatalf("Failed to create MiniRag: %v", err)
+				t.Fatalf("Failed to create LilRag: %v", err)
 			}
 
-			err = miniRag.Initialize()
+			err = lilRag.Initialize()
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -336,40 +336,40 @@ func TestMiniRag_Initialize(t *testing.T) {
 
 			if !tt.expectError && err == nil {
 				// Verify components were initialized
-				if miniRag.storage == nil {
+				if lilRag.storage == nil {
 					t.Error("Expected storage to be initialized")
 				}
-				if miniRag.embedder == nil {
+				if lilRag.embedder == nil {
 					t.Error("Expected embedder to be initialized")
 				}
-				if miniRag.chunker == nil {
+				if lilRag.chunker == nil {
 					t.Error("Expected chunker to be initialized")
 				}
-				if miniRag.pdfParser == nil {
+				if lilRag.pdfParser == nil {
 					t.Error("Expected PDF parser to be initialized")
 				}
 
 				// Verify default data directory was set
-				if tt.config.DataDir == "" && miniRag.config.DataDir != "data" {
-					t.Errorf("Expected default data dir 'data', got %q", miniRag.config.DataDir)
+				if tt.config.DataDir == "" && lilRag.config.DataDir != "data" {
+					t.Errorf("Expected default data dir 'data', got %q", lilRag.config.DataDir)
 				}
 
 				// Clean up
-				miniRag.Close()
+				lilRag.Close()
 			}
 		})
 	}
 }
 
-func TestMiniRag_Index_WithMocks(t *testing.T) {
-	miniRag := &MiniRag{
+func TestLilRag_Index_WithMocks(t *testing.T) {
+	lilRag := &LilRag{
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(100, 20), // Small limits for testing
 		config:   &Config{MaxTokens: 100},
 	}
 
-	err := miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	err := lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize mock storage: %v", err)
 	}
@@ -409,7 +409,7 @@ func TestMiniRag_Index_WithMocks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			err := miniRag.Index(ctx, tt.text, tt.id)
+			err := lilRag.Index(ctx, tt.text, tt.id)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -420,7 +420,7 @@ func TestMiniRag_Index_WithMocks(t *testing.T) {
 
 			if !tt.expectError {
 				// Verify document was stored
-				mockStorage, ok := miniRag.storage.(*MockStorage)
+				mockStorage, ok := lilRag.storage.(*MockStorage)
 				if !ok {
 					t.Fatal("Expected MockStorage")
 				}
@@ -435,14 +435,14 @@ func TestMiniRag_Index_WithMocks(t *testing.T) {
 	}
 }
 
-func TestMiniRag_IndexFile(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "minirag_file_test")
+func TestLilRag_IndexFile(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lilrag_file_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	miniRag := &MiniRag{
+	lilRag := &LilRag{
 		storage:   NewMockStorage(),
 		embedder:  NewMockEmbedder(),
 		chunker:   NewTextChunker(1000, 200),
@@ -450,7 +450,7 @@ func TestMiniRag_IndexFile(t *testing.T) {
 		config:    &Config{},
 	}
 
-	err = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	err = lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize mock storage: %v", err)
 	}
@@ -498,7 +498,7 @@ func TestMiniRag_IndexFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			err := miniRag.IndexFile(ctx, tt.filePath, tt.id)
+			err := lilRag.IndexFile(ctx, tt.filePath, tt.id)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -509,7 +509,7 @@ func TestMiniRag_IndexFile(t *testing.T) {
 
 			if !tt.expectError {
 				// Verify document was stored
-				mockStorage, ok := miniRag.storage.(*MockStorage)
+				mockStorage, ok := lilRag.storage.(*MockStorage)
 				if !ok {
 					t.Fatal("Expected MockStorage")
 				}
@@ -523,15 +523,15 @@ func TestMiniRag_IndexFile(t *testing.T) {
 	}
 }
 
-func TestMiniRag_Search(t *testing.T) {
-	miniRag := &MiniRag{
+func TestLilRag_Search(t *testing.T) {
+	lilRag := &LilRag{
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(1000, 200),
 		config:   &Config{MaxTokens: 1000, Overlap: 200},
 	}
 
-	err := miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	err := lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize mock storage: %v", err)
 	}
@@ -546,7 +546,7 @@ func TestMiniRag_Search(t *testing.T) {
 	}
 
 	for id, text := range testDocs {
-		err := miniRag.Index(ctx, text, id)
+		err := lilRag.Index(ctx, text, id)
 		if err != nil {
 			t.Fatalf("Failed to index document %s: %v", id, err)
 		}
@@ -598,7 +598,7 @@ func TestMiniRag_Search(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := miniRag.Search(ctx, tt.query, tt.limit)
+			results, err := lilRag.Search(ctx, tt.query, tt.limit)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -632,32 +632,32 @@ func TestMiniRag_Search(t *testing.T) {
 	}
 }
 
-func TestMiniRag_Close(t *testing.T) {
+func TestLilRag_Close(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupRag    func() *MiniRag
+		setupRag    func() *LilRag
 		expectError bool
 	}{
 		{
 			name: "close with initialized storage",
-			setupRag: func() *MiniRag {
+			setupRag: func() *LilRag {
 				mockStorage := NewMockStorage()
 				_ = mockStorage.Initialize() // Test setup, error intentionally ignored
-				return &MiniRag{storage: mockStorage}
+				return &LilRag{storage: mockStorage}
 			},
 			expectError: false,
 		},
 		{
 			name: "close with nil storage",
-			setupRag: func() *MiniRag {
-				return &MiniRag{storage: nil}
+			setupRag: func() *LilRag {
+				return &LilRag{storage: nil}
 			},
 			expectError: false,
 		},
 		{
-			name: "close uninitialized MiniRag",
-			setupRag: func() *MiniRag {
-				return &MiniRag{}
+			name: "close uninitialized LilRag",
+			setupRag: func() *LilRag {
+				return &LilRag{}
 			},
 			expectError: false,
 		},
@@ -665,8 +665,8 @@ func TestMiniRag_Close(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			miniRag := tt.setupRag()
-			err := miniRag.Close()
+			lilRag := tt.setupRag()
+			err := lilRag.Close()
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -676,7 +676,7 @@ func TestMiniRag_Close(t *testing.T) {
 			}
 
 			// Verify mock storage was closed if it existed
-			if mockStorage, ok := miniRag.storage.(*MockStorage); ok {
+			if mockStorage, ok := lilRag.storage.(*MockStorage); ok {
 				if !mockStorage.closed {
 					t.Error("Expected mock storage to be closed")
 				}
@@ -686,8 +686,8 @@ func TestMiniRag_Close(t *testing.T) {
 }
 
 // Integration-style test using real components (but mocked external dependencies)
-func TestMiniRag_Integration(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "minirag_integration_test")
+func TestLilRag_Integration(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lilrag_integration_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -701,34 +701,34 @@ func TestMiniRag_Integration(t *testing.T) {
 		Overlap:      10,
 	}
 
-	miniRag, err := New(config)
+	lilRag, err := New(config)
 	if err != nil {
-		t.Fatalf("Failed to create MiniRag: %v", err)
+		t.Fatalf("Failed to create LilRag: %v", err)
 	}
 
 	// Replace embedder with mock for predictable testing
-	miniRag.embedder = NewMockEmbedder()
+	lilRag.embedder = NewMockEmbedder()
 
 	// Initialize with real storage but mock embedder
 	mockStorage := NewMockStorage()
-	miniRag.storage = mockStorage
+	lilRag.storage = mockStorage
 
-	err = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	err = lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 	if err != nil {
 		t.Fatalf("Failed to initialize storage: %v", err)
 	}
 
 	// Initialize other components
-	miniRag.chunker = NewTextChunker(config.MaxTokens, config.Overlap)
-	miniRag.pdfParser = NewPDFParser()
+	lilRag.chunker = NewTextChunker(config.MaxTokens, config.Overlap)
+	lilRag.pdfParser = NewPDFParser()
 
-	defer miniRag.Close()
+	defer lilRag.Close()
 
 	ctx := context.Background()
 
 	// Test indexing various types of content
 	t.Run("index short text", func(t *testing.T) {
-		err := miniRag.Index(ctx, "Short document about AI", "short-doc")
+		err := lilRag.Index(ctx, "Short document about AI", "short-doc")
 		if err != nil {
 			t.Errorf("Failed to index short text: %v", err)
 		}
@@ -736,14 +736,14 @@ func TestMiniRag_Integration(t *testing.T) {
 
 	t.Run("index long text requiring chunking", func(t *testing.T) {
 		longText := strings.Repeat("This is a sentence about machine learning. ", 20)
-		err := miniRag.Index(ctx, longText, "long-doc")
+		err := lilRag.Index(ctx, longText, "long-doc")
 		if err != nil {
 			t.Errorf("Failed to index long text: %v", err)
 		}
 	})
 
 	t.Run("search indexed content", func(t *testing.T) {
-		results, err := miniRag.Search(ctx, "machine learning", 5)
+		results, err := lilRag.Search(ctx, "machine learning", 5)
 		if err != nil {
 			t.Errorf("Failed to search: %v", err)
 		}
@@ -774,13 +774,13 @@ func TestMiniRag_Integration(t *testing.T) {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 
-		err = miniRag.IndexFile(ctx, testFile, "file-doc")
+		err = lilRag.IndexFile(ctx, testFile, "file-doc")
 		if err != nil {
 			t.Errorf("Failed to index file: %v", err)
 		}
 
 		// Verify file was indexed and can be found
-		results, err := miniRag.Search(ctx, "test file", 3)
+		results, err := lilRag.Search(ctx, "test file", 3)
 		if err != nil {
 			t.Errorf("Failed to search for file content: %v", err)
 		}
@@ -804,49 +804,49 @@ func TestMiniRag_Integration(t *testing.T) {
 }
 
 // Test error handling scenarios
-func TestMiniRag_ErrorHandling(t *testing.T) {
-	// Test with uninitialized MiniRag
-	uninitializedRag := &MiniRag{}
+func TestLilRag_ErrorHandling(t *testing.T) {
+	// Test with uninitialized LilRag
+	uninitializedRag := &LilRag{}
 	ctx := context.Background()
 
 	t.Run("index without initialization", func(t *testing.T) {
 		err := uninitializedRag.Index(ctx, "test", "doc1")
 		if err == nil {
-			t.Error("Expected error when indexing with uninitialized MiniRag")
+			t.Error("Expected error when indexing with uninitialized LilRag")
 		}
 	})
 
 	t.Run("search without initialization", func(t *testing.T) {
 		_, err := uninitializedRag.Search(ctx, "query", 1)
 		if err == nil {
-			t.Error("Expected error when searching with uninitialized MiniRag")
+			t.Error("Expected error when searching with uninitialized LilRag")
 		}
 	})
 
 	t.Run("index file without initialization", func(t *testing.T) {
 		err := uninitializedRag.IndexFile(ctx, "test.txt", "doc1")
 		if err == nil {
-			t.Error("Expected error when indexing file with uninitialized MiniRag")
+			t.Error("Expected error when indexing file with uninitialized LilRag")
 		}
 	})
 
 	t.Run("close without initialization", func(t *testing.T) {
 		err := uninitializedRag.Close()
 		if err != nil {
-			t.Errorf("Close should not error on uninitialized MiniRag: %v", err)
+			t.Errorf("Close should not error on uninitialized LilRag: %v", err)
 		}
 	})
 }
 
 // Benchmark tests
-func BenchmarkMiniRag_Index_Short(b *testing.B) {
-	miniRag := &MiniRag{
+func BenchmarkLilRag_Index_Short(b *testing.B) {
+	lilRag := &LilRag{
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(1000, 200),
 		config:   &Config{},
 	}
-	_ = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	_ = lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 
 	ctx := context.Background()
 	text := "This is a short text for benchmarking"
@@ -854,21 +854,21 @@ func BenchmarkMiniRag_Index_Short(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		id := fmt.Sprintf("bench-doc-%d", i)
-		err := miniRag.Index(ctx, text, id)
+		err := lilRag.Index(ctx, text, id)
 		if err != nil {
 			b.Fatalf("Failed to index: %v", err)
 		}
 	}
 }
 
-func BenchmarkMiniRag_Index_Long(b *testing.B) {
-	miniRag := &MiniRag{
+func BenchmarkLilRag_Index_Long(b *testing.B) {
+	lilRag := &LilRag{
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(100, 20), // Force chunking
 		config:   &Config{},
 	}
-	_ = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	_ = lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 
 	ctx := context.Background()
 	text := strings.Repeat("This is a long text that will be chunked for benchmarking. ", 50)
@@ -876,20 +876,20 @@ func BenchmarkMiniRag_Index_Long(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		id := fmt.Sprintf("bench-long-doc-%d", i)
-		err := miniRag.Index(ctx, text, id)
+		err := lilRag.Index(ctx, text, id)
 		if err != nil {
 			b.Fatalf("Failed to index: %v", err)
 		}
 	}
 }
 
-func BenchmarkMiniRag_Search(b *testing.B) {
-	miniRag := &MiniRag{
+func BenchmarkLilRag_Search(b *testing.B) {
+	lilRag := &LilRag{
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		config:   &Config{},
 	}
-	_ = miniRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
+	_ = lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
 
 	ctx := context.Background()
 
@@ -897,14 +897,14 @@ func BenchmarkMiniRag_Search(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		text := fmt.Sprintf("Document %d about various topics including machine learning", i)
 		id := fmt.Sprintf("doc-%d", i)
-		_ = miniRag.Index(ctx, text, id) // Benchmark setup, error intentionally ignored
+		_ = lilRag.Index(ctx, text, id) // Benchmark setup, error intentionally ignored
 	}
 
 	query := "machine learning"
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := miniRag.Search(ctx, query, 10)
+		_, err := lilRag.Search(ctx, query, 10)
 		if err != nil {
 			b.Fatalf("Failed to search: %v", err)
 		}
