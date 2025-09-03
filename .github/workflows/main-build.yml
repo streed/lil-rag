@@ -129,7 +129,7 @@ jobs:
       run: |
         EXT="${{ matrix.extension }}"
         SUFFIX="${{ matrix.suffix }}"
-        VERSION="${{ needs.version.outputs.version }}"
+        VERSION="${{ needs.version.outputs.new }}"
         
         echo "Building for $GOOS/$GOARCH with version $VERSION"
         
@@ -140,7 +140,7 @@ jobs:
     - name: Create archive (tar.gz)
       if: matrix.archive == 'tar.gz'
       run: |
-        VERSION="${{ needs.version.outputs.version }}"
+        VERSION="${{ needs.version.outputs.new }}"
         SUFFIX="${{ matrix.suffix }}"
         EXT="${{ matrix.extension }}"
         
@@ -151,7 +151,7 @@ jobs:
       if: matrix.archive == 'zip'
       shell: bash
       run: |
-        VERSION="${{ needs.version.outputs.version }}"
+        VERSION="${{ needs.version.outputs.new }}"
         SUFFIX="${{ matrix.suffix }}"
         EXT="${{ matrix.extension }}"
         
@@ -166,9 +166,9 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: lil-rag-${{ needs.version.outputs.version }}-${{ matrix.suffix }}
+        name: lil-rag-${{ needs.version.outputs.new }}-${{ matrix.suffix }}
         path: |
-          dist/lil-rag-${{ needs.version.outputs.version }}-${{ matrix.suffix }}.*
+          dist/lil-rag-${{ needs.version.outputs.new }}-${{ matrix.suffix }}.*
         retention-days: 30
 
   release:
@@ -184,7 +184,7 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: lil-rag-${{ needs.version.outputs.version }}-*
+        pattern: lil-rag-${{ needs.version.outputs.new }}-*
         path: dist
         merge-multiple: true
 
@@ -197,19 +197,19 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v${{ needs.version.outputs.version }}
-        name: Release v${{ needs.version.outputs.version }}
+        tag_name: v${{ needs.version.outputs.new }}
+        name: Release v${{ needs.version.outputs.new }}
         body: |
-          ## 🚀 Release v${{ needs.version.outputs.version }}
+          ## 🚀 Release v${{ needs.version.outputs.new }}
           
           Auto-generated release from main branch build using native platform compilation.
           
           ### 📦 Downloads
-          - **Linux AMD64**: `lil-rag-${{ needs.version.outputs.version }}-linux-amd64.tar.gz`
-          - **Linux ARM64**: `lil-rag-${{ needs.version.outputs.version }}-linux-arm64.tar.gz`
-          - **Windows AMD64**: `lil-rag-${{ needs.version.outputs.version }}-windows-amd64.zip`
-          - **macOS AMD64**: `lil-rag-${{ needs.version.outputs.version }}-darwin-amd64.tar.gz`
-          - **macOS ARM64**: `lil-rag-${{ needs.version.outputs.version }}-darwin-arm64.tar.gz`
+          - **Linux AMD64**: `lil-rag-${{ needs.version.outputs.new }}-linux-amd64.tar.gz`
+          - **Linux ARM64**: `lil-rag-${{ needs.version.outputs.new }}-linux-arm64.tar.gz`
+          - **Windows AMD64**: `lil-rag-${{ needs.version.outputs.new }}-windows-amd64.zip`
+          - **macOS AMD64**: `lil-rag-${{ needs.version.outputs.new }}-darwin-amd64.tar.gz`
+          - **macOS ARM64**: `lil-rag-${{ needs.version.outputs.new }}-darwin-arm64.tar.gz`
           
           ### 📋 Quick Install
           ```bash
@@ -233,14 +233,14 @@ jobs:
     - name: Display build summary
       run: |
         echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "**Version:** ${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Release Tag:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Version:** ${{ needs.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Release Tag:** v${{ needs.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
         echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64), macOS (AMD64, ARM64)" >> $GITHUB_STEP_SUMMARY
         echo "**Build Method:** Native platform compilation" >> $GITHUB_STEP_SUMMARY
         echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip 2>/dev/null | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Release URL" >> $GITHUB_STEP_SUMMARY
-        echo "https://github.com/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "https://github.com/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
         ls -la dist/ >> $GITHUB_STEP_SUMMARY

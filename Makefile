@@ -1,6 +1,6 @@
 # Lil-RAG - A simple RAG system with SQLite and Ollama
 
-.PHONY: build test clean install fmt vet lint help dev examples deps coverage build-cross clean-dist version
+.PHONY: build test clean install fmt vet lint help dev examples deps coverage build-cross clean-dist version check-cross-tools
 
 # Build binary names
 BINARY_CLI=lil-rag
@@ -104,7 +104,13 @@ examples: build ## Build and validate example programs
 all: clean deps lint test build examples ## Run all checks and build everything
 	@echo "All tasks completed successfully!"
 
-build-cross: ## Build binaries for all platforms (requires cross-compilation tools)
+check-cross-tools: ## Check for required cross-compilation tools
+	@echo "Checking for cross-compilation tools..."
+	@which aarch64-linux-gnu-gcc > /dev/null 2>&1 || (echo "ERROR: aarch64-linux-gnu-gcc not found. Install with: sudo apt-get install gcc-aarch64-linux-gnu" && exit 1)
+	@which x86_64-w64-mingw32-gcc > /dev/null 2>&1 || (echo "ERROR: x86_64-w64-mingw32-gcc not found. Install with: sudo apt-get install gcc-mingw-w64" && exit 1)
+	@echo "All cross-compilation tools are available!"
+
+build-cross: check-cross-tools ## Build binaries for all platforms (requires cross-compilation tools)
 	@echo "Building cross-platform binaries version $(VERSION)..."
 	@echo "Note: For production releases, use GitHub Actions workflow for better cross-platform support"
 	@mkdir -p dist
