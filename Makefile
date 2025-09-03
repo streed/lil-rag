@@ -104,8 +104,9 @@ examples: build ## Build and validate example programs
 all: clean deps lint test build examples ## Run all checks and build everything
 	@echo "All tasks completed successfully!"
 
-build-cross: ## Build binaries for all platforms
+build-cross: ## Build binaries for all platforms (requires cross-compilation tools)
 	@echo "Building cross-platform binaries version $(VERSION)..."
+	@echo "Note: For production releases, use GitHub Actions workflow for better cross-platform support"
 	@mkdir -p dist
 	@echo "Building for Linux AMD64..."
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_CLI)-linux-amd64 ./cmd/lil-rag

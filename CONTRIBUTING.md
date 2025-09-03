@@ -214,9 +214,14 @@ The project uses an automated build system for releases:
 #### Automatic Builds (Main Branch)
 When code is merged to the `main` branch, the CI/CD system automatically:
 1. **Increments the patch version** in the `VERSION` file
-2. **Builds cross-platform binaries** (Linux, macOS, Windows)
+2. **Builds cross-platform binaries** using native platform runners
+   - Linux: Ubuntu runners (AMD64, ARM64)
+   - macOS: macOS runners (AMD64, ARM64) 
+   - Windows: Windows runners (AMD64)
 3. **Creates versioned archives** with checksums
 4. **Uploads build artifacts** to GitHub Actions
+
+This approach uses pre-compiled Go binaries on each platform to avoid CGO cross-compilation issues.
 
 #### Manual Releases (Tags)
 For official releases, create a Git tag:
