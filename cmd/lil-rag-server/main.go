@@ -96,8 +96,11 @@ func run() error {
 
 	mux.Handle("/api/index", handler.Index())
 	mux.Handle("/api/search", handler.Search())
+	mux.Handle("/api/chat", handler.Chat())
+	mux.Handle("/api/documents", handler.Documents())
 	mux.Handle("/api/health", handler.Health())
 	mux.Handle("/api/metrics", handler.Metrics())
+	mux.Handle("/chat", handler.Chat())
 	mux.Handle("/", handler.Static())
 
 	addr := fmt.Sprintf("%s:%d", profileConfig.Server.Host, profileConfig.Server.Port)

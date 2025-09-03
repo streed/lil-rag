@@ -30,6 +30,17 @@ type SearchRequest struct {
 	Limit int    `json:"limit,omitempty"`
 }
 
+type ChatRequest struct {
+	Message string `json:"message"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+type ChatResponse struct {
+	Response string                `json:"response"`
+	Sources  []lilrag.SearchResult `json:"sources"`
+	Query    string                `json:"query"`
+}
+
 type SearchResponse struct {
 	Results []lilrag.SearchResult `json:"results"`
 }
@@ -215,6 +226,740 @@ func (h *Handler) Metrics() http.HandlerFunc {
 	}
 }
 
+func (h *Handler) Documents() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		documents, err := h.rag.ListDocuments(ctx)
+		if err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to list documents", err.Error())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"documents": documents,
+			"count":     len(documents),
+		}); err != nil {
+			// Log error but don't change response at this point
+			fmt.Printf("Error encoding response: %v\n", err)
+		}
+	}
+}
+
+func (h *Handler) Chat() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			// Serve the chat interface HTML
+			h.serveChatInterface(w, r)
+		case http.MethodPost:
+			// Handle chat message
+			h.handleChatMessage(w, r)
+		default:
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+		}
+	}
+}
+
+func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+
+	html := `<!DOCTYPE html>
+<html>
+<head>
+    <title>LilRag Chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrainsMono NL Nerd Font Propo', 'JetBrains Mono NL', 'JetBrains Mono', 
+                         'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-container {
+            width: 95%;
+            max-width: 1200px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .documents-sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+            background: #fff;
+        }
+
+        .sidebar-header h3 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1rem;
+        }
+
+        .documents-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .document-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .document-item:hover {
+            background: #f0f7ff;
+            border-color: #007AFF;
+        }
+
+        .document-id {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+
+        .document-preview {
+            font-size: 0.85em;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .document-meta {
+            font-size: 0.75em;
+            color: #999;
+            margin-top: 6px;
+        }
+
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 20px 20px 0 0;
+        }
+
+        .chat-header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+
+        .message.user {
+            background: #007AFF;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .message.assistant {
+            background: #f1f3f5;
+            color: #333;
+            align-self: flex-start;
+            border: 1px solid #e9ecef;
+        }
+
+        .message.assistant h1,
+        .message.assistant h2,
+        .message.assistant h3,
+        .message.assistant h4 {
+            margin: 0.5em 0 0.3em 0;
+            color: #2c3e50;
+        }
+
+        .message.assistant h2 {
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .message.assistant p {
+            margin: 0.5em 0;
+            line-height: 1.5;
+        }
+
+        .message.assistant strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .message.assistant code {
+            background: #e9ecef;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'JetBrainsMono NL Nerd Font Propo', 'JetBrains Mono NL', 'JetBrains Mono', 
+                         'Fira Code', 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        .message.assistant pre {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+
+        .message.assistant pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .message.system {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            align-self: center;
+            font-size: 0.9rem;
+        }
+
+        .message.document {
+            background: #f8f9fa;
+            color: #2c3e50;
+            border: 1px solid #e9ecef;
+            align-self: flex-start;
+            max-width: 100% !important;
+            width: 100%;
+            font-size: 0.9rem;
+            border-radius: 12px;
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .message.document strong {
+            color: #495057;
+        }
+
+        .sources {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #dee2e6;
+            font-size: 0.85rem;
+        }
+
+        .source-item {
+            margin: 5px 0;
+            padding: 8px 12px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            border-left: 3px solid #2196F3;
+        }
+
+        .source-id {
+            font-weight: bold;
+            color: #1976D2;
+        }
+
+        .source-score {
+            font-size: 0.8rem;
+            color: #666;
+            float: right;
+        }
+
+        .source-text {
+            margin-top: 5px;
+            font-style: italic;
+            color: #555;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #e9ecef;
+            background: #f8f9fa;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 1px solid #dee2e6;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+            resize: none;
+            max-height: 120px;
+            min-height: 44px;
+        }
+
+        .message-input:focus {
+            border-color: #007AFF;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        .send-button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .send-button:hover {
+            background: #0056CC;
+        }
+
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            background: #f1f3f5;
+            padding: 12px 18px;
+            border-radius: 18px;
+            margin-bottom: 15px;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .chat-header {
+                border-radius: 0;
+            }
+            
+            .chat-main {
+                flex-direction: column;
+            }
+            
+            .documents-sidebar {
+                width: 100%;
+                max-height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #e9ecef;
+            }
+            
+            .chat-panel {
+                flex: 1;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 LilRag Chat</h1>
+            <p>Ask questions about your indexed documents</p>
+        </div>
+        
+        <div class="chat-main">
+            <div class="documents-sidebar">
+                <div class="sidebar-header">
+                    <h3>📚 Documents</h3>
+                </div>
+                <div class="documents-list" id="documentsList">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        Loading documents...
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-panel">
+                <div class="chat-messages" id="messages">
+                    <div class="message system">
+                        Welcome! Ask me questions about your indexed documents. " +
+                        "I'll search through them and provide relevant answers.
+                    </div>
+                </div>
+                
+                <div class="typing-indicator" id="typing">
+                    <div class="typing-dots">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+                
+                <div class="chat-input">
+            <div class="input-container">
+                <textarea 
+                    class="message-input" 
+                    id="messageInput" 
+                    placeholder="Ask a question about your documents..."
+                    rows="1"
+                ></textarea>
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const typingIndicator = document.getElementById('typing');
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Send message on Enter (but allow Shift+Enter for new lines)
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function addMessage(content, type, sources = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + type;
+            
+            // Render markdown for assistant messages, keep plain text for user messages
+            let html = (type === 'assistant' && typeof marked !== 'undefined') ? marked.parse(content) : content;
+            
+            if (sources && sources.length > 0) {
+                html += '<div class="sources"><strong>📚 Sources:</strong>';
+                sources.forEach((source, index) => {
+                    html += '<div class="source-item">';
+                    html += '<span class="source-id">' + source.ID + '</span>';
+                    html += '<span class="source-score">Score: ' + source.Score.toFixed(3) + '</span>';
+                    html += '<div class="source-text">' + 
+                        (source.Text.substring(0, 200) + (source.Text.length > 200 ? '...' : '')) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            
+            messageDiv.innerHTML = html;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            typingIndicator.style.display = 'block';
+            messagesContainer.appendChild(typingIndicator);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            messagesContainer.appendChild(errorDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || sendButton.disabled) return;
+
+            // Add user message
+            addMessage(message, 'user');
+            
+            // Clear input and disable send button
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            sendButton.disabled = true;
+            
+            // Show typing indicator
+            showTyping();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        limit: 5
+                    })
+                });
+
+                hideTyping();
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Request failed');
+                }
+
+                const data = await response.json();
+                addMessage(data.response, 'assistant', data.sources);
+                
+            } catch (error) {
+                hideTyping();
+                console.error('Error:', error);
+                showError('Failed to get response: ' + error.message);
+            } finally {
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // Documents functionality
+        function loadDocuments() {
+            fetch('/api/documents')
+                .then(response => response.json())
+                .then(data => {
+                    displayDocuments(data.documents || []);
+                })
+                .catch(error => {
+                    console.error('Error loading documents:', error);
+                    document.getElementById('documentsList').innerHTML = 
+                        "<div style='padding: 20px; text-align: center; color: #dc3545;'>" +
+                        "Failed to load documents</div>";
+                });
+        }
+
+        function displayDocuments(documents) {
+            const container = document.getElementById('documentsList');
+            
+            if (documents.length === 0) {
+                container.innerHTML = "<div style='padding: 20px; text-align: center; color: #666;'>" +
+                    "No documents found</div>";
+                return;
+            }
+
+            container.innerHTML = documents.map(doc => {
+                const preview = doc.text.length > 150 ? doc.text.substring(0, 150) + '...' : doc.text;
+                const updatedDate = new Date(doc.updated_at).toLocaleDateString();
+                
+                return '<div class="document-item" onclick="showDocumentDetail(\'' + doc.id + '\')">' +
+                    '<div class="document-id">' + doc.id + '</div>' +
+                    '<div class="document-preview">' + preview + '</div>' +
+                    '<div class="document-meta">Updated: ' + updatedDate + ' • ' + doc.chunk_count + ' chunk(s)</div>' +
+                    '</div>';
+            }).join('');
+        }
+
+        function showDocumentDetail(docId) {
+            // Find the document
+            fetch('/api/documents')
+                .then(response => response.json())
+                .then(data => {
+                    const doc = data.documents.find(d => d.id === docId);
+                    if (doc) {
+                        // Add a document message showing the document content
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message document';
+                        messageDiv.innerHTML = '<strong>📄 Document: ' + doc.id + '</strong><br><br>' + 
+                            doc.text.replace(/\n/g, '<br>') +
+                            '<br><br><em>Updated: ' + new Date(doc.updated_at).toLocaleString() + '</em>';
+                        messagesContainer.appendChild(messageDiv);
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading document:', error);
+                });
+        }
+
+        // Load documents on page load
+        loadDocuments();
+
+        // Focus input on load
+        messageInput.focus();
+    </script>
+</body>
+</html>`
+
+	if _, err := w.Write([]byte(html)); err != nil {
+		fmt.Printf("Error writing response: %v\n", err)
+	}
+}
+
+func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
+	var req ChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid JSON", err.Error())
+		return
+	}
+
+	if req.Message == "" {
+		h.writeError(w, http.StatusBadRequest, "message is required", "")
+		return
+	}
+
+	// Set default limit
+	if req.Limit <= 0 {
+		req.Limit = 5
+	} else if req.Limit > 20 {
+		req.Limit = 20 // Cap at 20 sources
+	}
+
+	ctx := context.Background()
+
+	// Search for relevant documents
+	results, err := h.rag.Search(ctx, req.Message, req.Limit)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "search failed", err.Error())
+		return
+	}
+
+	// Generate response based on search results
+	var response string
+	if len(results) == 0 {
+		response = "I couldn't find any relevant information in your indexed documents to answer " +
+			"that question. You may want to:\n\n• Check if you've indexed documents related " +
+			"to this topic\n• Try rephrasing your question\n• Add more relevant documents to the system"
+	} else {
+		// Create a contextual response
+		response = "Based on your indexed documents, here's what I found:\n\n"
+
+		for i, result := range results {
+			if i < 3 { // Limit to top 3 results in response text
+				response += fmt.Sprintf("📄 **From %s** (relevance: %.1f%%):\n%s\n\n",
+					result.ID, result.Score*100,
+					result.Text[:minInt(300, len(result.Text))]+
+						func() string {
+							if len(result.Text) > 300 {
+								return "..."
+							}
+							return ""
+						}())
+			}
+		}
+
+		if len(results) > 3 {
+			response += fmt.Sprintf("💡 *Found %d additional relevant sources (see sources below)*", len(results)-3)
+		}
+	}
+
+	chatResp := ChatResponse{
+		Response: response,
+		Sources:  results,
+		Query:    req.Message,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+		fmt.Printf("Error encoding response: %v\n", err)
+	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func (h *Handler) Static() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -238,6 +983,14 @@ func (h *Handler) Static() http.HandlerFunc {
 <body>
     <h1>LilRag API</h1>
     <p>A simple RAG (Retrieval Augmented Generation) API using SQLite and Ollama</p>
+    
+    <div style="margin: 20px 0; padding: 15px; background: #e8f5e8; border: 1px solid #4caf50; 
+         border-radius: 5px; text-align: center;">
+        <h3 style="margin: 0 0 10px 0; color: #2e7d32;">💬 Try the Interactive Chat Interface!</h3>
+        <p style="margin: 0 0 15px 0;">Ask questions about your documents in a user-friendly chat interface</p>
+        <a href="/chat" style="background: #4caf50; color: white; padding: 10px 20px; 
+           text-decoration: none; border-radius: 5px; font-weight: bold;">Open Chat Interface</a>
+    </div>
     
     <div class="endpoint">
         <h3><span class="method post">POST</span> /api/index</h3>
