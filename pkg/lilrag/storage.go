@@ -135,10 +135,14 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+
+	committed := false
 	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			// Log rollback error if needed, but don't override the main error
-			fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Log rollback error if needed, but don't override the main error
+				fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+			}
 		}
 	}()
 
@@ -218,7 +222,12 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string
 		}
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // Index maintains backward compatibility for single-text indexing
