@@ -104,24 +104,30 @@ examples: build ## Build and validate example programs
 all: clean deps lint test build examples ## Run all checks and build everything
 	@echo "All tasks completed successfully!"
 
-build-cross: ## Build binaries for all platforms
+build-cross: ## Build binaries for all platforms (requires cross-compilation tools)
 	@echo "Building cross-platform binaries version $(VERSION)..."
+	@echo "Note: For production releases, use GitHub Actions workflow for better cross-platform support"
 	@mkdir -p dist
 	@echo "Building for Linux AMD64..."
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_CLI)-linux-amd64 ./cmd/lil-rag
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_SERVER)-linux-amd64 ./cmd/lil-rag-server
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_MCP)-linux-amd64 ./cmd/lil-rag-mcp
 	@echo "Building for Linux ARM64..."
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_CLI)-linux-arm64 ./cmd/lil-rag
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_SERVER)-linux-arm64 ./cmd/lil-rag-server
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_MCP)-linux-arm64 ./cmd/lil-rag-mcp
 	@echo "Building for macOS AMD64..."
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_CLI)-darwin-amd64 ./cmd/lil-rag
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_SERVER)-darwin-amd64 ./cmd/lil-rag-server
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_MCP)-darwin-amd64 ./cmd/lil-rag-mcp
 	@echo "Building for macOS ARM64..."
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_CLI)-darwin-arm64 ./cmd/lil-rag
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_SERVER)-darwin-arm64 ./cmd/lil-rag-server
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_MCP)-darwin-arm64 ./cmd/lil-rag-mcp
 	@echo "Building for Windows AMD64..."
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_CLI)-windows-amd64.exe ./cmd/lil-rag
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_SERVER)-windows-amd64.exe ./cmd/lil-rag-server
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc $(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o dist/$(BINARY_MCP)-windows-amd64.exe ./cmd/lil-rag-mcp
 	@echo "Cross-platform build complete!"
 
 clean-dist: ## Clean distribution artifacts

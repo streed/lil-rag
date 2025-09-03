@@ -555,10 +555,12 @@ The project uses semantic versioning stored in the `VERSION` file. When code is 
 
 ### Cross-Platform Builds
 
-The CI/CD system builds binaries for:
-- **Linux**: AMD64, ARM64
-- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon)
-- **Windows**: AMD64
+The CI/CD system builds binaries using native platform runners to avoid CGO cross-compilation issues:
+- **Linux**: AMD64, ARM64 (built on Ubuntu runners)
+- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon) (built on macOS runners)
+- **Windows**: AMD64 (built on Windows runners)
+
+This approach uses pre-compiled Go binaries on each platform for reliable builds with CGO dependencies.
 
 All binaries include the version information and can be checked with:
 ```bash

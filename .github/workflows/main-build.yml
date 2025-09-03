@@ -12,28 +12,17 @@ permissions:
   actions: read
 
 jobs:
-  build-and-version:
-    name: Build Cross-Platform Binaries
+  version:
+    name: Update Version
     runs-on: ubuntu-latest
-    
+    outputs:
+      version: ${{ steps.version.outputs.new }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-
-    - name: Install dependencies
-      run: go mod download
-
-    - name: Run tests
-      run: go test -v ./...
 
     - name: Read current version and increment
       id: version
@@ -67,88 +56,160 @@ jobs:
           git push
         fi
 
-    - name: Create release directory
+  build-cross-platform:
+    name: Build Native Binaries
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+            archive: tar.gz
+          - os: ubuntu-latest  
+            goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+            archive: tar.gz
+            cc: aarch64-linux-gnu-gcc
+            setup_cross: |
+              sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            extension: .exe
+            archive: zip
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+            archive: tar.gz
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+            archive: tar.gz
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Set up cross-compilation tools
+      if: matrix.setup_cross
+      run: ${{ matrix.setup_cross }}
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Run tests (Linux only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: go test -v ./...
+
+    - name: Create dist directory
       run: mkdir -p dist
 
-    - name: Build for Linux AMD64
+    - name: Build binaries
       env:
-        GOOS: linux
-        GOARCH: amd64
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: 1
+        CC: ${{ matrix.cc }}
       run: |
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-linux-amd64 ./cmd/lil-rag
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-linux-amd64 ./cmd/lil-rag-server
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-mcp-linux-amd64 ./cmd/lil-rag-mcp
-
-    - name: Build for Linux ARM64
-      env:
-        GOOS: linux
-        GOARCH: arm64
-        CGO_ENABLED: 1
-        CC: aarch64-linux-gnu-gcc
-      run: |
-        sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-linux-arm64 ./cmd/lil-rag
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-linux-arm64 ./cmd/lil-rag-server
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-mcp-linux-arm64 ./cmd/lil-rag-mcp
-
-    # Note: macOS builds are temporarily disabled due to CGO cross-compilation complexity
-    # Users can build locally on macOS with: go build ./cmd/lil-rag
-    # TODO: Add proper macOS runners or osxcross toolchain setup
-
-    - name: Build for Windows AMD64
-      env:
-        GOOS: windows
-        GOARCH: amd64
-        CGO_ENABLED: 1
-        CC: x86_64-w64-mingw32-gcc
-      run: |
-        sudo apt-get install -y gcc-mingw-w64
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-windows-amd64.exe ./cmd/lil-rag
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-server-windows-amd64.exe ./cmd/lil-rag-server
-        go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.new }}" -o dist/lil-rag-mcp-windows-amd64.exe ./cmd/lil-rag-mcp
-
-    - name: Create archives
-      run: |
-        # Linux AMD64
-        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-amd64.tar.gz -C dist lil-rag-linux-amd64 lil-rag-server-linux-amd64 lil-rag-mcp-linux-amd64
+        EXT="${{ matrix.extension }}"
+        SUFFIX="${{ matrix.suffix }}"
+        VERSION="${{ needs.version.outputs.version }}"
         
-        # Linux ARM64
-        tar -czf dist/lil-rag-${{ steps.version.outputs.new }}-linux-arm64.tar.gz -C dist lil-rag-linux-arm64 lil-rag-server-linux-arm64 lil-rag-mcp-linux-arm64
+        echo "Building for $GOOS/$GOARCH with version $VERSION"
         
-        # Windows AMD64
-        zip -j dist/lil-rag-${{ steps.version.outputs.new }}-windows-amd64.zip dist/lil-rag-windows-amd64.exe dist/lil-rag-server-windows-amd64.exe dist/lil-rag-mcp-windows-amd64.exe
+        go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/lil-rag-$SUFFIX$EXT" ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/lil-rag-server-$SUFFIX$EXT" ./cmd/lil-rag-server  
+        go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/lil-rag-mcp-$SUFFIX$EXT" ./cmd/lil-rag-mcp
 
-    - name: Generate checksums
+    - name: Create archive (tar.gz)
+      if: matrix.archive == 'tar.gz'
       run: |
+        VERSION="${{ needs.version.outputs.version }}"
+        SUFFIX="${{ matrix.suffix }}"
+        EXT="${{ matrix.extension }}"
+        
         cd dist
-        sha256sum *.tar.gz *.zip > checksums.txt
+        tar -czf "lil-rag-$VERSION-$SUFFIX.tar.gz" "lil-rag-$SUFFIX$EXT" "lil-rag-server-$SUFFIX$EXT" "lil-rag-mcp-$SUFFIX$EXT"
+
+    - name: Create archive (zip)
+      if: matrix.archive == 'zip'
+      shell: bash
+      run: |
+        VERSION="${{ needs.version.outputs.version }}"
+        SUFFIX="${{ matrix.suffix }}"
+        EXT="${{ matrix.extension }}"
+        
+        cd dist
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          # Use PowerShell on Windows for zip creation
+          powershell -Command "Compress-Archive -Path 'lil-rag-$SUFFIX$EXT', 'lil-rag-server-$SUFFIX$EXT', 'lil-rag-mcp-$SUFFIX$EXT' -DestinationPath 'lil-rag-$VERSION-$SUFFIX.zip'"
+        else
+          zip "lil-rag-$VERSION-$SUFFIX.zip" "lil-rag-$SUFFIX$EXT" "lil-rag-server-$SUFFIX$EXT" "lil-rag-mcp-$SUFFIX$EXT"
+        fi
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: lil-rag-${{ steps.version.outputs.new }}-binaries
+        name: lil-rag-${{ needs.version.outputs.version }}-${{ matrix.suffix }}
         path: |
-          dist/*.tar.gz
-          dist/*.zip
-          dist/checksums.txt
+          dist/lil-rag-${{ needs.version.outputs.version }}-${{ matrix.suffix }}.*
         retention-days: 30
 
+  release:
+    name: Create GitHub Release
+    needs: [version, build-cross-platform]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: lil-rag-${{ needs.version.outputs.version }}-*
+        path: dist
+        merge-multiple: true
+
+    - name: Generate checksums
+      run: |
+        cd dist
+        find . -name "*.tar.gz" -o -name "*.zip" | xargs sha256sum > checksums.txt
+        ls -la
+
     - name: Create GitHub Release
-      if: github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v${{ steps.version.outputs.new }}
-        name: Release v${{ steps.version.outputs.new }}
+        tag_name: v${{ needs.version.outputs.version }}
+        name: Release v${{ needs.version.outputs.version }}
         body: |
-          ## 🚀 Release v${{ steps.version.outputs.new }}
+          ## 🚀 Release v${{ needs.version.outputs.version }}
           
-          Auto-generated release from main branch build.
+          Auto-generated release from main branch build using native platform compilation.
           
           ### 📦 Downloads
-          - **Linux AMD64**: `lil-rag-${{ steps.version.outputs.new }}-linux-amd64.tar.gz`
-          - **Linux ARM64**: `lil-rag-${{ steps.version.outputs.new }}-linux-arm64.tar.gz`
-          - **Windows AMD64**: `lil-rag-${{ steps.version.outputs.new }}-windows-amd64.zip`
+          - **Linux AMD64**: `lil-rag-${{ needs.version.outputs.version }}-linux-amd64.tar.gz`
+          - **Linux ARM64**: `lil-rag-${{ needs.version.outputs.version }}-linux-arm64.tar.gz`
+          - **Windows AMD64**: `lil-rag-${{ needs.version.outputs.version }}-windows-amd64.zip`
+          - **macOS AMD64**: `lil-rag-${{ needs.version.outputs.version }}-darwin-amd64.tar.gz`
+          - **macOS ARM64**: `lil-rag-${{ needs.version.outputs.version }}-darwin-arm64.tar.gz`
           
           ### 📋 Quick Install
           ```bash
@@ -158,7 +219,7 @@ jobs:
           ### ✨ What's New
           This release includes all changes merged to main since the previous release.
           
-          **Note**: macOS users should build from source due to CGO cross-compilation complexity.
+          **Note**: Built using native platform compilation to avoid CGO cross-compilation issues.
         files: |
           dist/*.tar.gz
           dist/*.zip
@@ -172,14 +233,14 @@ jobs:
     - name: Display build summary
       run: |
         echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "**Version:** ${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Release Tag:** v${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64)" >> $GITHUB_STEP_SUMMARY
-        echo "**Note:** macOS builds available via local compilation" >> $GITHUB_STEP_SUMMARY
-        echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
+        echo "**Version:** ${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Release Tag:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64), macOS (AMD64, ARM64)" >> $GITHUB_STEP_SUMMARY
+        echo "**Build Method:** Native platform compilation" >> $GITHUB_STEP_SUMMARY
+        echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip 2>/dev/null | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔗 Release URL" >> $GITHUB_STEP_SUMMARY
-        echo "https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
+        echo "https://github.com/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
         ls -la dist/ >> $GITHUB_STEP_SUMMARY
