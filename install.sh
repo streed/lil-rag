@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-REPO="streed/lil-rag"  # Update this to your actual GitHub repo
+REPO="streed/lil-rag"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 GITHUB_API="https://api.github.com"
 GITHUB_REPO="https://github.com"
