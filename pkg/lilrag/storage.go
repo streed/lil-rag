@@ -401,6 +401,54 @@ func (s *SQLiteStorage) hasMultipleChunks(ctx context.Context, documentID string
 	return count > 1
 }
 
+func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, original_text_compressed, chunk_count, updated_at 
+		FROM documents 
+		ORDER BY updated_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query documents: %w", err)
+	}
+	defer rows.Close()
+
+	var documents []DocumentInfo
+	for rows.Next() {
+		var doc DocumentInfo
+		var compressedText []byte
+		var updatedAtStr string
+
+		err := rows.Scan(&doc.ID, &compressedText, &doc.ChunkCount, &updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan document row: %w", err)
+		}
+
+		// Decompress the text
+		doc.Text, err = DecompressText(compressedText)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress document text for %s: %w", doc.ID, err)
+		}
+
+		// Parse the timestamp
+		doc.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+		if err != nil {
+			// Try alternative format if RFC3339 fails
+			doc.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAtStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse timestamp for %s: %w", doc.ID, err)
+			}
+		}
+
+		documents = append(documents, doc)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during document iteration: %w", err)
+	}
+
+	return documents, nil
+}
+
 func (s *SQLiteStorage) Close() error {
 	if s.db != nil {
 		return s.db.Close()

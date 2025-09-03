@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -36,6 +37,7 @@ type Storage interface {
 	Index(ctx context.Context, id string, text string, embedding []float32) error
 	IndexChunks(ctx context.Context, documentID string, text string, chunks []Chunk, embeddings [][]float32) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
+	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	Close() error
 }
 
@@ -48,6 +50,13 @@ type SearchResult struct {
 	Text     string
 	Score    float64
 	Metadata map[string]interface{}
+}
+
+type DocumentInfo struct {
+	ID         string    `json:"id"`
+	Text       string    `json:"text"`
+	ChunkCount int       `json:"chunk_count"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 func New(config *Config) (*LilRag, error) {
@@ -251,6 +260,10 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 	}
 
 	return m.storage.Search(ctx, embedding, limit)
+}
+
+func (m *LilRag) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {
+	return m.storage.ListDocuments(ctx)
 }
 
 func (m *LilRag) Close() error {

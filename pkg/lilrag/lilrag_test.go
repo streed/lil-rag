@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Mock implementations for testing
@@ -85,6 +86,24 @@ func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]Searc
 		}
 	}
 	return results, nil
+}
+
+func (m *MockStorage) ListDocuments(_ context.Context) ([]DocumentInfo, error) {
+	if !m.initialized {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+
+	var documents []DocumentInfo
+	for id, text := range m.documents {
+		doc := DocumentInfo{
+			ID:         id,
+			Text:       text,
+			ChunkCount: 1, // Mock with 1 chunk
+			UpdatedAt:  time.Now(),
+		}
+		documents = append(documents, doc)
+	}
+	return documents, nil
 }
 
 func (m *MockStorage) Close() error {
