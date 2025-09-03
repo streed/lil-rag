@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-username/lil-rag)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/streed/lil-rag)
 
 A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides CLI, HTTP API, and MCP server interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
 
@@ -48,10 +48,10 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ```bash
 # Install to ~/.local/bin (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/your-username/lil-rag/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/streed/lil-rag/main/install.sh | bash
 
 # Or download and run manually
-curl -fsSL -O https://raw.githubusercontent.com/your-username/lil-rag/main/install.sh
+curl -fsSL -O https://raw.githubusercontent.com/streed/lil-rag/main/install.sh
 chmod +x install.sh
 ./install.sh
 
@@ -72,7 +72,7 @@ The install script will:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/lil-rag.git
+git clone https://github.com/streed/lil-rag.git
 cd lil-rag
 
 # Build both CLI and server
@@ -94,13 +94,13 @@ make install
 
 ```bash
 # Install CLI directly
-go install github.com/your-username/lil-rag/cmd/lil-rag@latest
+go install github.com/streed/lil-rag/cmd/lil-rag@latest
 
 # Install server directly  
-go install github.com/your-username/lil-rag/cmd/lil-rag-server@latest
+go install github.com/streed/lil-rag/cmd/lil-rag-server@latest
 
 # Install MCP server directly
-go install github.com/your-username/lil-rag/cmd/lil-rag-mcp@latest
+go install github.com/streed/lil-rag/cmd/lil-rag-mcp@latest
 ```
 
 ## 🎯 Quick Start
