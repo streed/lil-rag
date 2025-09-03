@@ -134,13 +134,52 @@ jobs:
           dist/checksums.txt
         retention-days: 30
 
+    - name: Create GitHub Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.version.outputs.new }}
+        name: Release v${{ steps.version.outputs.new }}
+        body: |
+          ## 🚀 Release v${{ steps.version.outputs.new }}
+          
+          Auto-generated release from main branch build.
+          
+          ### 📦 Downloads
+          - **Linux AMD64**: `lil-rag-${{ steps.version.outputs.new }}-linux-amd64.tar.gz`
+          - **Linux ARM64**: `lil-rag-${{ steps.version.outputs.new }}-linux-arm64.tar.gz`
+          - **Windows AMD64**: `lil-rag-${{ steps.version.outputs.new }}-windows-amd64.zip`
+          
+          ### 📋 Quick Install
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+          ```
+          
+          ### ✨ What's New
+          This release includes all changes merged to main since the previous release.
+          
+          **Note**: macOS users should build from source due to CGO cross-compilation complexity.
+        files: |
+          dist/*.tar.gz
+          dist/*.zip
+          dist/checksums.txt
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Display build summary
       run: |
         echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "**Version:** ${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Release Tag:** v${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
         echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64)" >> $GITHUB_STEP_SUMMARY
         echo "**Note:** macOS builds available via local compilation" >> $GITHUB_STEP_SUMMARY
         echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Release URL" >> $GITHUB_STEP_SUMMARY
+        echo "https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
         ls -la dist/ >> $GITHUB_STEP_SUMMARY

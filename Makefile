@@ -5,6 +5,7 @@
 # Build binary names
 BINARY_CLI=lil-rag
 BINARY_SERVER=lil-rag-server
+BINARY_MCP=lil-rag-mcp
 
 # Go parameters
 GOCMD=go
@@ -33,11 +34,12 @@ help: ## Show this help message
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build CLI and server binaries
-	@echo "Building $(BINARY_CLI) and $(BINARY_SERVER) version $(VERSION)..."
+build: ## Build all binaries (CLI, server, MCP)
+	@echo "Building $(BINARY_CLI), $(BINARY_SERVER), and $(BINARY_MCP) version $(VERSION)..."
 	@mkdir -p bin
 	$(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o bin/$(BINARY_CLI) ./cmd/lil-rag
 	$(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o bin/$(BINARY_SERVER) ./cmd/lil-rag-server
+	$(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o bin/$(BINARY_MCP) ./cmd/lil-rag-mcp
 	@echo "Build complete!"
 
 build-cli: ## Build only the CLI binary
@@ -50,6 +52,11 @@ build-server: ## Build only the server binary
 	@mkdir -p bin
 	$(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o bin/$(BINARY_SERVER) ./cmd/lil-rag-server
 
+build-mcp: ## Build only the MCP server binary
+	@echo "Building $(BINARY_MCP) version $(VERSION)..."
+	@mkdir -p bin
+	$(GOBUILD) $(BUILDFLAGS) $(LDFLAGS_WITH_VERSION) -o bin/$(BINARY_MCP) ./cmd/lil-rag-mcp
+
 test: ## Run tests
 	$(GOTEST) -v ./pkg/... ./internal/... ./cmd/...
 
@@ -60,7 +67,7 @@ coverage: ## Run tests with coverage
 
 clean: ## Clean build artifacts
 	$(GOCLEAN)
-	rm -f bin/$(BINARY_CLI) bin/$(BINARY_SERVER)
+	rm -f bin/$(BINARY_CLI) bin/$(BINARY_SERVER) bin/$(BINARY_MCP)
 	rm -f coverage.out coverage.html
 	rm -rf dist/
 
@@ -68,6 +75,7 @@ install: build ## Install binaries to $GOPATH/bin
 	@echo "Installing binaries to $(GOPATH)/bin..."
 	cp bin/$(BINARY_CLI) $(GOPATH)/bin/
 	cp bin/$(BINARY_SERVER) $(GOPATH)/bin/
+	cp bin/$(BINARY_MCP) $(GOPATH)/bin/
 	@echo "Installation complete!"
 
 fmt: ## Format Go code

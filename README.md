@@ -42,6 +42,32 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ## 🚀 Installation
 
+### Quick Install (Recommended)
+
+**One-line install from GitHub releases:**
+
+```bash
+# Install to ~/.local/bin (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/your-username/lil-rag/main/install.sh | bash
+
+# Or download and run manually
+curl -fsSL -O https://raw.githubusercontent.com/your-username/lil-rag/main/install.sh
+chmod +x install.sh
+./install.sh
+
+# Install to custom directory
+./install.sh --dir /usr/local/bin
+
+# Windows users can use Git Bash or WSL
+```
+
+The install script will:
+- 🔍 **Auto-detect** your OS and architecture
+- ⬇️ **Download** the latest release from GitHub
+- 📦 **Extract** and install binaries
+- ✅ **Verify** installation
+- 📋 **Show** quick start instructions
+
 ### From Source
 
 ```bash
@@ -191,7 +217,34 @@ lil-rag config set ollama.model all-MiniLM-L6-v2   # Update configuration
 ./bin/lil-rag-server --host 0.0.0.0 --port 9000
 ```
 
-Visit http://localhost:8080 for the web interface with API documentation.
+Visit http://localhost:8080 for the web interface with API documentation and interactive chat.
+
+### 💬 Interactive Chat Interface
+
+The HTTP server includes a modern, responsive chat interface for conversing with your indexed documents:
+
+![Chat Interface](https://img.shields.io/badge/UI-Chat%20Interface-blue)
+
+**Features:**
+- 🎨 Modern, responsive design with JetBrains Mono font
+- 📄 Document browser sidebar with click-to-view functionality  
+- 💬 Real-time chat with RAG-powered responses
+- 📚 Source citations with relevance scores
+- 🔍 Full document display when clicking on sidebar items
+- 📱 Mobile-friendly responsive layout
+
+**Access the Chat:**
+1. Start the server: `./bin/lil-rag-server`
+2. Open your browser to: http://localhost:8080/chat
+3. Browse indexed documents in the sidebar
+4. Ask questions about your documents in the chat
+
+**Chat Interface Capabilities:**
+- Ask questions about indexed content
+- View source documents with relevance scores
+- Browse and preview all indexed documents
+- See full document content by clicking sidebar items
+- Markdown rendering for formatted responses
 
 ### API Endpoints
 
@@ -264,6 +317,59 @@ curl -X POST http://localhost:8080/api/search \
       }
     }
   ]
+}
+```
+
+#### POST /api/chat
+Chat interface for conversational queries with RAG responses.
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Tell me about machine learning algorithms",
+    "limit": 5
+  }'
+```
+
+**Response:**
+```json
+{
+  "response": "Based on your indexed documents, here's what I found:\n\n📄 **From doc1** (relevance: 85.4%):\nThis document discusses machine learning algorithms and their applications in modern AI systems...",
+  "sources": [
+    {
+      "ID": "doc1",
+      "Text": "Full document content...",
+      "Score": 0.8542,
+      "Metadata": {
+        "chunk_index": 1,
+        "matching_chunk": "...relevant excerpt..."
+      }
+    }
+  ],
+  "query": "Tell me about machine learning algorithms"
+}
+```
+
+#### GET /api/documents
+List all indexed documents with metadata.
+
+```bash
+curl http://localhost:8080/api/documents
+```
+
+**Response:**
+```json
+{
+  "documents": [
+    {
+      "id": "doc1",
+      "text": "Full document content...",
+      "chunk_count": 3,
+      "updated_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1
 }
 ```
 
