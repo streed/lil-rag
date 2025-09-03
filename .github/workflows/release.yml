@@ -12,6 +12,8 @@ jobs:
   build-and-release:
     name: Build and Release
     runs-on: ubuntu-latest
+    # NOTE: This workflow uses cross-compilation which has limitations with CGO.
+    # For production releases, prefer the native platform builds in main-build.yml
     
     steps:
     - name: Checkout code
@@ -28,6 +30,13 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Get version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
     - name: Run tests
       run: go test -v ./...
 
@@ -40,9 +49,10 @@ jobs:
         GOARCH: amd64
         CGO_ENABLED: 1
       run: |
-        go build -ldflags="-s -w" -o dist/lil-rag-linux-amd64 ./cmd/lil-rag
-        go build -ldflags="-s -w" -o dist/lil-rag-server-linux-amd64 ./cmd/lil-rag-server
-        go build -ldflags="-s -w" -o dist/lil-rag-mcp-linux-amd64 ./cmd/lil-rag-mcp
+        VERSION="${{ steps.version.outputs.version }}"
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-linux-amd64 ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-server-linux-amd64 ./cmd/lil-rag-server
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-mcp-linux-amd64 ./cmd/lil-rag-mcp
 
     - name: Build for Linux ARM64
       env:
@@ -52,9 +62,10 @@ jobs:
         CC: aarch64-linux-gnu-gcc
       run: |
         sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-        go build -ldflags="-s -w" -o dist/lil-rag-linux-arm64 ./cmd/lil-rag
-        go build -ldflags="-s -w" -o dist/lil-rag-server-linux-arm64 ./cmd/lil-rag-server
-        go build -ldflags="-s -w" -o dist/lil-rag-mcp-linux-arm64 ./cmd/lil-rag-mcp
+        VERSION="${{ steps.version.outputs.version }}"
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-linux-arm64 ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-server-linux-arm64 ./cmd/lil-rag-server
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-mcp-linux-arm64 ./cmd/lil-rag-mcp
 
     # Note: macOS builds are temporarily disabled due to CGO cross-compilation complexity
     # Users can build locally on macOS with: go build ./cmd/lil-rag
@@ -68,9 +79,10 @@ jobs:
         CC: x86_64-w64-mingw32-gcc
       run: |
         sudo apt-get install -y gcc-mingw-w64
-        go build -ldflags="-s -w" -o dist/lil-rag-windows-amd64.exe ./cmd/lil-rag
-        go build -ldflags="-s -w" -o dist/lil-rag-server-windows-amd64.exe ./cmd/lil-rag-server
-        go build -ldflags="-s -w" -o dist/lil-rag-mcp-windows-amd64.exe ./cmd/lil-rag-mcp
+        VERSION="${{ steps.version.outputs.version }}"
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-windows-amd64.exe ./cmd/lil-rag
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-server-windows-amd64.exe ./cmd/lil-rag-server
+        go build -ldflags="-s -w -X main.version=$VERSION" -o dist/lil-rag-mcp-windows-amd64.exe ./cmd/lil-rag-mcp
 
     - name: Create archives
       run: |
