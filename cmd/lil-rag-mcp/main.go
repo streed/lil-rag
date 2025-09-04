@@ -106,6 +106,7 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 			DataDir:      profileConfig.DataDir,
 			OllamaURL:    profileConfig.Ollama.Endpoint,
 			Model:        profileConfig.Ollama.EmbeddingModel,
+			ChatModel:    profileConfig.Ollama.ChatModel,
 			VectorSize:   profileConfig.Ollama.VectorSize,
 			MaxTokens:    profileConfig.Chunking.MaxTokens,
 			Overlap:      profileConfig.Chunking.Overlap,
@@ -227,7 +228,7 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 				"properties": map[string]interface{}{
 					"file_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Path to the file to index (supports .txt and .pdf files)",
+						"description": "Path to the file to index (supports multiple formats: .txt, .pdf, .docx, .xlsx, .html, .csv)",
 					},
 					"id": map[string]interface{}{
 						"type":        "string",
@@ -254,6 +255,48 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 				},
 				"required": []string{"query"},
+			},
+		},
+		{
+			Name:        "lilrag_chat",
+			Description: "Interactive chat with RAG context - ask questions and get responses with relevant sources",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"message": map[string]interface{}{
+						"type":        "string",
+						"description": "The question or message to ask",
+					},
+					"limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum number of source documents to use for context (default: 5, max: 20)",
+						"default":     5,
+					},
+				},
+				"required": []string{"message"},
+			},
+		},
+		{
+			Name:        "lilrag_list_documents",
+			Description: "List all indexed documents with metadata",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+				"required":   []string{},
+			},
+		},
+		{
+			Name:        "lilrag_delete_document",
+			Description: "Delete a document and all its chunks from the RAG system",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"document_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The ID of the document to delete",
+					},
+				},
+				"required": []string{"document_id"},
 			},
 		},
 	}
@@ -287,6 +330,12 @@ func (s *LilRagMCPServer) handleToolsCall(message MCPMessage) *MCPMessage {
 		return s.handleIndexFile(message.ID, callParams.Arguments)
 	case "lilrag_search":
 		return s.handleSearch(message.ID, callParams.Arguments)
+	case "lilrag_chat":
+		return s.handleChat(message.ID, callParams.Arguments)
+	case "lilrag_list_documents":
+		return s.handleListDocuments(message.ID, callParams.Arguments)
+	case "lilrag_delete_document":
+		return s.handleDeleteDocument(message.ID, callParams.Arguments)
 	default:
 		return s.errorResponse(message.ID, -32601, "Tool not found")
 	}
@@ -439,6 +488,146 @@ func (s *LilRagMCPServer) errorResponse(id interface{}, code int, message string
 		Error: map[string]interface{}{
 			"code":    code,
 			"message": message,
+		},
+	}
+}
+
+func (s *LilRagMCPServer) handleChat(id interface{}, args map[string]interface{}) *MCPMessage {
+	// Extract parameters
+	message, ok := args["message"].(string)
+	if !ok || message == "" {
+		return s.errorResponse(id, -32602, "message parameter is required and must be a non-empty string")
+	}
+
+	// Parse limit (default to 5)
+	limit := 5
+	if limitArg, exists := args["limit"]; exists {
+		if limitFloat, ok := limitArg.(float64); ok {
+			limit = int(limitFloat)
+		}
+	}
+
+	// Cap limit at 20
+	if limit > 20 {
+		limit = 20
+	}
+
+	// Perform chat
+	ctx := context.Background()
+	response, sources, err := s.rag.Chat(ctx, message, limit)
+	if err != nil {
+		return s.errorResponse(id, -32603, fmt.Sprintf("Chat failed: %v", err))
+	}
+
+	// Format response with sources
+	var fullResponse strings.Builder
+	fullResponse.WriteString(fmt.Sprintf("**Response:**\n%s\n\n", response))
+
+	if len(sources) > 0 {
+		fullResponse.WriteString(fmt.Sprintf("**Sources (%d):**\n", len(sources)))
+		for i, source := range sources {
+			fullResponse.WriteString(fmt.Sprintf("%d. **%s** (Score: %.4f)\n", i+1, source.ID, source.Score))
+			// Truncate source content for readability
+			sourceText := source.Text
+			if len(sourceText) > 300 {
+				sourceText = sourceText[:300] + "..."
+			}
+			fullResponse.WriteString(fmt.Sprintf("   %s\n\n", sourceText))
+		}
+	}
+
+	return &MCPMessage{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: MCPCallToolResult{
+			Content: []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}{{
+				Type: "text",
+				Text: fullResponse.String(),
+			}},
+		},
+	}
+}
+
+func (s *LilRagMCPServer) handleListDocuments(id interface{}, _ map[string]interface{}) *MCPMessage {
+	ctx := context.Background()
+	documents, err := s.rag.ListDocuments(ctx)
+	if err != nil {
+		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to list documents: %v", err))
+	}
+
+	if len(documents) == 0 {
+		return &MCPMessage{
+			JSONRPC: "2.0",
+			ID:      id,
+			Result: MCPCallToolResult{
+				Content: []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				}{{
+					Type: "text",
+					Text: "No documents found in the RAG system.",
+				}},
+			},
+		}
+	}
+
+	// Format documents list
+	var response strings.Builder
+	response.WriteString(fmt.Sprintf("**Indexed Documents (%d):**\n\n", len(documents)))
+
+	for i, doc := range documents {
+		response.WriteString(fmt.Sprintf("**%d. %s**\n", i+1, doc.ID))
+		response.WriteString(fmt.Sprintf("   - Type: %s\n", doc.DocType))
+		response.WriteString(fmt.Sprintf("   - Chunks: %d\n", doc.ChunkCount))
+		if doc.SourcePath != "" {
+			response.WriteString(fmt.Sprintf("   - Source: %s\n", doc.SourcePath))
+		}
+		response.WriteString(fmt.Sprintf("   - Created: %s\n", doc.CreatedAt.Format("2006-01-02 15:04:05")))
+		response.WriteString(fmt.Sprintf("   - Updated: %s\n\n", doc.UpdatedAt.Format("2006-01-02 15:04:05")))
+	}
+
+	return &MCPMessage{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: MCPCallToolResult{
+			Content: []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}{{
+				Type: "text",
+				Text: response.String(),
+			}},
+		},
+	}
+}
+
+func (s *LilRagMCPServer) handleDeleteDocument(id interface{}, args map[string]interface{}) *MCPMessage {
+	// Extract parameters
+	documentID, ok := args["document_id"].(string)
+	if !ok || documentID == "" {
+		return s.errorResponse(id, -32602, "document_id parameter is required and must be a non-empty string")
+	}
+
+	// Delete the document
+	ctx := context.Background()
+	if err := s.rag.DeleteDocument(ctx, documentID); err != nil {
+		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to delete document: %v", err))
+	}
+
+	return &MCPMessage{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: MCPCallToolResult{
+			Content: []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}{{
+				Type: "text",
+				Text: fmt.Sprintf("Successfully deleted document: %s", documentID),
+			}},
 		},
 	}
 }

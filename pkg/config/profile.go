@@ -19,6 +19,7 @@ type OllamaConfig struct {
 	Endpoint       string `json:"endpoint"`
 	EmbeddingModel string `json:"embedding_model"`
 	VectorSize     int    `json:"vector_size"`
+	ChatModel      string `json:"chat_model"`
 }
 
 type ServerConfig struct {
@@ -44,6 +45,7 @@ func DefaultProfile() *ProfileConfig {
 			Endpoint:       "http://localhost:11434",
 			EmbeddingModel: "nomic-embed-text",
 			VectorSize:     768,
+			ChatModel:      "gemma3:4b",
 		},
 		StoragePath: filepath.Join(dataDir, "lilrag.db"),
 		DataDir:     dataDir,
@@ -52,8 +54,8 @@ func DefaultProfile() *ProfileConfig {
 			Port: 8080,
 		},
 		Chunking: ChunkConfig{
-			MaxTokens: 1800, // Conservative limit under 2k tokens
-			Overlap:   200,  // Overlap between chunks for context
+			MaxTokens: 256, // Optimized for 2025 RAG best practices (128-512 range)
+			Overlap:   38,  // 15% overlap ratio for optimal context preservation
 		},
 	}
 }

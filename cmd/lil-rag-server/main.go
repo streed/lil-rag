@@ -31,6 +31,7 @@ func run() error {
 		dataDir     = flag.String("data-dir", "", "Data directory (overrides profile config)")
 		ollamaURL   = flag.String("ollama", "", "Ollama URL (overrides profile config)")
 		model       = flag.String("model", "", "Embedding model (overrides profile config)")
+		chatModel   = flag.String("chat-model", "", "Chat model (overrides profile config)")
 		vectorSize  = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
 		host        = flag.String("host", "", "Server host (overrides profile config)")
 		port        = flag.Int("port", 0, "Server port (overrides profile config)")
@@ -61,6 +62,9 @@ func run() error {
 	if *model != "" {
 		profileConfig.Ollama.EmbeddingModel = *model
 	}
+	if *chatModel != "" {
+		profileConfig.Ollama.ChatModel = *chatModel
+	}
 	if *vectorSize > 0 {
 		profileConfig.Ollama.VectorSize = *vectorSize
 	}
@@ -76,6 +80,7 @@ func run() error {
 		DataDir:      profileConfig.DataDir,
 		OllamaURL:    profileConfig.Ollama.Endpoint,
 		Model:        profileConfig.Ollama.EmbeddingModel,
+		ChatModel:    profileConfig.Ollama.ChatModel,
 		VectorSize:   profileConfig.Ollama.VectorSize,
 		MaxTokens:    profileConfig.Chunking.MaxTokens,
 		Overlap:      profileConfig.Chunking.Overlap,
@@ -98,19 +103,48 @@ func run() error {
 	mux.Handle("/api/search", handler.Search())
 	mux.Handle("/api/chat", handler.Chat())
 	mux.Handle("/api/documents", handler.Documents())
+	mux.Handle("/api/documents/", handler.DocumentRouter())
 	mux.Handle("/api/health", handler.Health())
 	mux.Handle("/api/metrics", handler.Metrics())
 	mux.Handle("/chat", handler.Chat())
+	mux.Handle("/documents", handler.DocumentsList())
+	mux.Handle("/docs", handler.Documentation())
+	mux.Handle("/view/", handler.ViewDocument())
 	mux.Handle("/", handler.Static())
+
+	// Wrap the mux with logging middleware
+	loggedHandler := handlers.LoggingMiddleware(mux)
 
 	addr := fmt.Sprintf("%s:%d", profileConfig.Server.Host, profileConfig.Server.Port)
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      loggedHandler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start periodic system metrics updates
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		// Update initial metrics
+		ctx := context.Background()
+		handler.UpdateSystemMetrics(ctx)
+
+		for {
+			select {
+			case <-ticker.C:
+				handler.UpdateSystemMetrics(ctx)
+			case <-quit:
+				return
+			}
+		}
+	}()
 
 	go func() {
 		log.Printf("Starting lil-rag-server version %s on %s", version, addr)
@@ -119,8 +153,6 @@ func run() error {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server...")
