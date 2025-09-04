@@ -161,8 +161,9 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 
 	// Insert or update document
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents (id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunk_count, updated_at) 
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT OR REPLACE INTO documents (
+			id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunk_count, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, len(chunks), time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to insert document: %w", err)

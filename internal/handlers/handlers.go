@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"lil-rag/pkg/lilrag"
 	"lil-rag/pkg/metrics"
 )
@@ -836,7 +837,9 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             </div>
             <h1>🤖 LilRag Chat</h1>
             <p>Ask questions about your indexed documents</p>
-            <button class="clear-chat-button" onclick="clearChatHistory()" title="Clear chat history">🗑️ Clear Chat</button>
+            <button class="clear-chat-button" onclick="clearChatHistory()" title="Clear chat history">
+                🗑️ Clear Chat
+            </button>
         </div>
         
         <div class="chat-main">
@@ -909,7 +912,8 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
                             chunkParam = '?highlight=' + source.Metadata.chunk_index;
                         }
                     }
-                    return '<a href="/view/' + docId + chunkParam + '" class="doc-ref-link" target="_blank">[' + docId + ']</a>';
+                    return '<a href="/view/' + docId + chunkParam + 
+                        '" class="doc-ref-link" target="_blank">[' + docId + ']</a>';
                 });
             }
             
@@ -932,8 +936,10 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
                     html += '<div class="source-header">';
                     html += '<span class="source-id">' + source.ID + '</span>';
                     html += '<span class="source-score">' + (source.Score * 100).toFixed(1) + '% relevance</span>';
-                    const chunkParam = source.Metadata && source.Metadata.chunk_index !== undefined ? '?highlight=' + source.Metadata.chunk_index : '';
-                    html += '<a href="/view/' + source.ID + chunkParam + '" class="view-document-link" target="_blank">📄 View Document</a>';
+                    const chunkParam = source.Metadata && source.Metadata.chunk_index !== undefined ? 
+                        '?highlight=' + source.Metadata.chunk_index : '';
+                    html += '<a href="/view/' + source.ID + chunkParam + 
+                        '" class="view-document-link" target="_blank">📄 View Document</a>';
                     html += '</div>';
                     html += '<div class="source-text">' + source.Text + '</div>';
                     html += '</div>';
@@ -1351,7 +1357,9 @@ func (h *Handler) Static() http.HandlerFunc {
 <body>
     <div class="container">
         <h1>🚀 Lil-RAG</h1>
-        <p class="subtitle">A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama</p>
+        <p class="subtitle">
+            A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama
+        </p>
         
         <div class="quick-actions">
             <a href="/chat" class="action-card chat">
@@ -1447,7 +1455,10 @@ curl -F "id=doc2" -F "file=@document.pdf" /api/index</pre>
     </div>
 
     <div class="footer">
-        <p>📚 Lil-RAG v` + h.version + ` | Built with Go, SQLite, and Ollama | <a href="/docs" style="color: #007AFF;">Full Documentation</a></p>
+        <p>
+            📚 Lil-RAG v` + h.version + ` | Built with Go, SQLite, and Ollama | 
+            <a href="/docs" style="color: #007AFF;">Full Documentation</a>
+        </p>
     </div>
 </body>
 </html>`
@@ -1716,7 +1727,9 @@ func (h *Handler) DeleteDocument() http.HandlerFunc {
 }
 
 // serveDocumentContent serves the document content in a web viewer
-func (h *Handler) serveDocumentContent(w http.ResponseWriter, _ *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int) {
+func (h *Handler) serveDocumentContent(
+	w http.ResponseWriter, _ *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int,
+) {
 	// For now, serve a simple HTML viewer with the document content
 	w.Header().Set("Content-Type", "text/html")
 
@@ -2298,7 +2311,8 @@ func (h *Handler) DocumentsList() http.HandlerFunc {
                     <td><span class="doc-time">${formatDate(doc.created_at)}</span></td>
                     <td>
                         <a href="/view/${escapeHtml(doc.id)}" class="action-button view-button">View</a>
-                        <button class="action-button delete-button" onclick="deleteDocument('${escapeHtml(doc.id)}')">Delete</button>
+                        <button class="action-button delete-button" 
+                                onclick="deleteDocument('${escapeHtml(doc.id)}')">Delete</button>
                     </td>
                 ` + "`" + `;
                 tbody.appendChild(row);
@@ -2585,7 +2599,10 @@ func (h *Handler) Documentation() http.HandlerFunc {
         
         <h1>🚀 Lil-RAG Documentation</h1>
         
-        <p>Complete documentation for Lil-RAG - A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama.</p>
+        <p>
+            Complete documentation for Lil-RAG - A simple yet powerful RAG (Retrieval Augmented Generation) 
+            system built with Go, SQLite, and Ollama.
+        </p>
 
         <div class="nav">
             <ul>
@@ -2604,7 +2621,9 @@ func (h *Handler) Documentation() http.HandlerFunc {
             <div class="interface-grid">
                 <div class="feature">
                     <h3>🔍 Semantic Vector Search</h3>
-                    <p>Advanced similarity search using SQLite with sqlite-vec extension for fast, accurate retrieval.</p>
+                    <p>
+                        Advanced similarity search using SQLite with sqlite-vec extension for fast, accurate retrieval.
+                    </p>
                 </div>
                 
                 <div class="feature">
@@ -2808,7 +2827,10 @@ echo "Content" | ./bin/lil-rag index doc3 -
             </div>
 
             <h3>Configuration</h3>
-            <p>The MCP server uses the same profile configuration as the CLI and HTTP server, or falls back to environment variables:</p>
+            <p>
+                The MCP server uses the same profile configuration as the CLI and HTTP server, 
+                or falls back to environment variables:
+            </p>
             <pre><code>LILRAG_DB_PATH=/path/to/database.db
 LILRAG_OLLAMA_URL=http://localhost:11434
 LILRAG_MODEL=nomic-embed-text</code></pre>
@@ -2858,7 +2880,10 @@ LILRAG_MODEL=nomic-embed-text</code></pre>
     </div>
 
     <div class="footer">
-        <p>📚 Lil-RAG v` + h.version + ` | <a href="https://github.com/your-username/lil-rag" style="color: #007AFF;">GitHub Repository</a></p>
+        <p>
+            📚 Lil-RAG v` + h.version + ` | 
+            <a href="https://github.com/your-username/lil-rag" style="color: #007AFF;">GitHub Repository</a>
+        </p>
     </div>
 </body>
 </html>`

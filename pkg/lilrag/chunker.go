@@ -244,7 +244,9 @@ func (tc *TextChunker) getSeparator(contentType string) string {
 	}
 }
 
-func (tc *TextChunker) getContextualOverlap(sentences []string, currentIndex, overlapTokens int, contentType string) string {
+func (tc *TextChunker) getContextualOverlap(
+	sentences []string, currentIndex, overlapTokens int, contentType string,
+) string {
 	if currentIndex == 0 || overlapTokens == 0 {
 		return ""
 	}

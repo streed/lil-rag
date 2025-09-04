@@ -255,13 +255,13 @@ func (p *PDFParser) parsePDFWithDslipak(filePath string) (*PDFDocument, error) {
 			continue
 		}
 
-		plainTextBytes, err := page.GetPlainText(nil)
+		plainText, err := page.GetPlainText(nil)
 		if err != nil {
 			// Continue with other pages if one fails
 			continue
 		}
 
-		cleanedText := cleanText(string(plainTextBytes))
+		cleanedText := cleanText(plainText)
 		if strings.TrimSpace(cleanedText) != "" {
 			allText.WriteString(cleanedText)
 			allText.WriteString("\n\n")

@@ -39,7 +39,10 @@ type Storage interface {
 	Initialize() error
 	Index(ctx context.Context, id string, text string, embedding []float32) error
 	IndexChunks(ctx context.Context, documentID string, text string, chunks []Chunk, embeddings [][]float32) error
-	IndexChunksWithMetadata(ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType string) error
+	IndexChunksWithMetadata(
+		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
+		originalFilePath, docType string,
+	) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error)
