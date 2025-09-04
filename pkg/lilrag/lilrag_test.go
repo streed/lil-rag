@@ -58,6 +58,11 @@ func (m *MockStorage) IndexChunks(_ context.Context, documentID, text string, ch
 	return nil
 }
 
+func (m *MockStorage) IndexChunksWithMetadata(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType string) error {
+	// For the mock, we'll just call the regular IndexChunks method and ignore metadata
+	return m.IndexChunks(context.Background(), documentID, text, chunks, embeddings)
+}
+
 func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]SearchResult, error) {
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
@@ -104,6 +109,55 @@ func (m *MockStorage) ListDocuments(_ context.Context) ([]DocumentInfo, error) {
 		documents = append(documents, doc)
 	}
 	return documents, nil
+}
+
+func (m *MockStorage) GetDocumentByID(_ context.Context, documentID string) (*DocumentInfo, error) {
+	if !m.initialized {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	
+	text, exists := m.documents[documentID]
+	if !exists {
+		return nil, fmt.Errorf("document not found: %s", documentID)
+	}
+	
+	return &DocumentInfo{
+		ID:        documentID,
+		Text:      text,
+		CreatedAt: time.Now(), // Mock timestamp
+		DocType:   "text",     // Mock type
+	}, nil
+}
+
+func (m *MockStorage) GetDocumentChunks(_ context.Context, documentID string) ([]Chunk, error) {
+	if !m.initialized {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	
+	chunks, exists := m.chunks[documentID]
+	if !exists {
+		return nil, fmt.Errorf("document not found: %s", documentID)
+	}
+	
+	return chunks, nil
+}
+
+func (m *MockStorage) DeleteDocument(_ context.Context, documentID string) error {
+	if !m.initialized {
+		return fmt.Errorf("storage not initialized")
+	}
+	
+	// Check if document exists
+	if _, exists := m.documents[documentID]; !exists {
+		return fmt.Errorf("document not found: %s", documentID)
+	}
+	
+	// Delete document and related data
+	delete(m.documents, documentID)
+	delete(m.embeddings, documentID)
+	delete(m.chunks, documentID)
+	
+	return nil
 }
 
 func (m *MockStorage) Close() error {

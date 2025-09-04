@@ -387,19 +387,16 @@ func TestHandler_Metrics(t *testing.T) {
 		name           string
 		method         string
 		expectedStatus int
-		expectError    bool
 	}{
 		{
 			name:           "valid GET request",
 			method:         http.MethodGet,
 			expectedStatus: http.StatusOK,
-			expectError:    false,
 		},
 		{
-			name:           "invalid method",
+			name:           "valid POST request", // Prometheus handler accepts all methods
 			method:         http.MethodPost,
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectError:    true,
+			expectedStatus: http.StatusOK,
 		},
 	}
 
@@ -414,26 +411,22 @@ func TestHandler_Metrics(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			// Check response content type
+			// Check response content type for Prometheus format
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
-				t.Errorf("Expected Content-Type application/json, got %s", contentType)
+			expectedContentType := "text/plain; version=0.0.4; charset=utf-8; escaping=underscores"
+			if contentType != expectedContentType {
+				t.Errorf("Expected Content-Type %s, got %s", expectedContentType, contentType)
 			}
 
-			// Verify response structure
-			var response map[string]interface{}
-			if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-				t.Errorf("Failed to parse response JSON: %v", err)
+			// Verify response contains Prometheus metrics
+			responseBody := w.Body.String()
+			if !strings.Contains(responseBody, "# HELP") {
+				t.Error("Expected Prometheus metrics format with HELP comments")
 			}
-
-			if tt.expectError {
-				if _, hasError := response["error"]; !hasError {
-					t.Error("Expected error field in response")
-				}
-			} else {
-				if _, ok := response["status"]; !ok {
-					t.Error("Expected status field in response")
-				}
+			
+			// Check for at least one of our custom metrics
+			if !strings.Contains(responseBody, "lilrag_") {
+				t.Error("Expected lilrag_ metrics in Prometheus output")
 			}
 		})
 	}
@@ -480,8 +473,8 @@ func TestHandler_Static(t *testing.T) {
 				if !strings.Contains(body, "<!DOCTYPE html>") {
 					t.Error("Expected HTML document in response")
 				}
-				if !strings.Contains(body, "LilRag API") {
-					t.Error("Expected 'LilRag API' in HTML response")
+				if !strings.Contains(body, "Simple RAG System") {
+					t.Error("Expected 'Simple RAG System' in HTML response")
 				}
 			}
 		})
@@ -746,13 +739,16 @@ func TestHandler_BasicIntegration(t *testing.T) {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 		}
 
-		var response map[string]interface{}
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
+		// Check for Prometheus format
+		contentType := w.Header().Get("Content-Type")
+		expectedContentType := "text/plain; version=0.0.4; charset=utf-8; escaping=underscores"
+		if contentType != expectedContentType {
+			t.Errorf("Expected Content-Type %s, got %s", expectedContentType, contentType)
 		}
 
-		if _, ok := response["status"]; !ok {
-			t.Error("Expected status field in metrics response")
+		responseBody := w.Body.String()
+		if !strings.Contains(responseBody, "# HELP") {
+			t.Error("Expected Prometheus metrics format")
 		}
 	})
 }
