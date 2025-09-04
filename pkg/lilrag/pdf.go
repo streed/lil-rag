@@ -376,12 +376,18 @@ func (p *PDFParser) addCrossPageContext(currentChunk, previousChunk Chunk) Chunk
 	prevText := strings.TrimSpace(previousChunk.Text)
 	sentences := strings.Split(prevText, ". ")
 	
-	if len(sentences) > 1 {
+	var context string
+	if len(sentences) >= 2 {
 		// Take last 1-2 sentences for context
 		contextSentences := sentences[len(sentences)-2:]
-		context := strings.Join(contextSentences, ". ")
+		context = strings.Join(contextSentences, ". ")
+	} else if len(sentences) == 1 {
+		// Only one sentence available
+		context = sentences[0]
+	}
 		
 		// Limit context to avoid making chunks too large
+	if len(context) > 0 {
 		if len(context) > 200 {
 			context = context[:200] + "..."
 		}

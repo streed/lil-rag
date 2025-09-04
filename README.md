@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-username/lil-rag)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/streed/lil-rag)
 
 A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides CLI, HTTP API, and MCP server interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
 
@@ -52,11 +52,37 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ## 🚀 Installation
 
+### Quick Install (Recommended)
+
+**One-line install from GitHub releases:**
+
+```bash
+# Install to ~/.local/bin (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/streed/lil-rag/main/install.sh | bash
+
+# Or download and run manually
+curl -fsSL -O https://raw.githubusercontent.com/streed/lil-rag/main/install.sh
+chmod +x install.sh
+./install.sh
+
+# Install to custom directory
+./install.sh --dir /usr/local/bin
+
+# Windows users can use Git Bash or WSL
+```
+
+The install script will:
+- 🔍 **Auto-detect** your OS and architecture
+- ⬇️ **Download** the latest release from GitHub
+- 📦 **Extract** and install binaries
+- ✅ **Verify** installation
+- 📋 **Show** quick start instructions
+
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/lil-rag.git
+git clone https://github.com/streed/lil-rag.git
 cd lil-rag
 
 # Build both CLI and server
@@ -78,13 +104,13 @@ make install
 
 ```bash
 # Install CLI directly
-go install github.com/your-username/lil-rag/cmd/lil-rag@latest
+go install github.com/streed/lil-rag/cmd/lil-rag@latest
 
 # Install server directly  
-go install github.com/your-username/lil-rag/cmd/lil-rag-server@latest
+go install github.com/streed/lil-rag/cmd/lil-rag-server@latest
 
 # Install MCP server directly
-go install github.com/your-username/lil-rag/cmd/lil-rag-mcp@latest
+go install github.com/streed/lil-rag/cmd/lil-rag-mcp@latest
 ```
 
 ## 🎯 Quick Start
@@ -236,7 +262,34 @@ lil-rag reset --force                               # Reset database (skip confi
 ./bin/lil-rag-server --host 0.0.0.0 --port 9000
 ```
 
-Visit http://localhost:8080 for the web interface with API documentation.
+Visit http://localhost:8080 for the web interface with API documentation and interactive chat.
+
+### 💬 Interactive Chat Interface
+
+The HTTP server includes a modern, responsive chat interface for conversing with your indexed documents:
+
+![Chat Interface](https://img.shields.io/badge/UI-Chat%20Interface-blue)
+
+**Features:**
+- 🎨 Modern, responsive design with JetBrains Mono font
+- 📄 Document browser sidebar with click-to-view functionality  
+- 💬 Real-time chat with RAG-powered responses
+- 📚 Source citations with relevance scores
+- 🔍 Full document display when clicking on sidebar items
+- 📱 Mobile-friendly responsive layout
+
+**Access the Chat:**
+1. Start the server: `./bin/lil-rag-server`
+2. Open your browser to: http://localhost:8080/chat
+3. Browse indexed documents in the sidebar
+4. Ask questions about your documents in the chat
+
+**Chat Interface Capabilities:**
+- Ask questions about indexed content
+- View source documents with relevance scores
+- Browse and preview all indexed documents
+- See full document content by clicking sidebar items
+- Markdown rendering for formatted responses
 
 ### API Endpoints
 
@@ -618,10 +671,12 @@ The project uses semantic versioning stored in the `VERSION` file. When code is 
 
 ### Cross-Platform Builds
 
-The CI/CD system builds binaries for:
-- **Linux**: AMD64, ARM64
-- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon)
-- **Windows**: AMD64
+The CI/CD system builds binaries using native platform runners to avoid CGO cross-compilation issues:
+- **Linux**: AMD64, ARM64 (built on Ubuntu runners)
+- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon) (built on macOS runners)
+- **Windows**: AMD64 (built on Windows runners)
+
+This approach uses pre-compiled Go binaries on each platform for reliable builds with CGO dependencies.
 
 All binaries include the version information and can be checked with:
 ```bash
