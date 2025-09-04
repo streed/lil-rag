@@ -604,7 +604,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             border: 1px solid #e9ecef;
             align-self: flex-start;
             max-width: 100% !important;
-            width: 100%%;
+            width: 100%;
             font-size: 0.9rem;
             border-radius: 12px;
             margin-left: 0;
