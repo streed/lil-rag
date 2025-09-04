@@ -164,31 +164,12 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	}
 
 	if fileExists(input) {
-		// Handle file - check if it's PDF or regular text
-		if isPDFFile(input) {
-			fmt.Printf("Indexing PDF file '%s' with ID '%s'...\n", input, id)
-			if err := rag.IndexPDF(ctx, input, id); err != nil {
-				return fmt.Errorf("failed to index PDF: %w", err)
-			}
-			fmt.Printf("Successfully indexed PDF file '%s' with ID '%s'\n", input, id)
-			return nil
+		// Handle file using the document handler (supports PDF, DOCX, XLSX, HTML, CSV, etc.)
+		fmt.Printf("Indexing file '%s' with ID '%s'...\n", input, id)
+		if err := rag.IndexFile(ctx, input, id); err != nil {
+			return fmt.Errorf("failed to index file: %w", err)
 		}
-		// Regular text file
-		text, err := readFromFile(input)
-		if err != nil {
-			return fmt.Errorf("failed to read from file: %w", err)
-		}
-
-		if strings.TrimSpace(text) == "" {
-			return fmt.Errorf("no text to index")
-		}
-
-		fmt.Printf("Indexing text file '%s' with ID '%s'...\n", input, id)
-		if err := rag.Index(ctx, text, id); err != nil {
-			return fmt.Errorf("failed to index: %w", err)
-		}
-
-		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
+		fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", input, id)
 		return nil
 	}
 	// Treat as direct text input

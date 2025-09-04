@@ -236,6 +236,16 @@ func (h *Handler) Documents() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
+		// Check if this is a request for a specific document
+		path := strings.TrimPrefix(r.URL.Path, "/api/documents")
+		if path != "" && path != "/" {
+			// Handle individual document request
+			documentID := strings.TrimPrefix(path, "/")
+			h.serveDocumentText(w, r, documentID)
+			return
+		}
+
+		// Handle list all documents request
 		documents, err := h.rag.ListDocuments(ctx)
 		if err != nil {
 			h.writeError(w, http.StatusInternalServerError, "failed to list documents", err.Error())
@@ -312,64 +322,12 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             overflow: hidden;
         }
 
-        .documents-sidebar {
-            width: 300px;
-            background: #f8f9fa;
-            border-right: 1px solid #e9ecef;
-            display: flex;
-            flex-direction: column;
-        }
 
-        .sidebar-header {
-            padding: 15px;
-            border-bottom: 1px solid #e9ecef;
-            background: #fff;
-        }
 
-        .sidebar-header h3 {
-            margin: 0;
-            color: #2c3e50;
-            font-size: 1rem;
-        }
 
-        .documents-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
 
-        .document-item {
-            background: white;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            padding: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
 
-        .document-item:hover {
-            background: #f0f7ff;
-            border-color: #007AFF;
-        }
 
-        .document-id {
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 4px;
-        }
-
-        .document-preview {
-            font-size: 0.85em;
-            color: #666;
-            line-height: 1.4;
-        }
-
-        .document-meta {
-            font-size: 0.75em;
-            color: #999;
-            margin-top: 6px;
-        }
 
         .chat-panel {
             flex: 1;
@@ -383,6 +341,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             padding: 20px;
             text-align: center;
             border-radius: 20px 20px 0 0;
+            position: relative;
         }
 
         .chat-header h1 {
@@ -395,13 +354,54 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             font-size: 0.9rem;
         }
 
+        .clear-chat-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(231, 76, 60, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background-color 0.2s ease;
+        }
+        .nav-links {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        .nav-link {
+            background: rgba(52, 152, 219, 0.8);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .nav-link:hover {
+            background: rgba(52, 152, 219, 1);
+            transform: translateY(-1px);
+        }
+
+        .clear-chat-button:hover {
+            background: rgba(231, 76, 60, 1);
+        }
+
         .chat-messages {
             flex: 1;
             padding: 20px;
             overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             gap: 15px;
+            min-width: 0;
         }
 
         .message {
@@ -409,6 +409,8 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             padding: 12px 18px;
             border-radius: 18px;
             word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
             line-height: 1.4;
         }
 
@@ -465,6 +467,9 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             padding: 12px;
             margin: 8px 0;
             overflow-x: auto;
+            max-width: 100%;
+            box-sizing: border-box;
+            white-space: pre;
         }
 
         .message.assistant pre code {
@@ -477,6 +482,22 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             color: #888;
             font-weight: 500;
             font-size: 0.9em;
+        }
+
+        .doc-ref-link {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9em;
+            padding: 1px 3px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .doc-ref-link:hover {
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
         }
 
         .message.system {
@@ -493,11 +514,14 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             border: 1px solid #e9ecef;
             align-self: flex-start;
             max-width: 100% !important;
-            width: 100%;
+            width: 100%%;
             font-size: 0.9rem;
             border-radius: 12px;
             margin-left: 0;
             margin-right: 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            box-sizing: border-box;
         }
 
         .message.document strong {
@@ -561,6 +585,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             margin-bottom: 8px;
             padding-bottom: 6px;
             border-bottom: 1px solid #e8e8e8;
+            gap: 12px;
         }
 
         .source-id {
@@ -575,11 +600,30 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             font-style: italic;
         }
 
+        .view-document-link {
+            font-size: 0.75rem;
+            color: #007bff;
+            text-decoration: none;
+            padding: 2px 6px;
+            border: 1px solid #007bff;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .view-document-link:hover {
+            background-color: #007bff;
+            color: white;
+        }
+
         .source-text {
             color: #666;
             font-size: 0.85rem;
             line-height: 1.4;
             white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         .chat-input {
@@ -675,7 +719,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
 
         @media (max-width: 768px) {
             .chat-container {
-                width: 100%;
+                width: 100%%;
                 height: 100vh;
                 border-radius: 0;
             }
@@ -684,16 +728,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
                 border-radius: 0;
             }
             
-            .chat-main {
-                flex-direction: column;
-            }
             
-            .documents-sidebar {
-                width: 100%;
-                max-height: 200px;
-                border-right: none;
-                border-bottom: 1px solid #e9ecef;
-            }
             
             .chat-panel {
                 flex: 1;
@@ -705,28 +740,18 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
 <body>
     <div class="chat-container">
         <div class="chat-header">
+            <div class="nav-links">
+                <a href="/" class="nav-link">← Home</a>
+                <a href="/documents" class="nav-link">📚 Documents</a>
+            </div>
             <h1>🤖 LilRag Chat</h1>
             <p>Ask questions about your indexed documents</p>
+            <button class="clear-chat-button" onclick="clearChatHistory()" title="Clear chat history">🗑️ Clear Chat</button>
         </div>
         
         <div class="chat-main">
-            <div class="documents-sidebar">
-                <div class="sidebar-header">
-                    <h3>📚 Documents</h3>
-                </div>
-                <div class="documents-list" id="documentsList">
-                    <div style="padding: 20px; text-align: center; color: #666;">
-                        Loading documents...
-                    </div>
-                </div>
-            </div>
-            
             <div class="chat-panel">
                 <div class="chat-messages" id="messages">
-                    <div class="message system">
-                        Welcome! Ask me questions about your indexed documents. " +
-                        "I'll search through them and provide relevant answers.
-                    </div>
                 </div>
                 
                 <div class="typing-indicator" id="typing">
@@ -775,7 +800,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             }
         });
 
-        function addMessage(content, type, sources = null) {
+        function addMessage(content, type, sources = null, skipSave = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + type;
             
@@ -784,7 +809,18 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             
             // Style document references in square brackets for assistant messages
             if (type === 'assistant') {
-                html = html.replace(/\[([a-zA-Z0-9_-]+)\]/g, '<span class="doc-ref">[$1]</span>');
+                // Create clickable links to document viewer with chunk highlighting
+                html = html.replace(/\[([a-zA-Z0-9_-]+)\]/g, function(match, docId) {
+                    // Find the source with this document ID to get chunk information
+                    let chunkParam = '';
+                    if (sources) {
+                        const source = sources.find(s => s.ID === docId);
+                        if (source && source.Metadata && source.Metadata.chunk_index !== undefined) {
+                            chunkParam = '?highlight=' + source.Metadata.chunk_index;
+                        }
+                    }
+                    return '<a href="/view/' + docId + chunkParam + '" class="doc-ref-link" target="_blank">[' + docId + ']</a>';
+                });
             }
             
             if (sources && sources.length > 0) {
@@ -806,6 +842,8 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
                     html += '<div class="source-header">';
                     html += '<span class="source-id">' + source.ID + '</span>';
                     html += '<span class="source-score">' + (source.Score * 100).toFixed(1) + '% relevance</span>';
+                    const chunkParam = source.Metadata && source.Metadata.chunk_index !== undefined ? '?highlight=' + source.Metadata.chunk_index : '';
+                    html += '<a href="/view/' + source.ID + chunkParam + '" class="view-document-link" target="_blank">📄 View Document</a>';
                     html += '</div>';
                     html += '<div class="source-text">' + source.Text + '</div>';
                     html += '</div>';
@@ -817,6 +855,11 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             messageDiv.innerHTML = html;
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Save to localStorage for persistence
+            if (!skipSave) {
+                saveChatHistory();
+            }
         }
 
         function showTyping() {
@@ -892,67 +935,52 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
             }
         }
 
-        // Documents functionality
-        function loadDocuments() {
-            fetch('/api/documents')
-                .then(response => response.json())
-                .then(data => {
-                    displayDocuments(data.documents || []);
-                })
-                .catch(error => {
-                    console.error('Error loading documents:', error);
-                    document.getElementById('documentsList').innerHTML = 
-                        "<div style='padding: 20px; text-align: center; color: #dc3545;'>" +
-                        "Failed to load documents</div>";
-                });
+
+        // Chat history persistence functions
+        function saveChatHistory() {
+            const messages = [];
+            const messageElements = messagesContainer.querySelectorAll('.message');
+            messageElements.forEach(element => {
+                if (element.classList.contains('message')) {
+                    const type = element.classList.contains('user') ? 'user' : 'assistant';
+                    const content = element.textContent || element.innerText;
+                    // Store the full HTML for assistant messages to preserve formatting and links
+                    const html = type === 'assistant' ? element.innerHTML : content;
+                    messages.push({ type, content, html });
+                }
+            });
+            localStorage.setItem('lilrag-chat-history', JSON.stringify(messages));
         }
-
-        function displayDocuments(documents) {
-            const container = document.getElementById('documentsList');
-            
-            if (documents.length === 0) {
-                container.innerHTML = "<div style='padding: 20px; text-align: center; color: #666;'>" +
-                    "No documents found</div>";
-                return;
-            }
-
-            container.innerHTML = documents.map(doc => {
-                const preview = doc.text.length > 150 ? doc.text.substring(0, 150) + '...' : doc.text;
-                const updatedDate = new Date(doc.updated_at).toLocaleDateString();
-                
-                return '<div class="document-item" onclick="showDocumentDetail(\'' + doc.id + '\')">' +
-                    '<div class="document-id">' + doc.id + '</div>' +
-                    '<div class="document-preview">' + preview + '</div>' +
-                    '<div class="document-meta">Updated: ' + updatedDate + ' • ' + doc.chunk_count + ' chunk(s)</div>' +
-                    '</div>';
-            }).join('');
-        }
-
-        function showDocumentDetail(docId) {
-            // Find the document
-            fetch('/api/documents')
-                .then(response => response.json())
-                .then(data => {
-                    const doc = data.documents.find(d => d.id === docId);
-                    if (doc) {
-                        // Add a document message showing the document content
+        
+        function loadChatHistory() {
+            try {
+                const saved = localStorage.getItem('lilrag-chat-history');
+                if (saved) {
+                    const messages = JSON.parse(saved);
+                    messages.forEach(msg => {
                         const messageDiv = document.createElement('div');
-                        messageDiv.className = 'message document';
-                        messageDiv.innerHTML = '<strong>📄 Document: ' + doc.id + '</strong><br><br>' + 
-                            doc.text.replace(/\n/g, '<br>') +
-                            '<br><br><em>Updated: ' + new Date(doc.updated_at).toLocaleString() + '</em>';
+                        messageDiv.className = 'message ' + msg.type;
+                        // Use saved HTML for assistant messages, plain content for user messages
+                        messageDiv.innerHTML = msg.type === 'assistant' ? msg.html : msg.content;
                         messagesContainer.appendChild(messageDiv);
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading document:', error);
-                });
+                    });
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+                // Clear corrupted data
+                localStorage.removeItem('lilrag-chat-history');
+            }
         }
-
-        // Load documents on page load
-        loadDocuments();
-
+        
+        function clearChatHistory() {
+            localStorage.removeItem('lilrag-chat-history');
+            messagesContainer.innerHTML = '';
+        }
+        
+        // Load chat history on page load
+        loadChatHistory();
+        
         // Focus input on load
         messageInput.focus();
     </script>
@@ -1041,6 +1069,14 @@ func (h *Handler) Static() http.HandlerFunc {
         <p style="margin: 0 0 15px 0;">Ask questions about your documents in a user-friendly chat interface</p>
         <a href="/chat" style="background: #4caf50; color: white; padding: 10px 20px; 
            text-decoration: none; border-radius: 5px; font-weight: bold;">Open Chat Interface</a>
+    </div>
+    
+    <div style="margin: 20px 0; padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; 
+         border-radius: 5px; text-align: center;">
+        <h3 style="margin: 0 0 10px 0; color: #1565c0;">📚 Browse Your Documents</h3>
+        <p style="margin: 0 0 15px 0;">View, manage, and organize all your indexed documents</p>
+        <a href="/documents" style="background: #2196f3; color: white; padding: 10px 20px; 
+           text-decoration: none; border-radius: 5px; font-weight: bold;">View Documents</a>
     </div>
     
     <div class="endpoint">
@@ -1205,6 +1241,801 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 func isPDFFile(filename string) bool {
 	ext := filepath.Ext(filename)
 	return ext == ".pdf" || ext == ".PDF"
+}
+
+// ViewDocument serves a document for web viewing
+func (h *Handler) ViewDocument() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		// Extract document ID from URL path
+		path := strings.TrimPrefix(r.URL.Path, "/view/")
+		documentID := strings.TrimSuffix(path, "/")
+
+		if documentID == "" {
+			h.writeError(w, http.StatusBadRequest, "document ID required", "")
+			return
+		}
+
+		// Get highlight chunk index from query parameter
+		highlightChunk := -1
+		if highlightParam := r.URL.Query().Get("highlight"); highlightParam != "" {
+			if chunkIndex, err := strconv.Atoi(highlightParam); err == nil {
+				highlightChunk = chunkIndex
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		// Get document information
+		docInfo, err := h.rag.GetDocumentByID(ctx, documentID)
+		if err != nil {
+			h.writeError(w, http.StatusNotFound, "document not found", err.Error())
+			return
+		}
+
+		// Serve the document based on its type
+		h.serveDocumentContent(w, r, docInfo, highlightChunk)
+	}
+}
+
+// DocumentContent handles API requests for document content at /api/documents/{id}
+func (h *Handler) DocumentContent() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		// Extract document ID from URL path
+		path := strings.TrimPrefix(r.URL.Path, "/api/documents/")
+		documentID := strings.TrimSuffix(path, "/")
+
+		if documentID == "" {
+			h.writeError(w, http.StatusBadRequest, "document ID required", "")
+			return
+		}
+
+		h.serveDocumentText(w, r, documentID)
+	}
+}
+
+// DocumentRouter routes between document content, chunks, and delete requests
+func (h *Handler) DocumentRouter() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			h.DeleteDocument().ServeHTTP(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/chunks") {
+			h.DocumentChunks().ServeHTTP(w, r)
+		} else {
+			h.DocumentContent().ServeHTTP(w, r)
+		}
+	}
+}
+
+// DocumentChunks handles API requests for document chunks at /api/documents/{id}/chunks
+func (h *Handler) DocumentChunks() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		// Extract document ID from URL path
+		path := strings.TrimPrefix(r.URL.Path, "/api/documents/")
+		path = strings.TrimSuffix(path, "/chunks")
+		documentID := strings.TrimSuffix(path, "/")
+		
+		if documentID == "" {
+			h.writeError(w, http.StatusBadRequest, "document ID required", "")
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		// Get document chunks
+		chunks, err := h.rag.GetDocumentChunks(ctx, documentID)
+		if err != nil {
+			h.writeError(w, http.StatusNotFound, "chunks not found", err.Error())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(chunks); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to encode chunks", err.Error())
+		}
+	}
+}
+
+// DeleteDocument handles DELETE requests for documents at /api/documents/{id}
+func (h *Handler) DeleteDocument() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		// Extract document ID from URL path
+		path := strings.TrimPrefix(r.URL.Path, "/api/documents/")
+		documentID := strings.TrimSuffix(path, "/")
+		
+		if documentID == "" {
+			h.writeError(w, http.StatusBadRequest, "document ID required", "")
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		// Delete the document
+		err := h.rag.DeleteDocument(ctx, documentID)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				h.writeError(w, http.StatusNotFound, "document not found", err.Error())
+			} else {
+				h.writeError(w, http.StatusInternalServerError, "failed to delete document", err.Error())
+			}
+			return
+		}
+
+		// Return success response
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]string{
+			"status":  "success",
+			"message": "Document deleted successfully",
+		}
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// serveDocumentContent serves the document content in a web viewer
+func (h *Handler) serveDocumentContent(w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int) {
+	// For now, serve a simple HTML viewer with the document content
+	w.Header().Set("Content-Type", "text/html")
+
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Document: %s</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'JetBrainsMono NL Nerd Font Propo', 'JetBrains Mono NL', 'JetBrains Mono', 
+                         'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .document-container {
+            max-width: 1200px;
+            width: 95%%;
+            min-height: 80vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .document-header {
+            background: white;
+            padding: 30px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .document-title {
+            font-size: 1.5em;
+            margin: 0 180px 10px 180px;
+            color: #333;
+            text-align: center;
+        }
+        .document-meta {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .document-content {
+            background: white;
+            padding: 30px;
+            white-space: pre-wrap;
+            font-family: inherit;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 70vh;
+        }
+        .chunk {
+            margin-bottom: 24px;
+            padding: 20px;
+            border-left: 4px solid #e0e0e0;
+            background: #fafafa;
+            border-radius: 0 8px 8px 0;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .highlighted-chunk {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+            box-shadow: 0 0 12px rgba(255, 193, 7, 0.4);
+            transform: translateX(4px);
+            transition: all 0.3s ease;
+        }
+        .chunk-text {
+            line-height: 1.5;
+        }
+        .back-to-chat-button {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .back-to-chat-button:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        .document-header {
+            position: relative;
+        }
+        .delete-button {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease;
+        }
+        .delete-button:hover {
+            background-color: #c82333;
+        }
+        .delete-button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .document-title {
+                margin: 0 20px 10px 20px;
+                text-align: left;
+            }
+            .back-to-chat-button {
+                position: relative;
+                top: 0;
+                left: 0;
+                margin-bottom: 15px;
+                display: inline-block;
+            }
+            .delete-button {
+                position: relative;
+                top: 0;
+                right: 0;
+                float: right;
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="document-container">
+        <div class="document-header">
+            <a href="/chat" class="back-to-chat-button">← Back to Chat</a>
+            <button class="delete-button" onclick="deleteDocument('%s')" id="deleteBtn">🗑️ Delete</button>
+            <h1 class="document-title">📄 %s</h1>
+            <div class="document-meta">
+                <strong>Type:</strong> %s<br>
+                <strong>Chunks:</strong> %d<br>
+                <strong>Source:</strong> %s<br>
+                <strong>Updated:</strong> %s
+            </div>
+        </div>
+        
+        <div class="document-content" id="content">
+            Loading document content...
+        </div>
+    </div>
+
+    <script>
+        const highlightChunk = %d;
+        
+        // Load document chunks for highlighting
+        fetch('/api/documents/' + '%s' + '/chunks')
+            .then(response => response.json())
+            .then(chunks => {
+                const contentDiv = document.getElementById('content');
+                contentDiv.innerHTML = '';
+                
+                chunks.forEach((chunk, index) => {
+                    const chunkDiv = document.createElement('div');
+                    chunkDiv.className = 'chunk';
+                    if (index === highlightChunk) {
+                        chunkDiv.className += ' highlighted-chunk';
+                    }
+                    chunkDiv.innerHTML = '<div class="chunk-text">' + chunk.Text.replace(/\n/g, '<br>') + '</div>';
+                    contentDiv.appendChild(chunkDiv);
+                });
+            })
+            .catch(error => {
+                // Fallback to regular content loading
+                fetch('/api/documents/' + '%s')
+                    .then(response => response.text())
+                    .then(content => {
+                        document.getElementById('content').textContent = content;
+                    });
+            });
+
+        function deleteDocument(documentId) {
+            if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                return;
+            }
+            
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ Deleting...';
+            
+            fetch('/api/documents/' + documentId, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Document deleted successfully!');
+                    window.location.href = '/chat';
+                } else {
+                    return response.json().then(error => {
+                        throw new Error(error.message || 'Failed to delete document');
+                    });
+                }
+            })
+            .catch(error => {
+                alert('Error deleting document: ' + error.message);
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = '🗑️ Delete';
+            });
+        }
+    </script>
+</body>
+</html>`,
+		docInfo.ID,                                             // title
+		docInfo.ID,                                             // delete button  
+		docInfo.ID,                                             // document title
+		docInfo.DocType,                                        // type
+		docInfo.ChunkCount,                                     // chunks
+		docInfo.SourcePath,                                     // source
+		docInfo.UpdatedAt.Format("2006-01-02 15:04:05"),      // updated
+		highlightChunk,                                         // highlightChunk JS variable
+		docInfo.ID,                                             // fetch chunks URL
+		docInfo.ID,                                             // fetch document URL
+	)
+
+	w.Write([]byte(html))
+}
+
+// serveDocumentText serves the raw text content of a document
+func (h *Handler) serveDocumentText(w http.ResponseWriter, r *http.Request, documentID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	// Get document information
+	docInfo, err := h.rag.GetDocumentByID(ctx, documentID)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "document not found", err.Error())
+		return
+	}
+
+	// For now, we'll serve the document content from the source file if available
+	// In the future, we could reconstruct it from the compressed storage
+	if docInfo.SourcePath != "" {
+		// Try to parse the original file using document handlers
+		content, err := h.rag.ParseDocumentFile(docInfo.SourcePath)
+		if err == nil {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write([]byte(content))
+			return
+		}
+
+		// Fallback to reading the raw file
+		rawContent, err := os.ReadFile(docInfo.SourcePath)
+		if err == nil {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write(rawContent)
+			return
+		}
+	}
+
+	// If we can't read the source file, return an error
+	h.writeError(w, http.StatusNotFound, "document content not available",
+		"Original source file not found or not readable")
+}
+
+// DocumentsList serves a web page with a table view of all documents
+func (h *Handler) DocumentsList() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		html := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Documents - LilRag</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'JetBrainsMono NL Nerd Font Propo', 'JetBrains Mono NL', 'JetBrains Mono', 
+                         'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .documents-container {
+            max-width: 1400px;
+            width: 95%%;
+            min-height: 80vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .documents-header {
+            background: white;
+            padding: 30px;
+            border-bottom: 1px solid #e9ecef;
+            position: relative;
+        }
+        
+        .documents-title {
+            font-size: 1.8em;
+            margin: 0 0 10px 0;
+            color: #333;
+            text-align: center;
+        }
+        
+        .nav-buttons {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .nav-button {
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        
+        .nav-button:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        
+        .documents-content {
+            background: white;
+            padding: 30px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            font-size: 1.1em;
+            padding: 40px;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .documents-table {
+            width: 100%%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .documents-table th {
+            background: #f8f9fa;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .documents-table td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: top;
+        }
+        
+        .documents-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .doc-id {
+            font-family: 'Courier New', monospace;
+            color: #007bff;
+            font-weight: 500;
+        }
+        
+        .doc-title {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .doc-time {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .action-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .view-button {
+            background: #28a745;
+            color: white;
+            margin-right: 8px;
+        }
+        
+        .view-button:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+        
+        .delete-button {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .delete-button:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+        
+        .delete-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .empty-state h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        
+        @media (max-width: 768px) {
+            .documents-container {
+                margin: 10px;
+                width: calc(100%% - 20px);
+                min-height: calc(100vh - 20px);
+            }
+            
+            .nav-buttons {
+                position: relative;
+                top: 0;
+                left: 0;
+                margin-bottom: 20px;
+            }
+            
+            .documents-title {
+                text-align: left;
+            }
+            
+            .documents-table {
+                font-size: 0.9em;
+            }
+            
+            .documents-table th,
+            .documents-table td {
+                padding: 8px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="documents-container">
+        <div class="documents-header">
+            <div class="nav-buttons">
+                <a href="/" class="nav-button">← Home</a>
+                <a href="/chat" class="nav-button">💬 Chat</a>
+            </div>
+            <h1 class="documents-title">📚 Documents</h1>
+        </div>
+        
+        <div class="documents-content">
+            <div class="loading" id="loading">Loading documents...</div>
+            <div class="error" id="error" style="display: none;"></div>
+            <div id="documents-container" style="display: none;">
+                <table class="documents-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Type</th>
+                            <th>Chunks</th>
+                            <th>Indexed</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="documents-body">
+                    </tbody>
+                </table>
+            </div>
+            <div class="empty-state" id="empty-state" style="display: none;">
+                <h3>No documents found</h3>
+                <p>Upload your first document to get started.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadDocuments() {
+            try {
+                const response = await fetch('/api/documents');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch documents');
+                }
+                
+                const data = await response.json();
+                displayDocuments(data.documents || data);
+            } catch (error) {
+                showError('Failed to load documents: ' + error.message);
+            }
+        }
+        
+        function displayDocuments(documents) {
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const container = document.getElementById('documents-container');
+            const emptyState = document.getElementById('empty-state');
+            const tbody = document.getElementById('documents-body');
+            
+            loading.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            if (!documents || documents.length === 0) {
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            container.style.display = 'block';
+            tbody.innerHTML = '';
+            
+            documents.forEach(doc => {
+                const row = document.createElement('tr');
+                row.innerHTML = ` + "`" + `
+                    <td><span class="doc-id">${escapeHtml(doc.id)}</span></td>
+                    <td><span class="doc-title">${escapeHtml(doc.id)}</span></td>
+                    <td>${escapeHtml(doc.doc_type || 'text')}</td>
+                    <td>${doc.chunk_count || 0}</td>
+                    <td><span class="doc-time">${formatDate(doc.created_at)}</span></td>
+                    <td>
+                        <a href="/view/${escapeHtml(doc.id)}" class="action-button view-button">View</a>
+                        <button class="action-button delete-button" onclick="deleteDocument('${escapeHtml(doc.id)}')">Delete</button>
+                    </td>
+                ` + "`" + `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        function showError(message) {
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            
+            loading.style.display = 'none';
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+        
+        async function deleteDocument(docId) {
+            if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                return;
+            }
+            
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Deleting...';
+            
+            try {
+                const response = await fetch('/api/documents/' + encodeURIComponent(docId), {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to delete document');
+                }
+                
+                // Reload the documents list
+                loadDocuments();
+            } catch (error) {
+                alert('Failed to delete document: ' + error.message);
+                button.disabled = false;
+                button.textContent = 'Delete';
+            }
+        }
+        
+        // Load documents when page loads
+        loadDocuments();
+    </script>
+</body>
+</html>`
+
+		w.Write([]byte(html))
+	}
 }
 
 func (h *Handler) writeError(w http.ResponseWriter, status int, errType, message string) {
