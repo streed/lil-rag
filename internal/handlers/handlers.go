@@ -809,7 +809,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
 
         @media (max-width: 768px) {
             .chat-container {
-                width: 100%%;
+                width: 100%;
                 height: 100vh;
                 border-radius: 0;
             }
