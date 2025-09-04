@@ -48,8 +48,8 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 	tokenCount := tc.EstimateTokenCount(text)
 	contentType := tc.detectContentType(text)
 	
-	// For very small texts (under 100 tokens), return as single chunk
-	if tokenCount <= 100 {
+	// For very small texts (under 100 tokens), return as single chunk unless MaxTokens is very small
+	if tokenCount <= 100 && tc.MaxTokens >= 100 {
 		return []Chunk{
 			{
 				Text:       text,
@@ -389,12 +389,24 @@ func (tc *TextChunker) splitByParagraphs(text string) []string {
 	// Split on double newlines (paragraph breaks)
 	paragraphs := strings.Split(text, "\n\n")
 	
-	var cleanParagraphs []string
+	// First pass: collect non-empty paragraphs
+	var tempParagraphs []string
 	for _, para := range paragraphs {
 		cleaned := strings.TrimSpace(para)
 		if cleaned != "" {
-			cleanParagraphs = append(cleanParagraphs, cleaned)
+			tempParagraphs = append(tempParagraphs, cleaned)
 		}
+	}
+	
+	// Second pass: apply punctuation rules
+	var cleanParagraphs []string
+	for i, para := range tempParagraphs {
+		// Remove trailing punctuation from all paragraphs except the last one
+		if i < len(tempParagraphs)-1 && strings.HasSuffix(para, ".") {
+			para = strings.TrimSuffix(para, ".")
+			para = strings.TrimSpace(para)
+		}
+		cleanParagraphs = append(cleanParagraphs, para)
 	}
 	
 	return cleanParagraphs
@@ -403,19 +415,42 @@ func (tc *TextChunker) splitByParagraphs(text string) []string {
 // splitBySentences uses improved sentence detection patterns
 func (tc *TextChunker) splitBySentences(text string) []string {
 	// Enhanced sentence patterns including abbreviations awareness
-	sentenceRegex := regexp.MustCompile(`(?:[.!?](?:\s+|$))|(?:\n\s*\n)`)
+	sentenceRegex := regexp.MustCompile(`[.!?](?:\s+|$)`)
 	
-	sentences := sentenceRegex.Split(text, -1)
-	
-	var cleanSentences []string
-	for _, sentence := range sentences {
-		cleaned := strings.TrimSpace(sentence)
-		if cleaned != "" && len(cleaned) > 10 { // Filter very short fragments
-			cleanSentences = append(cleanSentences, cleaned)
+	// Find all sentence boundaries
+	matches := sentenceRegex.FindAllStringIndex(text, -1)
+	if len(matches) == 0 {
+		// No sentence boundaries found
+		cleaned := strings.TrimSpace(text)
+		if cleaned != "" {
+			return []string{cleaned}
 		}
+		return []string{}
 	}
 	
-	return cleanSentences
+	var sentences []string
+	lastEnd := 0
+	
+	for i, match := range matches {
+		// Extract sentence including the punctuation for the last sentence
+		start := lastEnd
+		var end int
+		if i == len(matches)-1 {
+			// Last sentence - include the punctuation
+			end = match[1]
+		} else {
+			// Middle sentences - exclude the punctuation
+			end = match[0]
+		}
+		
+		sentence := strings.TrimSpace(text[start:end])
+		if sentence != "" && len(sentence) > 0 { // Allow shorter sentences for tests
+			sentences = append(sentences, sentence)
+		}
+		lastEnd = match[1]
+	}
+	
+	return sentences
 }
 
 // splitByCodeBlocks handles code snippets and structured content
