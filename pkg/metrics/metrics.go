@@ -120,7 +120,7 @@ func RecordHTTPRequest(method, endpoint string, statusCode int, duration time.Du
 	status := prometheus.Labels{
 		"method":      method,
 		"endpoint":    endpoint, 
-		"status_code": strconv.Itoa(statusCode), // Convert int to string properly
+		"status_code": strconv.Itoa(statusCode),
 	}
 	HTTPRequestDuration.With(status).Observe(duration.Seconds())
 	HTTPRequestsTotal.With(status).Inc()
