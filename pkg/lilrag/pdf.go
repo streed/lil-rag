@@ -163,8 +163,7 @@ func (p *PDFParser) ParsePDF(filePath string) (*PDFDocument, error) {
 		// Fallback to dslipak/pdf library
 		doc, dslipakErr := p.parsePDFWithDslipak(filePath)
 		if dslipakErr != nil {
-			log.Printf("WARNING: PDF text extraction may have issues - all parsers failed for %s. Text may not be fully searchable.", filePath)
-			return nil, fmt.Errorf("failed to extract text with pdftotext: %w, and dslipak/pdf: %v", err, dslipakErr)
+			return nil, fmt.Errorf("failed to extract text: pdftotext error: %w; dslipak/pdf error: %v", err, dslipakErr)
 		}
 		log.Printf("WARNING: Using fallback PDF parser for %s - text extraction quality may vary.", filePath)
 		return doc, nil
