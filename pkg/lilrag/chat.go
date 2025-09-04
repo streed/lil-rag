@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"lil-rag/pkg/metrics"
 )
 
 // OllamaChatClient handles chat interactions with Ollama
@@ -213,4 +215,110 @@ func (c *OllamaChatClient) TestConnection(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// OptimizeQuery uses the LLM to optimize a user query for better semantic search results
+func (c *OllamaChatClient) OptimizeQuery(ctx context.Context, userQuery string) (string, error) {
+	if userQuery == "" {
+		return userQuery, nil
+	}
+
+	optimizationStart := time.Now()
+
+	systemPrompt := `You are an expert at optimizing search queries for semantic/vector search in document databases. 
+
+Your task is to take a user's question or query and reformulate it to be more effective for semantic search. This means:
+
+1. Extract the key concepts and main topics
+2. Use more specific, searchable keywords
+3. Remove unnecessary words like "please", "can you", "I want to know"
+4. Focus on the core information need
+5. Use synonyms or related terms that might appear in documents
+6. Keep it concise but comprehensive
+
+Examples:
+- "Can you please tell me about machine learning?" → "machine learning algorithms models training"
+- "I want to know how to set up a database" → "database setup installation configuration"
+- "What are the benefits of using Docker?" → "Docker benefits advantages containerization"
+
+Respond with ONLY the optimized query, no explanations or additional text.`
+
+	// Build chat messages for query optimization
+	messages := []ChatMessage{
+		{
+			Role:    "system",
+			Content: systemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: userQuery,
+		},
+	}
+
+	// Create request with lower temperature for more consistent optimization
+	requestBody := ChatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Stream:   false,
+		Options: &ChatOptions{
+			Temperature: 0.3, // Lower temperature for more consistent results
+			TopP:        0.9,
+		},
+	}
+
+	// Marshal request
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		optimizationDuration := time.Since(optimizationStart)
+		metrics.RecordQueryOptimization(optimizationDuration, false)
+		return userQuery, fmt.Errorf("failed to marshal query optimization request: %w", err)
+	}
+
+	// Create HTTP request
+	url := fmt.Sprintf("%s/api/chat", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		optimizationDuration := time.Since(optimizationStart)
+		metrics.RecordQueryOptimization(optimizationDuration, false)
+		return userQuery, fmt.Errorf("failed to create query optimization request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	resp, err := c.client.Do(req)
+	if err != nil {
+		optimizationDuration := time.Since(optimizationStart)
+		metrics.RecordQueryOptimization(optimizationDuration, false)
+		return userQuery, fmt.Errorf("failed to send query optimization request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		optimizationDuration := time.Since(optimizationStart)
+		metrics.RecordQueryOptimization(optimizationDuration, false)
+		body, _ := io.ReadAll(resp.Body)
+		return userQuery, fmt.Errorf("query optimization request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var chatResp ChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		optimizationDuration := time.Since(optimizationStart)
+		metrics.RecordQueryOptimization(optimizationDuration, false)
+		return userQuery, fmt.Errorf("failed to decode query optimization response: %w", err)
+	}
+
+	optimizedQuery := strings.TrimSpace(chatResp.Message.Content)
+	if optimizedQuery == "" {
+		optimizationDuration := time.Since(optimizationStart)
+		metrics.RecordQueryOptimization(optimizationDuration, false)
+		return userQuery, nil // Fall back to original query if optimization failed
+	}
+
+	optimizationDuration := time.Since(optimizationStart)
+	metrics.RecordQueryOptimization(optimizationDuration, true)
+	
+	return optimizedQuery, nil
 }

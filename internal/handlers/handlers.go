@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"lil-rag/pkg/lilrag"
+	"lil-rag/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Handler struct {
@@ -58,6 +61,41 @@ func NewWithVersion(rag *lilrag.LilRag, version string) *Handler {
 	return &Handler{rag: rag, version: version}
 }
 
+// LoggingMiddleware logs HTTP requests with details and records Prometheus metrics
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		
+		// Create a response writer that captures status code
+		wrappedWriter := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		
+		// Log the request
+		log.Printf("[%s] %s %s - User-Agent: %s", 
+			r.Method, r.URL.Path, r.RemoteAddr, r.UserAgent())
+		
+		// Call the next handler
+		next.ServeHTTP(wrappedWriter, r)
+		
+		// Record metrics and log response
+		duration := time.Since(start)
+		metrics.RecordHTTPRequest(r.Method, r.URL.Path, wrappedWriter.statusCode, duration)
+		
+		log.Printf("[%s] %s %s - %d - %v", 
+			r.Method, r.URL.Path, r.RemoteAddr, wrappedWriter.statusCode, duration)
+	})
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
 func (h *Handler) Index() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -66,9 +104,11 @@ func (h *Handler) Index() http.HandlerFunc {
 		}
 
 		contentType := r.Header.Get("Content-Type")
+		log.Printf("Index request - Content-Type: %s", contentType)
 
 		// Handle multipart form data (file uploads)
 		if contentType != "" && strings.HasPrefix(contentType, "multipart/form-data") {
+			log.Printf("Processing file upload request")
 			h.handleFileUpload(w, r)
 			return
 		}
@@ -76,6 +116,7 @@ func (h *Handler) Index() http.HandlerFunc {
 		// Handle JSON requests
 		var req IndexRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			log.Printf("Failed to decode index request: %v", err)
 			h.writeError(w, http.StatusBadRequest, "invalid request body", err.Error())
 			return
 		}
@@ -83,6 +124,9 @@ func (h *Handler) Index() http.HandlerFunc {
 		// Generate ID if not provided
 		if req.ID == "" {
 			req.ID = lilrag.GenerateDocumentID()
+			log.Printf("Auto-generated document ID: %s", req.ID)
+		} else {
+			log.Printf("Using provided document ID: %s", req.ID)
 		}
 
 		if req.Text == "" {
@@ -90,13 +134,27 @@ func (h *Handler) Index() http.HandlerFunc {
 			return
 		}
 
+		log.Printf("Indexing document %s with %d characters", req.ID, len(req.Text))
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 		defer cancel()
 
-		if err := h.rag.Index(ctx, req.Text, req.ID); err != nil {
+		// Record metrics for indexing
+		indexStart := time.Now()
+		err := h.rag.Index(ctx, req.Text, req.ID)
+		indexDuration := time.Since(indexStart)
+		
+		if err != nil {
+			log.Printf("Failed to index document %s: %v", req.ID, err)
+			metrics.RecordIndexingRequest(indexDuration, false, len(req.Text))
 			h.writeError(w, http.StatusInternalServerError, "failed to index", err.Error())
 			return
 		}
+
+		metrics.RecordIndexingRequest(indexDuration, true, len(req.Text))
+		// Estimate tokens for LLM embedding generation
+		metrics.EstimateAndRecordTokens("embedding", "unknown", req.Text)
+		
+		log.Printf("Successfully indexed document %s", req.ID)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -141,6 +199,8 @@ func (h *Handler) handleSearchGET(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	log.Printf("Search GET request - query: '%s', limit: %d", query, limit)
+
 	h.performSearch(w, r, query, limit)
 }
 
@@ -167,17 +227,27 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
+	log.Printf("Performing search - query: '%s', limit: %d", query, limit)
+	searchStart := time.Now()
 	results, err := h.rag.Search(ctx, query, limit)
+	searchDuration := time.Since(searchStart)
+	
 	if err != nil {
+		log.Printf("Search failed for query '%s': %v", query, err)
+		metrics.RecordSearchRequest(searchDuration, false, 0)
 		h.writeError(w, http.StatusInternalServerError, "search failed", err.Error())
 		return
 	}
 
+	metrics.RecordSearchRequest(searchDuration, true, len(results))
+	// Estimate tokens for embedding search
+	metrics.EstimateAndRecordTokens("search", "unknown", query)
+	
+	log.Printf("Search completed - found %d results for query '%s'", len(results), query)
 	response := SearchResponse{Results: results}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		// Log error but don't change response at this point
-		fmt.Printf("Error encoding response: %v\n", err)
+		log.Printf("Error encoding search response: %v", err)
 	}
 }
 
@@ -201,28 +271,18 @@ func (h *Handler) Health() http.HandlerFunc {
 }
 
 func (h *Handler) Metrics() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
-			return
-		}
+	// Return the Prometheus metrics handler
+	return promhttp.Handler().ServeHTTP
+}
 
-		metrics := map[string]interface{}{
-			"status": "metrics not available",
-		}
-
-		// Try to get cache stats from embedder if it's an OllamaEmbedder
-		if _, ok := interface{}(h.rag).(*lilrag.LilRag); ok {
-			// Access the embedder (this would need to be exposed in LilRag)
-			metrics["message"] = "Cache statistics available in enhanced embedder"
-			metrics["embedding_features"] = []string{"caching", "preprocessing", "query_enhancement", "retry_logic"}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(metrics); err != nil {
-			// Log error but don't change response at this point
-			fmt.Printf("Error encoding response: %v\n", err)
-		}
+// UpdateSystemMetrics updates system-wide metrics like document count
+func (h *Handler) UpdateSystemMetrics(ctx context.Context) {
+	// Get document count and update metrics
+	if documents, err := h.rag.ListDocuments(ctx); err == nil {
+		metrics.UpdateDocumentCount(len(documents))
+		log.Printf("Updated system metrics - document count: %d", len(documents))
+	} else {
+		log.Printf("Failed to update document count metric: %v", err)
 	}
 }
 
@@ -475,6 +535,36 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
         .message.assistant pre code {
             background: none;
             padding: 0;
+        }
+
+        .message.assistant ul,
+        .message.assistant ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+            max-width: 100%;
+            box-sizing: border-box;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .message.assistant li {
+            margin: 0.3em 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .message.assistant li ul,
+        .message.assistant li ol {
+            margin: 0.3em 0;
+            padding-left: 1.2em;
+        }
+
+        .message.assistant li p {
+            margin: 0.2em 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         /* Style document references in square brackets */
@@ -995,6 +1085,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	var req ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Failed to decode chat request: %v", err)
 		h.writeError(w, http.StatusBadRequest, "invalid JSON", err.Error())
 		return
 	}
@@ -1011,11 +1102,17 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 		req.Limit = 20 // Cap at 20 sources
 	}
 
+	log.Printf("Chat request - message: '%s', limit: %d", req.Message, req.Limit)
 	ctx := context.Background()
 
-	// Generate LLM response using retrieved documents as context
+	// Generate LLM response using retrieved documents as context with query optimization
+	chatStart := time.Now()
 	response, searchResults, err := h.rag.Chat(ctx, req.Message, req.Limit)
+	chatDuration := time.Since(chatStart)
+	
 	if err != nil {
+		log.Printf("Chat failed for message '%s': %v", req.Message, err)
+		metrics.RecordChatRequest(chatDuration, false, 0, 0)
 		h.writeError(w, http.StatusInternalServerError, "chat failed", err.Error())
 		return
 	}
@@ -1026,9 +1123,16 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 		Query:    req.Message,
 	}
 
+	metrics.RecordChatRequest(chatDuration, true, len(searchResults), len(response))
+	// Estimate tokens for chat input and output
+	metrics.EstimateAndRecordTokens("chat_input", "unknown", req.Message)
+	metrics.EstimateAndRecordTokens("chat_output", "unknown", response)
+	
+	log.Printf("Chat completed successfully - found %d sources, response length: %d", len(searchResults), len(response))
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(chatResp); err != nil {
-		fmt.Printf("Error encoding response: %v\n", err)
+		log.Printf("Error encoding chat response: %v", err)
 	}
 }
 
@@ -1047,89 +1151,311 @@ func (h *Handler) Static() http.HandlerFunc {
 		}
 
 		html := `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>LilRag API</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lil-RAG - Simple RAG System</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-        .endpoint { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
-        .method { display: inline-block; padding: 2px 8px; border-radius: 3px; font-weight: bold; }
-        .post { background-color: #49cc90; color: white; }
-        .get { background-color: #61affe; color: white; }
-        pre { background-color: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #007AFF;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 40px;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .action-card {
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        }
+
+        .action-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.3em;
+        }
+
+        .action-card p {
+            margin: 0 0 15px 0;
+            color: #666;
+        }
+
+        .action-card.chat {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .action-card.chat:hover {
+            border: 2px solid #667eea;
+        }
+
+        .action-card.chat p {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .action-card.documents {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .action-card.documents:hover {
+            border: 2px solid #f093fb;
+        }
+
+        .action-card.documents p {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .action-card.docs {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .action-card.docs:hover {
+            border: 2px solid #4facfe;
+        }
+
+        .action-card.docs p {
+            color: rgba(255,255,255,0.9);
+        }
+
+        .btn {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.05);
+        }
+
+        .api-section {
+            margin-top: 40px;
+        }
+
+        .api-section h2 {
+            color: #007AFF;
+            margin-bottom: 20px;
+        }
+
+        .endpoint {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-left: 4px solid #007AFF;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .method {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+
+        .method.post { background: #28a745; color: white; }
+        .method.get { background: #007bff; color: white; }
+        .method.delete { background: #dc3545; color: white; }
+
+        pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            line-height: 1.4;
+            margin: 10px 0;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .feature {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007AFF;
+        }
+
+        .feature h4 {
+            margin: 0 0 8px 0;
+            color: #007AFF;
+        }
+
+        .feature p {
+            margin: 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
-    <h1>LilRag API</h1>
-    <p>A simple RAG (Retrieval Augmented Generation) API using SQLite and Ollama</p>
-    
-    <div style="margin: 20px 0; padding: 15px; background: #e8f5e8; border: 1px solid #4caf50; 
-         border-radius: 5px; text-align: center;">
-        <h3 style="margin: 0 0 10px 0; color: #2e7d32;">💬 Try the Interactive Chat Interface!</h3>
-        <p style="margin: 0 0 15px 0;">Ask questions about your documents in a user-friendly chat interface</p>
-        <a href="/chat" style="background: #4caf50; color: white; padding: 10px 20px; 
-           text-decoration: none; border-radius: 5px; font-weight: bold;">Open Chat Interface</a>
-    </div>
-    
-    <div style="margin: 20px 0; padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; 
-         border-radius: 5px; text-align: center;">
-        <h3 style="margin: 0 0 10px 0; color: #1565c0;">📚 Browse Your Documents</h3>
-        <p style="margin: 0 0 15px 0;">View, manage, and organize all your indexed documents</p>
-        <a href="/documents" style="background: #2196f3; color: white; padding: 10px 20px; 
-           text-decoration: none; border-radius: 5px; font-weight: bold;">View Documents</a>
-    </div>
-    
-    <div class="endpoint">
-        <h3><span class="method post">POST</span> /api/index</h3>
-        <p>Index text content with an optional ID (auto-generated if not provided)</p>
-        <pre>{"id": "doc1", "text": "Your text content here"}
-or
-{"text": "Your text content here"}</pre>
-    </div>
-    
-    <div class="endpoint">
-        <h3><span class="method post">POST</span> /api/index (File Upload)</h3>
-        <p>Upload and index files (text or PDF) with multipart/form-data</p>
-        <pre>Form fields:
-- id: Document ID (optional - auto-generated if not provided)
-- file: File to upload (required)
+    <div class="container">
+        <h1>🚀 Lil-RAG</h1>
+        <p class="subtitle">A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama</p>
+        
+        <div class="quick-actions">
+            <a href="/chat" class="action-card chat">
+                <h3>💬 Interactive Chat</h3>
+                <p>Ask questions about your documents in a user-friendly chat interface</p>
+                <span class="btn">Start Chatting</span>
+            </a>
+            
+            <a href="/documents" class="action-card documents">
+                <h3>📚 Document Library</h3>
+                <p>View, manage, and organize all your indexed documents</p>
+                <span class="btn">Browse Documents</span>
+            </a>
+            
+            <a href="/docs" class="action-card docs">
+                <h3>📖 Documentation</h3>
+                <p>Complete API reference and usage guides for all interfaces</p>
+                <span class="btn">View Documentation</span>
+            </a>
+        </div>
 
-Content-Type: multipart/form-data</pre>
-    </div>
-    
-    <div class="endpoint">
-        <h3><span class="method get">GET</span> /api/search?query=hello&limit=10</h3>
-        <p>Search for similar content using query parameters</p>
-    </div>
-    
-    <div class="endpoint">
-        <h3><span class="method post">POST</span> /api/search</h3>
-        <p>Search for similar content using JSON body</p>
-        <pre>{"query": "your search query", "limit": 10}</pre>
-    </div>
-    
-    <div class="endpoint">
-        <h3><span class="method get">GET</span> /api/health</h3>
-        <p>Health check endpoint</p>
-    </div>
-    
-    <div class="endpoint">
-        <h3><span class="method get">GET</span> /api/metrics</h3>
-        <p>Performance metrics and cache statistics</p>
+        <div class="api-section">
+            <h2>🌟 Key Features</h2>
+            <div class="features">
+                <div class="feature">
+                    <h4>🔍 Semantic Search</h4>
+                    <p>Advanced similarity search using SQLite with sqlite-vec</p>
+                </div>
+                <div class="feature">
+                    <h4>📄 Multi-Format</h4>
+                    <p>Support for PDF, DOCX, XLSX, HTML, CSV, and text files</p>
+                </div>
+                <div class="feature">
+                    <h4>💬 Chat Interface</h4>
+                    <p>Interactive chat with RAG context and source citations</p>
+                </div>
+                <div class="feature">
+                    <h4>🗜️ Smart Storage</h4>
+                    <p>Automatic compression and deduplication</p>
+                </div>
+                <div class="feature">
+                    <h4>🔧 Multiple APIs</h4>
+                    <p>CLI, HTTP REST API, and MCP server interfaces</p>
+                </div>
+                <div class="feature">
+                    <h4>⚡ High Performance</h4>
+                    <p>Optimized Go implementation with efficient caching</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-section">
+            <h2>🌐 API Quick Reference</h2>
+            
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> /api/index</h3>
+                <p>Index text content or upload files for processing</p>
+                <pre>// JSON
+{"id": "doc1", "text": "Your content here"}
+
+// File Upload (multipart/form-data)
+curl -F "id=doc2" -F "file=@document.pdf" /api/index</pre>
+            </div>
+            
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> <span class="method post">POST</span> /api/search</h3>
+                <p>Search for similar content using semantic similarity</p>
+                <pre>// GET: /api/search?query=hello&limit=10
+// POST: {"query": "your search query", "limit": 10}</pre>
+            </div>
+            
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> /api/chat</h3>
+                <p>Interactive chat with RAG context and source citations</p>
+                <pre>{"message": "What is machine learning?", "limit": 5}</pre>
+            </div>
+            
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> /api/documents</h3>
+                <p>List all indexed documents with metadata</p>
+            </div>
+            
+            <div class="endpoint">
+                <h3><span class="method delete">DELETE</span> /api/documents/{id}</h3>
+                <p>Delete a specific document and all its chunks</p>
+            </div>
+            
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> /api/health</h3>
+                <p>System health check and status</p>
+            </div>
+        </div>
     </div>
 
-    <h2>PDF Support</h2>
-    <p>PDF files are automatically chunked by page. Search results will show page numbers like 
-    <code>[Page 1]</code> to help you locate content within the document.</p>
-    
-    <h2>Performance Features</h2>
-    <p>The system includes several performance optimizations:</p>
-    <ul>
-        <li><strong>Embedding Cache:</strong> Frequently requested embeddings are cached to reduce API calls</li>
-        <li><strong>Text Preprocessing:</strong> Text is normalized and cleaned before embedding</li>
-        <li><strong>Query Enhancement:</strong> Search queries are enhanced with context for better results</li>
-        <li><strong>Retry Logic:</strong> Automatic retry with exponential backoff for API failures</li>
-    </ul>
+    <div class="footer">
+        <p>📚 Lil-RAG v` + h.version + ` | Built with Go, SQLite, and Ollama | <a href="/docs" style="color: #007AFF;">Full Documentation</a></p>
+    </div>
 </body>
 </html>`
 
@@ -2035,6 +2361,508 @@ func (h *Handler) DocumentsList() http.HandlerFunc {
 </html>`
 
 		w.Write([]byte(html))
+	}
+}
+
+func (h *Handler) Documentation() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET method is allowed")
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		
+		html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lil-RAG Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2, h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+
+        h1 {
+            border-bottom: 3px solid #007AFF;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            color: #007AFF;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        .nav {
+            background: #f1f3f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .nav li {
+            margin: 0;
+        }
+
+        .nav a {
+            color: #007AFF;
+            text-decoration: none;
+            font-weight: 500;
+            display: block;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .nav a:hover {
+            background: #e3f2fd;
+        }
+
+        .endpoint {
+            background: #f8f9fa;
+            border-left: 4px solid #007AFF;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+
+        .method.post { background: #28a745; color: white; }
+        .method.get { background: #007bff; color: white; }
+        .method.delete { background: #dc3545; color: white; }
+
+        pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+
+        code {
+            background: #e3f2fd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            color: #1976d2;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .feature {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .feature h3 {
+            color: white;
+            margin-top: 0;
+        }
+
+        .interface-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .interface-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.2s;
+        }
+
+        .interface-card:hover {
+            border-color: #007AFF;
+            box-shadow: 0 4px 12px rgba(0,122,255,0.15);
+        }
+
+        .interface-card h3 {
+            color: #007AFF;
+            margin-top: 0;
+        }
+
+        .command-list {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .command-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #007AFF;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #007AFF;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+        
+        <h1>🚀 Lil-RAG Documentation</h1>
+        
+        <p>Complete documentation for Lil-RAG - A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama.</p>
+
+        <div class="nav">
+            <ul>
+                <li><a href="#features">✨ Features</a></li>
+                <li><a href="#interfaces">🔗 Interfaces</a></li>
+                <li><a href="#http-api">🌐 HTTP API</a></li>
+                <li><a href="#cli">💻 CLI Usage</a></li>
+                <li><a href="#mcp">🔌 MCP Server</a></li>
+                <li><a href="#config">⚙️ Configuration</a></li>
+            </ul>
+        </div>
+
+        <section id="features">
+            <h2>✨ Features</h2>
+            
+            <div class="interface-grid">
+                <div class="feature">
+                    <h3>🔍 Semantic Vector Search</h3>
+                    <p>Advanced similarity search using SQLite with sqlite-vec extension for fast, accurate retrieval.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>📄 Multi-Format Support</h3>
+                    <p>Native support for PDF, DOCX, XLSX, HTML, CSV, and text files with intelligent parsing.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>💬 Interactive Chat</h3>
+                    <p>Chat functionality with RAG context, providing responses with relevant source citations.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>🗜️ Smart Compression</h3>
+                    <p>Automatic gzip compression and deduplication for optimal storage efficiency.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="interfaces">
+            <h2>🔗 Available Interfaces</h2>
+            
+            <div class="interface-grid">
+                <div class="interface-card">
+                    <h3>💻 Command Line Interface</h3>
+                    <p>Full-featured CLI with commands for indexing, searching, chatting, and document management.</p>
+                    <div class="command-list">
+                        <strong>Commands:</strong>
+                        <ul>
+                            <li><code>index</code> - Index documents</li>
+                            <li><code>search</code> - Search content</li>
+                            <li><code>chat</code> - Interactive chat</li>
+                            <li><code>documents</code> - List documents</li>
+                            <li><code>delete</code> - Remove documents</li>
+                            <li><code>health</code> - System status</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="interface-card">
+                    <h3>🌐 HTTP API Server</h3>
+                    <p>RESTful API with web interface for integration and interactive usage.</p>
+                    <div class="command-list">
+                        <strong>Endpoints:</strong>
+                        <ul>
+                            <li><code>/api/index</code> - Index content</li>
+                            <li><code>/api/search</code> - Search documents</li>
+                            <li><code>/api/chat</code> - Chat interface</li>
+                            <li><code>/api/documents</code> - Document management</li>
+                            <li><code>/api/health</code> - Health check</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="interface-card">
+                    <h3>🔌 MCP Server</h3>
+                    <p>Model Context Protocol server for integration with AI assistants and tools.</p>
+                    <div class="command-list">
+                        <strong>Tools:</strong>
+                        <ul>
+                            <li><code>lilrag_index</code> - Index content</li>
+                            <li><code>lilrag_search</code> - Search documents</li>
+                            <li><code>lilrag_chat</code> - Chat with context</li>
+                            <li><code>lilrag_list_documents</code> - List documents</li>
+                            <li><code>lilrag_delete_document</code> - Delete documents</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="http-api">
+            <h2>🌐 HTTP API Reference</h2>
+            
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> /api/index</h3>
+                <p>Index text content or upload files for processing.</p>
+                <pre><code>curl -X POST http://localhost:8080/api/index \\
+  -H "Content-Type: application/json" \\
+  -d '{"id": "doc1", "text": "Your content here"}'
+
+# File upload
+curl -X POST http://localhost:8080/api/index \\
+  -F "id=doc2" \\
+  -F "file=@document.pdf"</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> <span class="method post">POST</span> /api/search</h3>
+                <p>Search for similar content using semantic similarity.</p>
+                <pre><code># GET request
+curl "http://localhost:8080/api/search?query=machine%20learning&limit=5"
+
+# POST request  
+curl -X POST http://localhost:8080/api/search \\
+  -H "Content-Type: application/json" \\
+  -d '{"query": "artificial intelligence", "limit": 3}'</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> /api/chat</h3>
+                <p>Interactive chat with RAG context and source citations.</p>
+                <pre><code>curl -X POST http://localhost:8080/api/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{"message": "What is machine learning?", "limit": 5}'</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> /api/documents</h3>
+                <p>List all indexed documents with metadata.</p>
+                <pre><code>curl http://localhost:8080/api/documents</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method delete">DELETE</span> /api/documents/{id}</h3>
+                <p>Delete a specific document and all its chunks.</p>
+                <pre><code>curl -X DELETE http://localhost:8080/api/documents/doc1</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> /api/health</h3>
+                <p>System health check endpoint.</p>
+                <pre><code>curl http://localhost:8080/api/health</code></pre>
+            </div>
+        </section>
+
+        <section id="cli">
+            <h2>💻 CLI Usage</h2>
+            
+            <h3>Installation & Setup</h3>
+            <pre><code># Build from source
+make build
+
+# Initialize configuration
+./bin/lil-rag config init
+
+# Check configuration
+./bin/lil-rag config show</code></pre>
+
+            <h3>Document Management</h3>
+            <pre><code># Index text content (ID auto-generated)
+./bin/lil-rag index "Your content here"
+
+# Index with explicit ID
+./bin/lil-rag index doc1 "Your content here"
+
+# Index a PDF file (ID auto-generated)  
+./bin/lil-rag index document.pdf
+
+# Index a PDF file with explicit ID
+./bin/lil-rag index doc2 document.pdf
+
+# Index from stdin (ID auto-generated)
+echo "Content" | ./bin/lil-rag index -
+
+# Index from stdin with explicit ID
+echo "Content" | ./bin/lil-rag index doc3 -
+
+# List all documents
+./bin/lil-rag documents
+
+# Delete a document
+./bin/lil-rag delete doc1 --force</code></pre>
+
+            <h3>Search & Chat</h3>
+            <pre><code># Search for content
+./bin/lil-rag search "machine learning" 5
+
+# Interactive chat
+./bin/lil-rag chat "What is AI?" 3
+
+# Check system health
+./bin/lil-rag health</code></pre>
+
+            <h3>Configuration</h3>
+            <pre><code># Set Ollama endpoint
+./bin/lil-rag config set ollama.endpoint http://localhost:11434
+
+# Set embedding model
+./bin/lil-rag config set ollama.model nomic-embed-text
+
+# Set chat model
+./bin/lil-rag config set ollama.chat-model llama3.2</code></pre>
+        </section>
+
+        <section id="mcp">
+            <h2>🔌 MCP Server</h2>
+            
+            <p>The MCP server provides tools for AI assistants to interact with your RAG system.</p>
+
+            <h3>Available Tools</h3>
+            <div class="command-list">
+                <ul>
+                    <li><strong>lilrag_index</strong> - Index text content</li>
+                    <li><strong>lilrag_index_file</strong> - Index files (PDF, DOCX, etc.)</li>
+                    <li><strong>lilrag_search</strong> - Semantic search</li>
+                    <li><strong>lilrag_chat</strong> - Chat with RAG context</li>
+                    <li><strong>lilrag_list_documents</strong> - List all documents</li>
+                    <li><strong>lilrag_delete_document</strong> - Delete documents</li>
+                </ul>
+            </div>
+
+            <h3>Configuration</h3>
+            <p>The MCP server uses the same profile configuration as the CLI and HTTP server, or falls back to environment variables:</p>
+            <pre><code>LILRAG_DB_PATH=/path/to/database.db
+LILRAG_OLLAMA_URL=http://localhost:11434
+LILRAG_MODEL=nomic-embed-text</code></pre>
+        </section>
+
+        <section id="config">
+            <h2>⚙️ Configuration</h2>
+            
+            <p>Lil-RAG uses profile-based configuration stored in <code>~/.lilrag/config.json</code>.</p>
+
+            <h3>Configuration Keys</h3>
+            <div class="command-list">
+                <ul>
+                    <li><code>ollama.endpoint</code> - Ollama server URL</li>
+                    <li><code>ollama.model</code> - Embedding model name</li>
+                    <li><code>ollama.chat-model</code> - Chat model name</li>
+                    <li><code>ollama.vector-size</code> - Vector dimension size</li>
+                    <li><code>storage.path</code> - Database file path</li>
+                    <li><code>data.dir</code> - Data directory path</li>
+                    <li><code>server.host</code> - HTTP server host</li>
+                    <li><code>server.port</code> - HTTP server port</li>
+                    <li><code>chunking.max-tokens</code> - Max tokens per chunk</li>
+                    <li><code>chunking.overlap</code> - Token overlap between chunks</li>
+                </ul>
+            </div>
+
+            <h3>Example Configuration</h3>
+            <pre><code>{
+  "ollama": {
+    "endpoint": "http://localhost:11434",
+    "embedding_model": "nomic-embed-text",
+    "chat_model": "llama3.2",
+    "vector_size": 768
+  },
+  "storage_path": "~/.lilrag/data/lilrag.db",
+  "data_dir": "~/.lilrag/data",
+  "server": {
+    "host": "localhost",
+    "port": 8080
+  },
+  "chunking": {
+    "max_tokens": 200,
+    "overlap": 50
+  }
+}</code></pre>
+        </section>
+    </div>
+
+    <div class="footer">
+        <p>📚 Lil-RAG v` + h.version + ` | <a href="https://github.com/your-username/lil-rag" style="color: #007AFF;">GitHub Repository</a></p>
+    </div>
+</body>
+</html>`
+
+		if _, err := w.Write([]byte(html)); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "write_error", "Failed to write response")
+			return
+		}
 	}
 }
 

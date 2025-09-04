@@ -8,16 +8,26 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ## ✨ Features
 
-- 🔍 **Semantic Vector Search** - Advanced similarity search using SQLite with sqlite-vec
-- 📄 **Document Deduplication** - Intelligent result deduplication for multi-chunk documents  
-- 🗜️ **Automatic Compression** - Transparent gzip compression for optimal storage
-- 📚 **PDF Support** - Native PDF parsing with page-based chunking
-- 🔧 **Triple Interface** - CLI, HTTP API, and MCP server for maximum flexibility
-- 🤖 **Ollama Integration** - Configurable embedding models via Ollama
-- ⚡ **High Performance** - Optimized Go implementation with efficient SQLite storage
-- 🎛️ **Profile Configuration** - User-friendly configuration management
-- 📁 **File Handling** - Support for text files, PDFs, and stdin input
+### Core Capabilities
+- 🔍 **Semantic Vector Search** - Advanced similarity search using SQLite with sqlite-vec extension
+- 💬 **Interactive Chat** - RAG-powered chat with context and source citations
+- 📄 **Multi-Format Support** - Native parsing for PDF, DOCX, XLSX, HTML, CSV, and text files
+- 📚 **Document Management** - Complete CRUD operations for indexed documents
+- 🗜️ **Smart Storage** - Automatic gzip compression and intelligent deduplication
 - 🔄 **Complete Documents** - Returns full document content, not just chunks
+
+### Multiple Interfaces
+- 💻 **CLI Application** - Full-featured command-line interface with all operations
+- 🌐 **HTTP API Server** - RESTful API with interactive web interface
+- 🔌 **MCP Server** - Model Context Protocol for AI assistant integration
+- 📖 **Built-in Documentation** - Comprehensive docs accessible via `/docs` route
+
+### Performance & Reliability
+- ⚡ **High Performance** - Optimized Go implementation with efficient SQLite storage
+- 🤖 **Ollama Integration** - Configurable embedding and chat models via Ollama
+- 🎛️ **Profile Configuration** - User-friendly configuration management
+- 💾 **Persistent Storage** - Reliable SQLite database with WAL mode
+- 🔧 **Health Monitoring** - Built-in health checks and metrics endpoints
 
 ## 📋 Prerequisites
 
@@ -141,31 +151,64 @@ Found 2 results:
    [complete document content shown]
 ```
 
-## CLI Usage
+## 💻 CLI Usage
 
-### Commands
+### All Commands
 
-- `index <id> [text|file|-]` - Index content with a unique ID
-- `search <query> [limit]` - Search for similar content
-- `config <init|show> [path]` - Manage configuration
+- `index [id] <text|file|->` - Index content (ID optional, auto-generated if not provided)
+- `search <query> [limit]` - Search for similar content  
+- `chat <message> [limit]` - Interactive chat with RAG context
+- `documents` - List all indexed documents
+- `delete <id> [--force]` - Delete a document by ID
+- `health` - Check system health status
+- `config <init|show|set>` - Manage configuration
+- `reset [--force]` - Delete database and all data
 
-### Examples
+### Document Management
 
 ```bash
-# Index examples
-lil-rag index doc1 "Hello world"                    # Direct text
-lil-rag index doc2 document.txt                     # From file
-echo "Hello world" | lil-rag index doc3 -          # From stdin
-cat large_file.txt | lil-rag index doc4 -          # Pipe large files
+# Index with auto-generated IDs (like HTTP API)
+lil-rag index "Hello world"                        # Direct text, auto ID
+lil-rag index document.pdf                         # PDF file, auto ID
+lil-rag index document.docx                        # Word document, auto ID
+echo "Hello world" | lil-rag index -              # From stdin, auto ID
 
+# Index with explicit IDs
+lil-rag index doc1 "Hello world"                   # Direct text with ID
+lil-rag index doc2 document.pdf                    # PDF file with ID
+echo "Hello world" | lil-rag index doc3 -         # From stdin with ID
+
+# List and manage documents
+lil-rag documents                                   # List all documents
+lil-rag delete doc1                                 # Delete with confirmation
+lil-rag delete doc2 --force                        # Delete without confirmation
+```
+
+### Search & Chat
+
+```bash
 # Search examples  
-lil-rag search "hello" 10                          # Search with limit
-lil-rag search "machine learning concepts"         # Default limit (10)
+lil-rag search "machine learning" 5                # Search with limit
+lil-rag search "AI concepts"                       # Default limit (10)
 
+# Chat examples
+lil-rag chat "What is machine learning?" 3         # Chat with context limit
+lil-rag chat "Explain neural networks"             # Default context (5 docs)
+```
+
+### System Operations
+
+```bash
 # Configuration
 lil-rag config init                                 # Initialize profile config
 lil-rag config show                                 # Show current config
-lil-rag config set ollama.model all-MiniLM-L6-v2   # Update configuration
+lil-rag config set ollama.model nomic-embed-text   # Update embedding model
+lil-rag config set ollama.chat-model llama3.2      # Update chat model
+
+# System management
+lil-rag health                                      # Check system health
+lil-rag reset                                       # Reset database (with confirmation)
+lil-rag reset --force                               # Reset database (skip confirmation)
 ```
 
 ### Flags
@@ -175,8 +218,10 @@ lil-rag config set ollama.model all-MiniLM-L6-v2   # Update configuration
 -data-dir string     Data directory (overrides profile config)
 -ollama string       Ollama URL (overrides profile config)  
 -model string        Embedding model (overrides profile config)
+-chat-model string   Chat model (overrides profile config)
 -vector-size int     Vector size (overrides profile config)
 -help               Show help
+-version            Show version
 ```
 
 ## 🌐 HTTP API
@@ -224,21 +269,14 @@ curl -X POST http://localhost:8080/api/index \
 }
 ```
 
-#### GET /api/search
-Search using query parameters.
+#### GET /api/search & POST /api/search
+Search using query parameters or JSON body.
 
 ```bash
-# Basic search
+# GET request
 curl "http://localhost:8080/api/search?query=machine%20learning&limit=5"
 
-# Single result (returns complete document)
-curl "http://localhost:8080/api/search?query=neural%20networks&limit=1"
-```
-
-#### POST /api/search  
-Search using JSON body (recommended for complex queries).
-
-```bash
+# POST request (recommended)
 curl -X POST http://localhost:8080/api/search \
   -H "Content-Type: application/json" \
   -d '{
@@ -267,6 +305,63 @@ curl -X POST http://localhost:8080/api/search \
 }
 ```
 
+#### POST /api/chat
+Interactive chat with RAG context and source citations.
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What is machine learning?", 
+    "limit": 5
+  }'
+```
+
+**Response:**
+```json
+{
+  "response": "Machine learning is a subset of artificial intelligence...",
+  "sources": [
+    {
+      "ID": "doc1",
+      "Text": "Machine learning algorithms...",
+      "Score": 0.8542
+    }
+  ],
+  "query": "What is machine learning?"
+}
+```
+
+#### GET /api/documents
+List all indexed documents with metadata.
+
+```bash
+curl http://localhost:8080/api/documents
+```
+
+**Response:**
+```json
+{
+  "documents": [
+    {
+      "id": "doc1",
+      "doc_type": "text",
+      "chunk_count": 3,
+      "source_path": "/path/to/file.txt",
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+#### DELETE /api/documents/{id}
+Delete a specific document and all its chunks.
+
+```bash
+curl -X DELETE http://localhost:8080/api/documents/doc1
+```
+
 #### GET /api/health
 Health check endpoint for monitoring.
 
@@ -289,6 +384,76 @@ Performance metrics and system information.
 ```bash
 curl http://localhost:8080/api/metrics
 ```
+
+### Web Interface
+
+- **Home**: `http://localhost:8080/` - API overview and quick actions
+- **Chat Interface**: `http://localhost:8080/chat` - Interactive chat with your documents
+- **Document Library**: `http://localhost:8080/documents` - Browse and manage documents
+- **Documentation**: `http://localhost:8080/docs` - Complete API reference and guides
+
+## 🔌 MCP Server
+
+The Model Context Protocol (MCP) server allows AI assistants and tools to interact with your RAG system seamlessly.
+
+### Start the MCP Server
+
+```bash
+# Start with default settings
+./bin/lil-rag-mcp
+
+# The server uses the same profile configuration as CLI/HTTP server
+# Or falls back to environment variables:
+LILRAG_DB_PATH=/path/to/database.db \
+LILRAG_OLLAMA_URL=http://localhost:11434 \
+LILRAG_MODEL=nomic-embed-text \
+./bin/lil-rag-mcp
+```
+
+### Available Tools
+
+#### lilrag_index
+Index text content into the RAG system.
+
+**Parameters:**
+- `text` (required): Text content to index
+- `id` (optional): Document ID (auto-generated if not provided)
+
+#### lilrag_index_file  
+Index files (PDF, DOCX, XLSX, HTML, CSV, text).
+
+**Parameters:**
+- `file_path` (required): Path to file to index
+- `id` (optional): Document ID (defaults to filename)
+
+#### lilrag_search
+Semantic similarity search.
+
+**Parameters:**
+- `query` (required): Search query
+- `limit` (optional): Max results (default: 10, max: 50)
+
+#### lilrag_chat
+Interactive chat with RAG context.
+
+**Parameters:**
+- `message` (required): Question or message  
+- `limit` (optional): Max context documents (default: 5, max: 20)
+
+#### lilrag_list_documents
+List all indexed documents with metadata.
+
+**Parameters:** None
+
+#### lilrag_delete_document
+Delete a document and all its chunks.
+
+**Parameters:**
+- `document_id` (required): ID of document to delete
+
+### Integration Examples
+
+The MCP server can be integrated with various AI tools and assistants that support the Model Context Protocol. The server provides a standard interface for document indexing, searching, and chat functionality.
 
 ## Configuration
 
@@ -319,6 +484,7 @@ Example profile configuration (`~/.lilrag/config.json`):
   "ollama": {
     "endpoint": "http://localhost:11434",
     "embedding_model": "nomic-embed-text",
+    "chat_model": "llama3.2",
     "vector_size": 768
   },
   "storage_path": "/home/user/.lilrag/data/lilrag.db",
@@ -339,7 +505,10 @@ Example profile configuration (`~/.lilrag/config.json`):
 # Change embedding model
 ./bin/lil-rag config set ollama.model all-MiniLM-L6-v2
 
-# Update vector size (must match model)
+# Change chat model
+./bin/lil-rag config set ollama.chat-model llama3.2
+
+# Update vector size (must match embedding model)
 ./bin/lil-rag config set ollama.vector-size 384
 
 # Change data directory

@@ -143,10 +143,13 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	var committed bool
 	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			// Log rollback error if needed, but don't override the main error
-			fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Log rollback error if needed, but don't override the main error
+				fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+			}
 		}
 	}()
 
@@ -226,7 +229,11 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // Index maintains backward compatibility for single-text indexing
@@ -555,9 +562,12 @@ func (s *SQLiteStorage) DeleteDocument(ctx context.Context, documentID string) e
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	var committed bool
 	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+			}
 		}
 	}()
 
@@ -602,6 +612,7 @@ func (s *SQLiteStorage) DeleteDocument(ctx context.Context, documentID string) e
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit deletion: %w", err)
 	}
+	committed = true
 
 	// Clean up file after successful deletion
 	if filePath.Valid && filePath.String != "" {

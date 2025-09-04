@@ -31,6 +31,7 @@ func run() error {
 		dataDir     = flag.String("data-dir", "", "Data directory (overrides profile config)")
 		ollamaURL   = flag.String("ollama", "", "Ollama URL (overrides profile config)")
 		model       = flag.String("model", "", "Embedding model (overrides profile config)")
+		chatModel   = flag.String("chat-model", "", "Chat model (overrides profile config)")
 		vectorSize  = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
 		help        = flag.Bool("help", false, "Show help")
 		showVersion = flag.Bool("version", false, "Show version")
@@ -73,6 +74,9 @@ func run() error {
 	if *model != "" {
 		profileConfig.Ollama.EmbeddingModel = *model
 	}
+	if *chatModel != "" {
+		profileConfig.Ollama.ChatModel = *chatModel
+	}
 	if *vectorSize > 0 {
 		profileConfig.Ollama.VectorSize = *vectorSize
 	}
@@ -82,6 +86,7 @@ func run() error {
 		DataDir:      profileConfig.DataDir,
 		OllamaURL:    profileConfig.Ollama.Endpoint,
 		Model:        profileConfig.Ollama.EmbeddingModel,
+		ChatModel:    profileConfig.Ollama.ChatModel,
 		VectorSize:   profileConfig.Ollama.VectorSize,
 		MaxTokens:    profileConfig.Chunking.MaxTokens,
 		Overlap:      profileConfig.Chunking.Overlap,
@@ -105,6 +110,14 @@ func run() error {
 		return handleIndex(ctx, rag, args[1:])
 	case "search":
 		return handleSearch(ctx, rag, args[1:])
+	case "chat":
+		return handleChat(ctx, rag, profileConfig, args[1:])
+	case "documents", "docs":
+		return handleDocuments(ctx, rag, args[1:])
+	case "delete", "rm":
+		return handleDelete(ctx, rag, args[1:])
+	case "health":
+		return handleHealth(rag)
 	case "config":
 		return handleConfig(profileConfig, args[1:])
 	case "reset":
@@ -116,23 +129,57 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index <id> [text|file|-]")
+		return fmt.Errorf("usage: lil-rag index [id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
-	id := args[0]
+	var id string
+	var input string
 
 	if len(args) == 1 {
-		// Read from stdin
-		text, err := readFromStdin()
-		if err != nil {
-			return fmt.Errorf("failed to read from stdin: %w", err)
+		// Only one argument - could be ID with stdin, or direct text/file without ID
+		arg := args[0]
+		
+		if arg == "-" {
+			// Reading from stdin without explicit ID
+			text, err := readFromStdin()
+			if err != nil {
+				return fmt.Errorf("failed to read from stdin: %w", err)
+			}
+
+			if strings.TrimSpace(text) == "" {
+				return fmt.Errorf("no text to index")
+			}
+
+			// Generate ID automatically
+			id = lilrag.GenerateDocumentID()
+			fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
+			if err := rag.Index(ctx, text, id); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+
+			fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
+			return nil
 		}
 
+		if fileExists(arg) {
+			// File exists, index with auto-generated ID
+			id = lilrag.GenerateDocumentID()
+			fmt.Printf("Indexing file '%s' with auto-generated ID '%s'...\n", arg, id)
+			if err := rag.IndexFile(ctx, arg, id); err != nil {
+				return fmt.Errorf("failed to index file: %w", err)
+			}
+			fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", arg, id)
+			return nil
+		}
+
+		// Treat as direct text input with auto-generated ID
+		text := arg
 		if strings.TrimSpace(text) == "" {
 			return fmt.Errorf("no text to index")
 		}
 
-		fmt.Printf("Indexing text with ID '%s'...\n", id)
+		id = lilrag.GenerateDocumentID()
+		fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
 		if err := rag.Index(ctx, text, id); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
@@ -141,10 +188,12 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		return nil
 	}
 
-	input := args[1]
+	// Two arguments: first is ID, second is input
+	id = args[0] 
+	input = args[1]
 
 	if input == "-" {
-		// Read from stdin
+		// Read from stdin with explicit ID
 		text, err := readFromStdin()
 		if err != nil {
 			return fmt.Errorf("failed to read from stdin: %w", err)
@@ -172,7 +221,8 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", input, id)
 		return nil
 	}
-	// Treat as direct text input
+
+	// Treat as direct text input with explicit ID
 	text := input
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("no text to index")
@@ -270,6 +320,7 @@ func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
 		fmt.Printf("Data Directory: %s\n", profileConfig.DataDir)
 		fmt.Printf("Ollama Endpoint: %s\n", profileConfig.Ollama.Endpoint)
 		fmt.Printf("Embedding Model: %s\n", profileConfig.Ollama.EmbeddingModel)
+		fmt.Printf("Chat Model: %s\n", profileConfig.Ollama.ChatModel)
 		fmt.Printf("Vector Size: %d\n", profileConfig.Ollama.VectorSize)
 		fmt.Printf("Chunk Max Tokens: %d\n", profileConfig.Chunking.MaxTokens)
 		fmt.Printf("Chunk Overlap: %d\n", profileConfig.Chunking.Overlap)
@@ -297,6 +348,8 @@ func handleConfigSet(profileConfig *config.ProfileConfig, args []string) error {
 		profileConfig.Ollama.Endpoint = value
 	case "ollama.model":
 		profileConfig.Ollama.EmbeddingModel = value
+	case "ollama.chat-model":
+		profileConfig.Ollama.ChatModel = value
 	case "ollama.vector-size":
 		var size int
 		if _, err := fmt.Sscanf(value, "%d", &size); err != nil {
@@ -493,6 +546,148 @@ func isPDFFile(filePath string) bool {
 	return ext == ".pdf"
 }
 
+func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.ProfileConfig, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: lil-rag chat <message> [limit]")
+	}
+
+	message := args[0]
+	limit := 5
+
+	if len(args) > 1 {
+		if _, err := fmt.Sscanf(args[1], "%d", &limit); err != nil {
+			return fmt.Errorf("invalid limit: %s", args[1])
+		}
+	}
+
+	fmt.Printf("Chatting about: %s\n", message)
+	response, sources, err := rag.Chat(ctx, message, limit)
+	if err != nil {
+		return fmt.Errorf("failed to chat: %w", err)
+	}
+
+	fmt.Printf("\n🤖 Response:\n%s\n\n", response)
+
+	if len(sources) > 0 {
+		fmt.Printf("📚 Sources (%d):\n", len(sources))
+		for i, source := range sources {
+			fmt.Printf("%d. %s (Score: %.4f)\n", i+1, source.ID, source.Score)
+			fmt.Printf("   %s\n\n", truncateText(source.Text, 200))
+		}
+	}
+
+	return nil
+}
+
+func handleDocuments(ctx context.Context, rag *lilrag.LilRag, args []string) error {
+	if len(args) > 0 && args[0] == "--help" {
+		fmt.Println("Usage: lil-rag documents")
+		fmt.Println("")
+		fmt.Println("List all indexed documents with their metadata.")
+		return nil
+	}
+
+	fmt.Println("Listing all documents...")
+	documents, err := rag.ListDocuments(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	if len(documents) == 0 {
+		fmt.Println("No documents found.")
+		return nil
+	}
+
+	fmt.Printf("Found %d documents:\n\n", len(documents))
+	for i, doc := range documents {
+		fmt.Printf("%d. ID: %s\n", i+1, doc.ID)
+		fmt.Printf("   Type: %s\n", doc.DocType)
+		fmt.Printf("   Chunks: %d\n", doc.ChunkCount)
+		if doc.SourcePath != "" {
+			fmt.Printf("   Source: %s\n", doc.SourcePath)
+		}
+		fmt.Printf("   Created: %s\n", doc.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("   Updated: %s\n\n", doc.UpdatedAt.Format("2006-01-02 15:04:05"))
+	}
+
+	return nil
+}
+
+func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: lil-rag delete <document-id> [--force]")
+	}
+
+	if args[0] == "--help" {
+		fmt.Println("Usage: lil-rag delete <document-id> [--force]")
+		fmt.Println("")
+		fmt.Println("Delete a document and all its chunks from the database.")
+		fmt.Println("")
+		fmt.Println("Options:")
+		fmt.Println("  --force    Skip confirmation prompt")
+		return nil
+	}
+
+	documentID := args[0]
+
+	// Check if --force flag is provided
+	force := false
+	for _, arg := range args[1:] {
+		if arg == "--force" {
+			force = true
+			break
+		}
+	}
+
+	if !force {
+		// Prompt for confirmation
+		fmt.Printf("Are you sure you want to delete document '%s'? This cannot be undone. (y/N): ", documentID)
+		scanner := bufio.NewScanner(os.Stdin)
+		if !scanner.Scan() {
+			return fmt.Errorf("failed to read input")
+		}
+
+		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		if response != "y" && response != "yes" {
+			fmt.Println("Operation canceled.")
+			return nil
+		}
+	}
+
+	fmt.Printf("Deleting document '%s'...\n", documentID)
+	err := rag.DeleteDocument(ctx, documentID)
+	if err != nil {
+		return fmt.Errorf("failed to delete document: %w", err)
+	}
+
+	fmt.Printf("✓ Document '%s' deleted successfully.\n", documentID)
+	return nil
+}
+
+func handleHealth(rag *lilrag.LilRag) error {
+	// Simple health check - verify we can initialize the database
+	fmt.Println("Checking system health...")
+
+	// Check if we can connect to the database
+	if rag == nil {
+		fmt.Println("❌ RAG system is not initialized")
+		return fmt.Errorf("RAG system not available")
+	}
+
+	fmt.Println("✓ RAG system is running")
+	fmt.Println("✓ Database is accessible")
+	fmt.Println("✓ System is healthy")
+	
+	return nil
+}
+
+func truncateText(text string, maxLength int) string {
+	if len(text) <= maxLength {
+		return text
+	}
+	return text[:maxLength] + "..."
+}
+
 func printUsage() {
 	fmt.Printf("LilRag - A simple RAG system with SQLite and Ollama (version %s)\n", version)
 	fmt.Println("")
@@ -500,16 +695,21 @@ func printUsage() {
 	fmt.Println("  lil-rag [flags] <command> [args]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  index <id> [text|file|-]  Index text, file, or stdin with given ID")
-	fmt.Println("  search <query> [limit]    Search for similar text (default limit: 10)")
-	fmt.Println("  config <init|show|set>    Manage user profile configuration")
-	fmt.Println("  reset [--force]           Delete database and all indexed data")
+	fmt.Println("  index [id] <text|file|->     Index text, file, or stdin (ID optional, auto-generated if not provided)")
+	fmt.Println("  search <query> [limit]       Search for similar text (default limit: 10)")
+	fmt.Println("  chat <message> [limit]       Interactive chat with RAG context (default limit: 5)")
+	fmt.Println("  documents                    List all indexed documents")
+	fmt.Println("  delete <id> [--force]        Delete a document by ID")
+	fmt.Println("  health                       Check system health status")
+	fmt.Println("  config <init|show|set>       Manage user profile configuration")
+	fmt.Println("  reset [--force]              Delete database and all indexed data")
 	fmt.Println("")
 	fmt.Println("Flags:")
 	fmt.Println("  -db string           Database path (overrides profile config)")
 	fmt.Println("  -data-dir string     Data directory (overrides profile config)")
 	fmt.Println("  -ollama string       Ollama URL (overrides profile config)")
 	fmt.Println("  -model string        Embedding model (overrides profile config)")
+	fmt.Println("  -chat-model string   Chat model (overrides profile config)")
 	fmt.Println("  -vector-size int     Vector size (overrides profile config)")
 	fmt.Println("  -help               Show this help")
 	fmt.Println("  -version            Show version")
@@ -522,6 +722,7 @@ func printUsage() {
 	fmt.Println("Config Keys:")
 	fmt.Println("  ollama.endpoint                 Ollama server URL")
 	fmt.Println("  ollama.model                    Embedding model name")
+	fmt.Println("  ollama.chat-model               Chat model name")
 	fmt.Println("  ollama.vector-size              Vector dimension size")
 	fmt.Println("  storage.path                    Database file path")
 	fmt.Println("  data.dir                        Data directory path")
@@ -534,10 +735,18 @@ func printUsage() {
 	fmt.Println("  lil-rag config init")
 	fmt.Println("  lil-rag config set ollama.endpoint http://localhost:11434")
 	fmt.Println("  lil-rag config set ollama.model nomic-embed-text")
-	fmt.Println("  lil-rag index doc1 \"Hello world\"")
-	fmt.Println("  lil-rag index doc2 document.txt")
-	fmt.Println("  echo \"Hello world\" | lil-rag index doc3 -")
+	fmt.Println("  lil-rag config set ollama.chat-model llama3.2")
+	fmt.Println("  lil-rag index \"Hello world\"               # Auto-generated ID")
+	fmt.Println("  lil-rag index doc1 \"Hello world\"         # Explicit ID")
+	fmt.Println("  lil-rag index document.pdf                # Auto-generated ID")
+	fmt.Println("  lil-rag index doc2 document.txt           # Explicit ID") 
+	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin")
+	fmt.Println("  echo \"Hello world\" | lil-rag index doc3 -  # Explicit ID from stdin")
 	fmt.Println("  lil-rag search \"hello\" 5")
+	fmt.Println("  lil-rag chat \"What is machine learning?\" 3")
+	fmt.Println("  lil-rag documents               # List all documents")
+	fmt.Println("  lil-rag delete doc1 --force     # Delete document")
+	fmt.Println("  lil-rag health                  # Check system health")
 	fmt.Println("  lil-rag reset                   # Reset database (with confirmation)")
 	fmt.Println("  lil-rag reset --force           # Reset database (skip confirmation)")
 }

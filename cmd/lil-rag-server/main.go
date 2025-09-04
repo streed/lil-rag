@@ -108,17 +108,43 @@ func run() error {
 	mux.Handle("/api/metrics", handler.Metrics())
 	mux.Handle("/chat", handler.Chat())
 	mux.Handle("/documents", handler.DocumentsList())
+	mux.Handle("/docs", handler.Documentation())
 	mux.Handle("/view/", handler.ViewDocument())
 	mux.Handle("/", handler.Static())
+
+	// Wrap the mux with logging middleware
+	loggedHandler := handlers.LoggingMiddleware(mux)
 
 	addr := fmt.Sprintf("%s:%d", profileConfig.Server.Host, profileConfig.Server.Port)
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      loggedHandler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start periodic system metrics updates
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		
+		// Update initial metrics
+		ctx := context.Background()
+		handler.UpdateSystemMetrics(ctx)
+		
+		for {
+			select {
+			case <-ticker.C:
+				handler.UpdateSystemMetrics(ctx)
+			case <-quit:
+				return
+			}
+		}
+	}()
 
 	go func() {
 		log.Printf("Starting lil-rag-server version %s on %s", version, addr)
@@ -127,8 +153,6 @@ func run() error {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server...")
