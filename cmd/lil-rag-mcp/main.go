@@ -551,7 +551,7 @@ func (s *LilRagMCPServer) handleChat(id interface{}, args map[string]interface{}
 	}
 }
 
-func (s *LilRagMCPServer) handleListDocuments(id interface{}, args map[string]interface{}) *MCPMessage {
+func (s *LilRagMCPServer) handleListDocuments(id interface{}, _ map[string]interface{}) *MCPMessage {
 	ctx := context.Background()
 	documents, err := s.rag.ListDocuments(ctx)
 	if err != nil {

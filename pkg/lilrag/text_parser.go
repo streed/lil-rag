@@ -24,17 +24,17 @@ func (tp *TextParser) Parse(filePath string) (string, error) {
 }
 
 // ParseWithChunks extracts and chunks content from a text file
-func (tp *TextParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error) {
+func (tp *TextParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	content, err := tp.Parse(filePath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Use a default chunker if none provided
 	if tp.chunker == nil {
 		tp.chunker = NewTextChunker(256, 38) // Use optimized defaults
 	}
-	
+
 	return tp.chunker.ChunkText(content), nil
 }
 

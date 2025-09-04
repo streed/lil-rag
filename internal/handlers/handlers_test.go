@@ -80,7 +80,7 @@ func createTestHandler(t *testing.T) *Handler {
 // createMockTestHandler creates a handler with minimal initialization for tests that don't need real Ollama integration
 func createMockTestHandler(t *testing.T) *Handler {
 	config := &lilrag.Config{
-		DatabasePath: ":memory:",  // Use in-memory database to avoid file system issues
+		DatabasePath: ":memory:", // Use in-memory database to avoid file system issues
 		DataDir:      t.TempDir(),
 		VectorSize:   3,
 		MaxTokens:    100,
@@ -443,7 +443,7 @@ func TestHandler_Metrics(t *testing.T) {
 			if !strings.Contains(responseBody, "# HELP") {
 				t.Error("Expected Prometheus metrics format with HELP comments")
 			}
-			
+
 			// Check for at least one of our custom metrics or default Go metrics
 			if !strings.Contains(responseBody, "lilrag_") && !strings.Contains(responseBody, "go_") {
 				t.Error("Expected metrics in Prometheus output")

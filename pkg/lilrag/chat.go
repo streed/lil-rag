@@ -23,7 +23,7 @@ type OllamaChatClient struct {
 // NewOllamaChatClient creates a new Ollama chat client
 func NewOllamaChatClient(baseURL, model string) *OllamaChatClient {
 	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+		baseURL = DefaultOllamaURL
 	}
 	if model == "" {
 		model = "gemma3:4b"
@@ -40,7 +40,7 @@ func NewOllamaChatClient(baseURL, model string) *OllamaChatClient {
 
 // ChatRequest represents a request to Ollama's chat API
 type ChatRequest struct {
-	Model   string        `json:"model"`
+	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
 	Stream   bool          `json:"stream"`
 	Options  *ChatOptions  `json:"options,omitempty"`
@@ -48,7 +48,7 @@ type ChatRequest struct {
 
 // ChatMessage represents a single message in a chat conversation
 type ChatMessage struct {
-	Role    string `json:"role"`    // "system", "user", or "assistant"
+	Role    string `json:"role"` // "system", "user", or "assistant"
 	Content string `json:"content"`
 }
 
@@ -68,10 +68,11 @@ type ChatResponse struct {
 }
 
 // GenerateResponse generates a chat response using the provided context and user message
-func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage string, searchResults []SearchResult) (string, error) {
+func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage string,
+	searchResults []SearchResult) (string, error) {
 	// Create system prompt with search results context
 	systemPrompt := c.createSystemPrompt(searchResults)
-	
+
 	// Build chat messages
 	messages := []ChatMessage{
 		{
@@ -119,7 +120,10 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("ollama server returned status %d", resp.StatusCode)
+		}
 		return "", fmt.Errorf("chat request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -135,38 +139,41 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 // createSystemPrompt creates a system prompt with search results context
 func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) string {
 	var prompt strings.Builder
-	
+
 	prompt.WriteString("You are a helpful AI assistant that answers questions based on provided document context. ")
 	prompt.WriteString("Use the following documents to answer the user's question. ")
 	prompt.WriteString("Be accurate, concise, and cite which documents you're referencing.\n\n")
-	
+
 	if len(searchResults) == 0 {
-		prompt.WriteString("No relevant documents were found. Please inform the user that you don't have enough context to answer their question and suggest they provide more relevant documents or rephrase their query.")
+		prompt.WriteString("No relevant documents were found. Please inform the user that you don't " +
+			"have enough context to answer their question and suggest they provide more relevant " +
+			"documents or rephrase their query.")
 		return prompt.String()
 	}
-	
+
 	prompt.WriteString("RELEVANT DOCUMENTS:\n\n")
-	
+
 	for i, result := range searchResults {
-		prompt.WriteString(fmt.Sprintf("Document %d (ID: %s, Relevance: %.1f%%):\n", 
+		prompt.WriteString(fmt.Sprintf("Document %d (ID: %s, Relevance: %.1f%%):\n",
 			i+1, result.ID, result.Score*100))
-		
+
 		// Use a reasonable excerpt length
 		text := result.Text
 		if len(text) > 2000 {
 			text = text[:2000] + "..."
 		}
-		
+
 		prompt.WriteString(text)
 		prompt.WriteString("\n\n")
 	}
-	
+
 	prompt.WriteString("Please answer the user's question based on these documents. ")
 	prompt.WriteString("If the documents don't contain relevant information, say so clearly. ")
-	prompt.WriteString("When referencing information from a document, cite it using square brackets with the document ID: [document-id]. ")
+	prompt.WriteString("When referencing information from a document, cite it using square " +
+		"brackets with the document ID: [document-id]. ")
 	prompt.WriteString("For example: \"According to [lilrag-overview]...\" or \"As mentioned in [vector-search]...\". ")
 	prompt.WriteString("Use only the document ID inside the brackets, not \"Document 1\" or similar.")
-	
+
 	return prompt.String()
 }
 
@@ -174,7 +181,7 @@ func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) stri
 func (c *OllamaChatClient) TestConnection(ctx context.Context) error {
 	// Check if the server is reachable
 	url := fmt.Sprintf("%s/api/tags", c.baseURL)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("failed to create test request: %w", err)
 	}
@@ -186,7 +193,7 @@ func (c *OllamaChatClient) TestConnection(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Ollama server returned status %d", resp.StatusCode)
+		return fmt.Errorf("ollama server returned status %d", resp.StatusCode)
 	}
 
 	// Parse response to check if model is available
@@ -210,7 +217,7 @@ func (c *OllamaChatClient) TestConnection(ctx context.Context) error {
 	}
 
 	if !modelFound {
-		return fmt.Errorf("chat model '%s' not found in Ollama. Available models: %v", 
+		return fmt.Errorf("chat model '%s' not found in Ollama. Available models: %v",
 			c.model, tagsResp.Models)
 	}
 
@@ -298,7 +305,10 @@ Respond with ONLY the optimized query, no explanations or additional text.`
 	if resp.StatusCode != http.StatusOK {
 		optimizationDuration := time.Since(optimizationStart)
 		metrics.RecordQueryOptimization(optimizationDuration, false)
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return userQuery, fmt.Errorf("query optimization request failed with status %d", resp.StatusCode)
+		}
 		return userQuery, fmt.Errorf("query optimization request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -319,6 +329,6 @@ Respond with ONLY the optimized query, no explanations or additional text.`
 
 	optimizationDuration := time.Since(optimizationStart)
 	metrics.RecordQueryOptimization(optimizationDuration, true)
-	
+
 	return optimizedQuery, nil
 }

@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// Content type constants
+const (
+	ContentTypeCode       = "code"
+	ContentTypeProse      = "prose"
+	ContentTypeStructured = "structured"
+)
+
 type TextChunker struct {
 	MaxTokens  int
 	Overlap    int
@@ -47,7 +54,7 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 
 	tokenCount := tc.EstimateTokenCount(text)
 	contentType := tc.detectContentType(text)
-	
+
 	// For very small texts (under 100 tokens), return as single chunk unless MaxTokens is very small
 	if tokenCount <= 100 && tc.MaxTokens >= 100 {
 		return []Chunk{
@@ -61,17 +68,17 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 			},
 		}
 	}
-	
+
 	// Apply semantic chunking for ALL documents to get optimal boundaries
 	// Even small documents benefit from content-type aware processing
 	semanticChunks := tc.adaptiveChunk(text, contentType)
-	
+
 	// If semantic chunking produces only one chunk that fits in token limit,
 	// we still benefit from the content-type detection and boundary analysis
 	if len(semanticChunks) == 1 && semanticChunks[0].TokenCount <= tc.MaxTokens {
 		return semanticChunks
 	}
-	
+
 	// For larger documents or multiple semantic chunks, apply full processing
 	return semanticChunks
 }
@@ -80,28 +87,28 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 func (tc *TextChunker) detectContentType(text string) string {
 	codeIndicators := []string{"function", "class", "def ", "```", "import ", "#include", "var ", "let ", "const "}
 	structuredIndicators := []string{"# ", "## ", "### ", "- ", "* ", "1. ", "2. "}
-	
+
 	for _, indicator := range codeIndicators {
 		if strings.Contains(text, indicator) {
-			return "code"
+			return ContentTypeCode
 		}
 	}
-	
+
 	structureCount := 0
 	for _, indicator := range structuredIndicators {
 		if strings.Contains(text, indicator) {
 			structureCount++
 		}
 	}
-	
+
 	if structureCount > 2 {
-		return "structured"
+		return ContentTypeStructured
 	}
-	
+
 	if strings.Count(text, "\n\n") > len(text)/500 {
-		return "prose"
+		return ContentTypeProse
 	}
-	
+
 	return "text"
 }
 
@@ -109,23 +116,23 @@ func (tc *TextChunker) detectContentType(text string) string {
 func (tc *TextChunker) adaptiveChunk(text, contentType string) []Chunk {
 	var sentences []string
 	var targetChunkSize int
-	
+
 	// Research-based optimal chunk sizes for different content types
 	switch contentType {
-	case "code":
+	case ContentTypeCode:
 		sentences = tc.splitByCodeBlocks(text)
 		targetChunkSize = int(float64(tc.MaxTokens) * 1.5) // 384 tokens - larger for code context
-	case "structured":
+	case ContentTypeStructured:
 		sentences = tc.splitIntoSentences(text)
 		targetChunkSize = tc.MaxTokens // 256 tokens - optimal for structured docs
-	case "prose":
+	case ContentTypeProse:
 		sentences = tc.splitByParagraphs(text)
 		targetChunkSize = int(float64(tc.MaxTokens) * 1.25) // 320 tokens - medium for narratives
 	default:
 		sentences = tc.splitIntoSentences(text)
 		targetChunkSize = tc.MaxTokens // 256 tokens - default optimal size
 	}
-	
+
 	if len(sentences) == 0 {
 		return nil
 	}
@@ -139,7 +146,7 @@ func (tc *TextChunker) buildChunksWithSmartOverlap(sentences []string, targetSiz
 	var currentChunk strings.Builder
 	var currentTokenCount int
 	chunkIndex := 0
-	
+
 	// Adaptive overlap based on content type
 	overlapRatio := tc.getOverlapRatio(contentType)
 	dynamicOverlap := int(float64(tc.Overlap) * overlapRatio)
@@ -215,11 +222,11 @@ func (tc *TextChunker) shouldStartNewChunk(currentTokens, newTokens, targetSize 
 
 func (tc *TextChunker) getOverlapRatio(contentType string) float64 {
 	switch contentType {
-	case "code":
+	case ContentTypeCode:
 		return 1.2 // More overlap for code context
-	case "structured":
+	case ContentTypeStructured:
 		return 0.8 // Less overlap for lists/headers
-	case "prose":
+	case ContentTypeProse:
 		return 1.0 // Standard overlap for narrative text
 	default:
 		return 1.0
@@ -228,9 +235,9 @@ func (tc *TextChunker) getOverlapRatio(contentType string) float64 {
 
 func (tc *TextChunker) getSeparator(contentType string) string {
 	switch contentType {
-	case "code":
+	case ContentTypeCode:
 		return "\n"
-	case "structured":
+	case ContentTypeStructured:
 		return "\n"
 	default:
 		return " "
@@ -246,11 +253,11 @@ func (tc *TextChunker) getContextualOverlap(sentences []string, currentIndex, ov
 	tokenCount := 0
 
 	// For code, prioritize function/class definitions in overlap
-	if contentType == "code" {
+	if contentType == ContentTypeCode {
 		for i := currentIndex - 1; i >= 0 && tokenCount < overlapTokens; i-- {
 			sentence := sentences[i]
 			sentenceTokens := tc.EstimateTokenCount(sentence)
-			
+
 			// Prioritize important code constructs
 			if tc.isImportantCodeConstruct(sentence) || tokenCount+sentenceTokens <= overlapTokens {
 				overlapSentences = append(overlapSentences, sentence)
@@ -293,7 +300,7 @@ func (tc *TextChunker) isImportantCodeConstruct(text string) bool {
 
 func (tc *TextChunker) handleOversizedChunks(chunks []Chunk) []Chunk {
 	var finalChunks []Chunk
-	
+
 	for _, chunk := range chunks {
 		if chunk.TokenCount <= tc.MaxTokens {
 			finalChunks = append(finalChunks, chunk)
@@ -313,7 +320,7 @@ func (tc *TextChunker) handleOversizedChunks(chunks []Chunk) []Chunk {
 }
 
 func (tc *TextChunker) splitOversizedChunk(chunk Chunk) []Chunk {
-	if chunk.ChunkType == "code" {
+	if chunk.ChunkType == ContentTypeCode {
 		return tc.splitCodeChunk(chunk)
 	}
 	return tc.splitLongChunkByWords(chunk)
@@ -324,10 +331,10 @@ func (tc *TextChunker) splitCodeChunk(chunk Chunk) []Chunk {
 	var chunks []Chunk
 	var currentChunk strings.Builder
 	var currentTokens int
-	
+
 	for _, line := range lines {
 		lineTokens := tc.EstimateTokenCount(line)
-		
+
 		if currentTokens > 0 && currentTokens+lineTokens > tc.MaxTokens {
 			if currentChunk.Len() > 0 {
 				chunks = append(chunks, Chunk{
@@ -339,14 +346,14 @@ func (tc *TextChunker) splitCodeChunk(chunk Chunk) []Chunk {
 			currentChunk.Reset()
 			currentTokens = 0
 		}
-		
+
 		if currentChunk.Len() > 0 {
 			currentChunk.WriteString("\n")
 		}
 		currentChunk.WriteString(line)
 		currentTokens += lineTokens
 	}
-	
+
 	if currentChunk.Len() > 0 {
 		chunks = append(chunks, Chunk{
 			Text:       strings.TrimSpace(currentChunk.String()),
@@ -354,31 +361,31 @@ func (tc *TextChunker) splitCodeChunk(chunk Chunk) []Chunk {
 			ChunkType:  "code",
 		})
 	}
-	
+
 	return chunks
 }
 
 func (tc *TextChunker) splitIntoSentences(text string) []string {
 	// Enhanced semantic boundary detection for optimal chunking
-	
+
 	// First try semantic boundaries (paragraphs) - highest priority for semantic coherence
 	paragraphs := tc.splitByParagraphs(text)
 	if len(paragraphs) > 1 {
 		return paragraphs
 	}
-	
+
 	// Then try sentence boundaries with improved patterns
 	sentences := tc.splitBySentences(text)
 	if len(sentences) > 1 {
 		return sentences
 	}
-	
+
 	// For code or structured content, try logical separators
 	codeBlocks := tc.splitByCodeBlocks(text)
 	if len(codeBlocks) > 1 {
 		return codeBlocks
 	}
-	
+
 	// Fallback to whitespace-based splitting for dense text
 	parts := tc.splitByWhitespace(text)
 	return parts
@@ -388,7 +395,7 @@ func (tc *TextChunker) splitIntoSentences(text string) []string {
 func (tc *TextChunker) splitByParagraphs(text string) []string {
 	// Split on double newlines (paragraph breaks)
 	paragraphs := strings.Split(text, "\n\n")
-	
+
 	// First pass: collect non-empty paragraphs
 	var tempParagraphs []string
 	for _, para := range paragraphs {
@@ -397,7 +404,7 @@ func (tc *TextChunker) splitByParagraphs(text string) []string {
 			tempParagraphs = append(tempParagraphs, cleaned)
 		}
 	}
-	
+
 	// Second pass: apply punctuation rules
 	var cleanParagraphs []string
 	for i, para := range tempParagraphs {
@@ -408,7 +415,7 @@ func (tc *TextChunker) splitByParagraphs(text string) []string {
 		}
 		cleanParagraphs = append(cleanParagraphs, para)
 	}
-	
+
 	return cleanParagraphs
 }
 
@@ -416,7 +423,7 @@ func (tc *TextChunker) splitByParagraphs(text string) []string {
 func (tc *TextChunker) splitBySentences(text string) []string {
 	// Enhanced sentence patterns including abbreviations awareness
 	sentenceRegex := regexp.MustCompile(`[.!?](?:\s+|$)`)
-	
+
 	// Find all sentence boundaries
 	matches := sentenceRegex.FindAllStringIndex(text, -1)
 	if len(matches) == 0 {
@@ -427,10 +434,10 @@ func (tc *TextChunker) splitBySentences(text string) []string {
 		}
 		return []string{}
 	}
-	
+
 	var sentences []string
 	lastEnd := 0
-	
+
 	for i, match := range matches {
 		// Extract sentence including the punctuation for the last sentence
 		start := lastEnd
@@ -442,14 +449,14 @@ func (tc *TextChunker) splitBySentences(text string) []string {
 			// Middle sentences - exclude the punctuation
 			end = match[0]
 		}
-		
+
 		sentence := strings.TrimSpace(text[start:end])
-		if sentence != "" && len(sentence) > 0 { // Allow shorter sentences for tests
+		if sentence != "" { // Allow shorter sentences for tests
 			sentences = append(sentences, sentence)
 		}
 		lastEnd = match[1]
 	}
-	
+
 	return sentences
 }
 
@@ -457,9 +464,9 @@ func (tc *TextChunker) splitBySentences(text string) []string {
 func (tc *TextChunker) splitByCodeBlocks(text string) []string {
 	// Split on code block patterns, function definitions, or structured separators
 	codePattern := regexp.MustCompile("(?:\\n```|\\n---|\\nfunction |\\nclass |\\n#+ |\\n\\* )")
-	
+
 	blocks := codePattern.Split(text, -1)
-	
+
 	var cleanBlocks []string
 	for _, block := range blocks {
 		cleaned := strings.TrimSpace(block)
@@ -467,15 +474,15 @@ func (tc *TextChunker) splitByCodeBlocks(text string) []string {
 			cleanBlocks = append(cleanBlocks, cleaned)
 		}
 	}
-	
+
 	return cleanBlocks
 }
 
 // splitByWhitespace falls back to whitespace-based chunking
 func (tc *TextChunker) splitByWhitespace(text string) []string {
 	// Split by significant whitespace gaps
-	parts := regexp.MustCompile("\\s{3,}|\\n\\s*\\n").Split(text, -1)
-	
+	parts := regexp.MustCompile(`\s{3,}|\n\s*\n`).Split(text, -1)
+
 	var cleanParts []string
 	for _, part := range parts {
 		cleaned := strings.TrimSpace(part)
@@ -483,12 +490,12 @@ func (tc *TextChunker) splitByWhitespace(text string) []string {
 			cleanParts = append(cleanParts, cleaned)
 		}
 	}
-	
+
 	// If still no good splits, return as single part
 	if len(cleanParts) <= 1 {
 		return []string{strings.TrimSpace(text)}
 	}
-	
+
 	return cleanParts
 }
 

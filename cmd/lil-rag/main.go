@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"lil-rag/pkg/config"
 	"lil-rag/pkg/lilrag"
+)
+
+const (
+	helpFlag = "--help"
 )
 
 // version is set during build time via ldflags
@@ -138,7 +141,7 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 1 {
 		// Only one argument - could be ID with stdin, or direct text/file without ID
 		arg := args[0]
-		
+
 		if arg == "-" {
 			// Reading from stdin without explicit ID
 			text, err := readFromStdin()
@@ -189,7 +192,7 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	}
 
 	// Two arguments: first is ID, second is input
-	id = args[0] 
+	id = args[0]
 	input = args[1]
 
 	if input == "-" {
@@ -393,7 +396,7 @@ func handleConfigSet(profileConfig *config.ProfileConfig, args []string) error {
 }
 
 func handleReset(profileConfig *config.ProfileConfig, args []string) error {
-	if len(args) > 0 && args[0] == "--help" {
+	if len(args) > 0 && args[0] == helpFlag {
 		fmt.Println("Usage: lil-rag reset [--force]")
 		fmt.Println("")
 		fmt.Println("Delete the current database and all indexed data.")
@@ -528,25 +531,12 @@ func readFromStdin() (string, error) {
 	return text.String(), nil
 }
 
-func readFromFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-func isPDFFile(filePath string) bool {
-	ext := strings.ToLower(filepath.Ext(filePath))
-	return ext == ".pdf"
-}
-
-func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.ProfileConfig, args []string) error {
+func handleChat(ctx context.Context, rag *lilrag.LilRag, _ *config.ProfileConfig, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: lil-rag chat <message> [limit]")
 	}
@@ -580,7 +570,7 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 }
 
 func handleDocuments(ctx context.Context, rag *lilrag.LilRag, args []string) error {
-	if len(args) > 0 && args[0] == "--help" {
+	if len(args) > 0 && args[0] == helpFlag {
 		fmt.Println("Usage: lil-rag documents")
 		fmt.Println("")
 		fmt.Println("List all indexed documents with their metadata.")
@@ -677,7 +667,7 @@ func handleHealth(rag *lilrag.LilRag) error {
 	fmt.Println("✓ RAG system is running")
 	fmt.Println("✓ Database is accessible")
 	fmt.Println("✓ System is healthy")
-	
+
 	return nil
 }
 
@@ -739,7 +729,7 @@ func printUsage() {
 	fmt.Println("  lil-rag index \"Hello world\"               # Auto-generated ID")
 	fmt.Println("  lil-rag index doc1 \"Hello world\"         # Explicit ID")
 	fmt.Println("  lil-rag index document.pdf                # Auto-generated ID")
-	fmt.Println("  lil-rag index doc2 document.txt           # Explicit ID") 
+	fmt.Println("  lil-rag index doc2 document.txt           # Explicit ID")
 	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin")
 	fmt.Println("  echo \"Hello world\" | lil-rag index doc3 -  # Explicit ID from stdin")
 	fmt.Println("  lil-rag search \"hello\" 5")

@@ -54,8 +54,8 @@ func DefaultProfile() *ProfileConfig {
 			Port: 8080,
 		},
 		Chunking: ChunkConfig{
-			MaxTokens: 256,  // Optimized for 2025 RAG best practices (128-512 range)
-			Overlap:   38,   // 15% overlap ratio for optimal context preservation
+			MaxTokens: 256, // Optimized for 2025 RAG best practices (128-512 range)
+			Overlap:   38,  // 15% overlap ratio for optimal context preservation
 		},
 	}
 }

@@ -26,30 +26,30 @@ func (xp *XLSXParser) Parse(filePath string) (string, error) {
 	defer f.Close()
 
 	var content strings.Builder
-	
+
 	// Get all sheet names
 	sheetNames := f.GetSheetList()
-	
+
 	for _, sheetName := range sheetNames {
 		content.WriteString(fmt.Sprintf("Sheet: %s\n", sheetName))
 		content.WriteString("=" + strings.Repeat("=", len(sheetName)+6) + "\n\n")
-		
+
 		// Get all rows from the sheet
 		rows, err := f.GetRows(sheetName)
 		if err != nil {
 			content.WriteString(fmt.Sprintf("Error reading sheet %s: %v\n\n", sheetName, err))
 			continue
 		}
-		
+
 		// Process rows
 		for rowIndex, row := range rows {
 			if len(row) == 0 {
 				continue // Skip empty rows
 			}
-			
+
 			rowNum := rowIndex + 1
 			content.WriteString(fmt.Sprintf("Row %d: ", rowNum))
-			
+
 			// Join non-empty cells
 			var cells []string
 			for colIndex, cell := range row {
@@ -58,13 +58,13 @@ func (xp *XLSXParser) Parse(filePath string) (string, error) {
 					cells = append(cells, fmt.Sprintf("%s: %s", columnName, cell))
 				}
 			}
-			
+
 			if len(cells) > 0 {
 				content.WriteString(strings.Join(cells, " | "))
 			}
 			content.WriteString("\n")
 		}
-		
+
 		content.WriteString("\n")
 	}
 
@@ -72,7 +72,7 @@ func (xp *XLSXParser) Parse(filePath string) (string, error) {
 }
 
 // ParseWithChunks extracts and chunks content from an XLSX file
-func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error) {
+func (xp *XLSXParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	f, err := excelize.OpenFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open XLSX file: %w", err)
@@ -86,10 +86,10 @@ func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 
 	var chunks []Chunk
 	chunkIndex := 0
-	
+
 	// Get all sheet names
 	sheetNames := f.GetSheetList()
-	
+
 	for _, sheetName := range sheetNames {
 		// Create sheet header chunk
 		sheetHeaderText := fmt.Sprintf("Excel Sheet: %s", sheetName)
@@ -103,17 +103,17 @@ func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 		}
 		chunks = append(chunks, headerChunk)
 		chunkIndex++
-		
+
 		// Get all rows from the sheet
 		rows, err := f.GetRows(sheetName)
 		if err != nil {
 			continue // Skip sheets with errors
 		}
-		
+
 		// Detect header row (usually first non-empty row)
 		var headerRow []string
 		var dataStartIndex int
-		
+
 		for i, row := range rows {
 			if len(row) > 0 && xp.hasNonEmptyData(row) {
 				headerRow = row
@@ -121,7 +121,7 @@ func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 				break
 			}
 		}
-		
+
 		// Create header chunk if we found headers
 		if len(headerRow) > 0 {
 			headerText := fmt.Sprintf("Sheet %s Headers: %s", sheetName, strings.Join(headerRow, " | "))
@@ -136,22 +136,22 @@ func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 			chunks = append(chunks, headerChunk)
 			chunkIndex++
 		}
-		
+
 		// Process data rows in chunks
 		var currentChunk strings.Builder
 		var rowsInChunk []int
 		estimatedTokens := 0
-		
+
 		for i := dataStartIndex; i < len(rows); i++ {
 			row := rows[i]
-			
+
 			if !xp.hasNonEmptyData(row) {
 				continue // Skip empty rows
 			}
-			
+
 			rowNum := i + 1
 			rowText := fmt.Sprintf("Row %d: ", rowNum)
-			
+
 			// Create meaningful row representation
 			var cells []string
 			for colIndex, cell := range row {
@@ -165,14 +165,14 @@ func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 					cells = append(cells, fmt.Sprintf("%s: %s", columnName, cell))
 				}
 			}
-			
+
 			if len(cells) > 0 {
 				rowText += strings.Join(cells, " | ")
 			}
 			rowText += "\n"
-			
+
 			rowTokens := xp.chunker.EstimateTokenCount(rowText)
-			
+
 			// If adding this row would exceed chunk size, create a chunk
 			if estimatedTokens+rowTokens > 150 && len(rowsInChunk) > 0 { // Smaller chunks for spreadsheet data
 				chunk := Chunk{
@@ -185,19 +185,19 @@ func (xp *XLSXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 				}
 				chunks = append(chunks, chunk)
 				chunkIndex++
-				
+
 				// Reset for next chunk
 				currentChunk.Reset()
 				rowsInChunk = []int{}
 				estimatedTokens = 0
 			}
-			
+
 			// Add row to current chunk
 			currentChunk.WriteString(rowText)
 			rowsInChunk = append(rowsInChunk, rowNum)
 			estimatedTokens += rowTokens
 		}
-		
+
 		// Add final chunk for this sheet if there's content
 		if currentChunk.Len() > 0 {
 			chunk := Chunk{

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"lil-rag/pkg/lilrag"
 	"lil-rag/pkg/metrics"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Handler struct {
@@ -65,22 +65,22 @@ func NewWithVersion(rag *lilrag.LilRag, version string) *Handler {
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// Create a response writer that captures status code
 		wrappedWriter := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		// Log the request
-		log.Printf("[%s] %s %s - User-Agent: %s", 
+		log.Printf("[%s] %s %s - User-Agent: %s",
 			r.Method, r.URL.Path, r.RemoteAddr, r.UserAgent())
-		
+
 		// Call the next handler
 		next.ServeHTTP(wrappedWriter, r)
-		
+
 		// Record metrics and log response
 		duration := time.Since(start)
 		metrics.RecordHTTPRequest(r.Method, r.URL.Path, wrappedWriter.statusCode, duration)
-		
-		log.Printf("[%s] %s %s - %d - %v", 
+
+		log.Printf("[%s] %s %s - %d - %v",
 			r.Method, r.URL.Path, r.RemoteAddr, wrappedWriter.statusCode, duration)
 	})
 }
@@ -142,7 +142,7 @@ func (h *Handler) Index() http.HandlerFunc {
 		indexStart := time.Now()
 		err := h.rag.Index(ctx, req.Text, req.ID)
 		indexDuration := time.Since(indexStart)
-		
+
 		if err != nil {
 			log.Printf("Failed to index document %s: %v", req.ID, err)
 			metrics.RecordIndexingRequest(indexDuration, false, len(req.Text))
@@ -153,7 +153,7 @@ func (h *Handler) Index() http.HandlerFunc {
 		metrics.RecordIndexingRequest(indexDuration, true, len(req.Text))
 		// Estimate tokens for LLM embedding generation
 		metrics.EstimateAndRecordTokens("embedding", "unknown", req.Text)
-		
+
 		log.Printf("Successfully indexed document %s", req.ID)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -231,7 +231,7 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 	searchStart := time.Now()
 	results, err := h.rag.Search(ctx, query, limit)
 	searchDuration := time.Since(searchStart)
-	
+
 	if err != nil {
 		log.Printf("Search failed for query '%s': %v", query, err)
 		metrics.RecordSearchRequest(searchDuration, false, 0)
@@ -242,7 +242,7 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 	metrics.RecordSearchRequest(searchDuration, true, len(results))
 	// Estimate tokens for embedding search
 	metrics.EstimateAndRecordTokens("search", "unknown", query)
-	
+
 	log.Printf("Search completed - found %d results for query '%s'", len(results), query)
 	response := SearchResponse{Results: results}
 	w.Header().Set("Content-Type", "application/json")
@@ -1109,7 +1109,7 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	chatStart := time.Now()
 	response, searchResults, err := h.rag.Chat(ctx, req.Message, req.Limit)
 	chatDuration := time.Since(chatStart)
-	
+
 	if err != nil {
 		log.Printf("Chat failed for message '%s': %v", req.Message, err)
 		metrics.RecordChatRequest(chatDuration, false, 0, 0)
@@ -1127,20 +1127,13 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	// Estimate tokens for chat input and output
 	metrics.EstimateAndRecordTokens("chat_input", "unknown", req.Message)
 	metrics.EstimateAndRecordTokens("chat_output", "unknown", response)
-	
+
 	log.Printf("Chat completed successfully - found %d sources, response length: %d", len(searchResults), len(response))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(chatResp); err != nil {
 		log.Printf("Error encoding chat response: %v", err)
 	}
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func (h *Handler) Static() http.HandlerFunc {
@@ -1633,11 +1626,12 @@ func (h *Handler) DocumentContent() http.HandlerFunc {
 // DocumentRouter routes between document content, chunks, and delete requests
 func (h *Handler) DocumentRouter() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
+		switch {
+		case r.Method == http.MethodDelete:
 			h.DeleteDocument().ServeHTTP(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/chunks") {
+		case strings.HasSuffix(r.URL.Path, "/chunks"):
 			h.DocumentChunks().ServeHTTP(w, r)
-		} else {
+		default:
 			h.DocumentContent().ServeHTTP(w, r)
 		}
 	}
@@ -1655,7 +1649,7 @@ func (h *Handler) DocumentChunks() http.HandlerFunc {
 		path := strings.TrimPrefix(r.URL.Path, "/api/documents/")
 		path = strings.TrimSuffix(path, "/chunks")
 		documentID := strings.TrimSuffix(path, "/")
-		
+
 		if documentID == "" {
 			h.writeError(w, http.StatusBadRequest, "document ID required", "")
 			return
@@ -1689,7 +1683,7 @@ func (h *Handler) DeleteDocument() http.HandlerFunc {
 		// Extract document ID from URL path
 		path := strings.TrimPrefix(r.URL.Path, "/api/documents/")
 		documentID := strings.TrimSuffix(path, "/")
-		
+
 		if documentID == "" {
 			h.writeError(w, http.StatusBadRequest, "document ID required", "")
 			return
@@ -1715,12 +1709,14 @@ func (h *Handler) DeleteDocument() http.HandlerFunc {
 			"status":  "success",
 			"message": "Document deleted successfully",
 		}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Failed to encode response: %v", err)
+		}
 	}
 }
 
 // serveDocumentContent serves the document content in a web viewer
-func (h *Handler) serveDocumentContent(w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int) {
+func (h *Handler) serveDocumentContent(w http.ResponseWriter, _ *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int) {
 	// For now, serve a simple HTML viewer with the document content
 	w.Header().Set("Content-Type", "text/html")
 
@@ -1941,19 +1937,21 @@ func (h *Handler) serveDocumentContent(w http.ResponseWriter, r *http.Request, d
     </script>
 </body>
 </html>`,
-		docInfo.ID,                                             // title
-		docInfo.ID,                                             // delete button  
-		docInfo.ID,                                             // document title
-		docInfo.DocType,                                        // type
-		docInfo.ChunkCount,                                     // chunks
-		docInfo.SourcePath,                                     // source
-		docInfo.UpdatedAt.Format("2006-01-02 15:04:05"),      // updated
-		highlightChunk,                                         // highlightChunk JS variable
-		docInfo.ID,                                             // fetch chunks URL
-		docInfo.ID,                                             // fetch document URL
+		docInfo.ID,         // title
+		docInfo.ID,         // delete button
+		docInfo.ID,         // document title
+		docInfo.DocType,    // type
+		docInfo.ChunkCount, // chunks
+		docInfo.SourcePath, // source
+		docInfo.UpdatedAt.Format("2006-01-02 15:04:05"), // updated
+		highlightChunk, // highlightChunk JS variable
+		docInfo.ID,     // fetch chunks URL
+		docInfo.ID,     // fetch document URL
 	)
 
-	w.Write([]byte(html))
+	if _, err := w.Write([]byte(html)); err != nil {
+		log.Printf("Failed to write HTML response: %v", err)
+	}
 }
 
 // serveDocumentText serves the raw text content of a document
@@ -1975,7 +1973,9 @@ func (h *Handler) serveDocumentText(w http.ResponseWriter, r *http.Request, docu
 		content, err := h.rag.ParseDocumentFile(docInfo.SourcePath)
 		if err == nil {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Write([]byte(content))
+			if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+				log.Printf("Failed to write content: %v", writeErr)
+			}
 			return
 		}
 
@@ -1983,7 +1983,9 @@ func (h *Handler) serveDocumentText(w http.ResponseWriter, r *http.Request, docu
 		rawContent, err := os.ReadFile(docInfo.SourcePath)
 		if err == nil {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Write(rawContent)
+			if _, writeErr := w.Write(rawContent); writeErr != nil {
+				log.Printf("Failed to write raw content: %v", writeErr)
+			}
 			return
 		}
 	}
@@ -2360,7 +2362,9 @@ func (h *Handler) DocumentsList() http.HandlerFunc {
 </body>
 </html>`
 
-		w.Write([]byte(html))
+		if _, err := w.Write([]byte(html)); err != nil {
+			log.Printf("Failed to write HTML response: %v", err)
+		}
 	}
 }
 
@@ -2372,7 +2376,7 @@ func (h *Handler) Documentation() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		
+
 		html := `<!DOCTYPE html>
 <html lang="en">
 <head>

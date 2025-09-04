@@ -30,7 +30,7 @@ func (dp *DOCXParser) Parse(filePath string) (string, error) {
 }
 
 // ParseWithChunks extracts and chunks content from a DOCX file
-func (dp *DOCXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error) {
+func (dp *DOCXParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	content, err := dp.Parse(filePath)
 	if err != nil {
 		return nil, err
@@ -43,13 +43,13 @@ func (dp *DOCXParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 
 	// Clean up the content
 	content = dp.cleanContent(content)
-	
+
 	// Detect content type for better chunking
 	contentType := dp.detectContentType(content)
-	
+
 	// Chunk the content based on type
 	chunks := dp.chunkByContentType(content, contentType)
-	
+
 	// Update chunk metadata
 	for i, chunk := range chunks {
 		chunk.Index = i
@@ -65,14 +65,14 @@ func (dp *DOCXParser) cleanContent(content string) string {
 	// Replace multiple whitespace with single spaces
 	lines := strings.Split(content, "\n")
 	var cleanLines []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			cleanLines = append(cleanLines, line)
 		}
 	}
-	
+
 	return strings.Join(cleanLines, "\n")
 }
 
@@ -81,29 +81,29 @@ func (dp *DOCXParser) detectContentType(content string) string {
 	// Count indicators of different content types
 	codePatterns := []string{"function", "class", "def ", "import ", "var ", "const ", "let ", "public ", "private "}
 	structuredPatterns := []string{"# ", "## ", "### ", "- ", "* ", "1. ", "2. ", "3. "}
-	
+
 	codeScore := 0
 	structuredScore := 0
-	
+
 	for _, pattern := range codePatterns {
 		codeScore += strings.Count(strings.ToLower(content), pattern)
 	}
-	
+
 	for _, pattern := range structuredPatterns {
 		structuredScore += strings.Count(content, pattern)
 	}
-	
+
 	if codeScore > 3 {
 		return "code"
-	} else if structuredScore > 3 {
-		return "structured"
-	} else {
-		return "prose"
 	}
+	if structuredScore > 3 {
+		return "structured"
+	}
+	return "prose"
 }
 
 // chunkByContentType applies content-type specific chunking
-func (dp *DOCXParser) chunkByContentType(content string, contentType string) []Chunk {
+func (dp *DOCXParser) chunkByContentType(content, contentType string) []Chunk {
 	switch contentType {
 	case "code":
 		return dp.chunkCodeContent(content)
@@ -129,7 +129,7 @@ func (dp *DOCXParser) chunkCodeContent(content string) []Chunk {
 		}
 
 		paraTokens := dp.chunker.EstimateTokenCount(paragraph)
-		
+
 		if currentTokens+paraTokens > targetSize && currentChunk.Len() > 0 {
 			// Create chunk
 			chunk := Chunk{
@@ -139,19 +139,19 @@ func (dp *DOCXParser) chunkCodeContent(content string) []Chunk {
 				TokenCount: currentTokens,
 			}
 			chunks = append(chunks, chunk)
-			
+
 			// Reset
 			currentChunk.Reset()
 			currentTokens = 0
 		}
-		
+
 		if currentChunk.Len() > 0 {
 			currentChunk.WriteString("\n\n")
 		}
 		currentChunk.WriteString(paragraph)
 		currentTokens += paraTokens
 	}
-	
+
 	// Add final chunk
 	if currentChunk.Len() > 0 {
 		chunk := Chunk{
@@ -162,7 +162,7 @@ func (dp *DOCXParser) chunkCodeContent(content string) []Chunk {
 		}
 		chunks = append(chunks, chunk)
 	}
-	
+
 	return chunks
 }
 
@@ -172,15 +172,15 @@ func (dp *DOCXParser) chunkStructuredContent(content string) []Chunk {
 	var chunks []Chunk
 	var currentChunk strings.Builder
 	currentTokens := 0
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		lineTokens := dp.chunker.EstimateTokenCount(line)
-		
+
 		// Check if this is a header (new section)
 		if dp.isHeader(line) && currentChunk.Len() > 0 {
 			// Save current chunk
@@ -191,19 +191,19 @@ func (dp *DOCXParser) chunkStructuredContent(content string) []Chunk {
 				TokenCount: currentTokens,
 			}
 			chunks = append(chunks, chunk)
-			
+
 			// Reset for new section
 			currentChunk.Reset()
 			currentTokens = 0
 		}
-		
+
 		// Add line to current chunk
 		if currentChunk.Len() > 0 {
 			currentChunk.WriteString("\n")
 		}
 		currentChunk.WriteString(line)
 		currentTokens += lineTokens
-		
+
 		// Check if chunk is getting too large
 		if currentTokens > dp.chunker.MaxTokens {
 			chunk := Chunk{
@@ -213,12 +213,12 @@ func (dp *DOCXParser) chunkStructuredContent(content string) []Chunk {
 				TokenCount: currentTokens,
 			}
 			chunks = append(chunks, chunk)
-			
+
 			currentChunk.Reset()
 			currentTokens = 0
 		}
 	}
-	
+
 	// Add final chunk
 	if currentChunk.Len() > 0 {
 		chunk := Chunk{
@@ -229,7 +229,7 @@ func (dp *DOCXParser) chunkStructuredContent(content string) []Chunk {
 		}
 		chunks = append(chunks, chunk)
 	}
-	
+
 	return chunks
 }
 
@@ -245,12 +245,12 @@ func (dp *DOCXParser) isHeader(line string) bool {
 	if len(line) < 3 {
 		return false
 	}
-	
+
 	// Check for markdown-style headers
 	if strings.HasPrefix(line, "#") {
 		return true
 	}
-	
+
 	// Check for numbered headers
 	if strings.Contains(line, ".") && len(strings.Fields(line)) <= 8 {
 		firstWord := strings.Fields(line)[0]
@@ -258,12 +258,12 @@ func (dp *DOCXParser) isHeader(line string) bool {
 			return true
 		}
 	}
-	
+
 	// Check for ALL CAPS headers (short lines)
 	if line == strings.ToUpper(line) && len(line) < 50 && !strings.Contains(line, " ") {
 		return true
 	}
-	
+
 	return false
 }
 

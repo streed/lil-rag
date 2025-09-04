@@ -32,19 +32,19 @@ func (cp *CSVParser) Parse(filePath string) (string, error) {
 	}
 
 	var content strings.Builder
-	
+
 	// Process header row if exists
 	if len(records) > 0 {
 		header := records[0]
 		content.WriteString("CSV Headers: ")
 		content.WriteString(strings.Join(header, " | "))
 		content.WriteString("\n\n")
-		
+
 		// Process data rows
 		for i, record := range records[1:] {
 			rowNum := i + 1
 			content.WriteString(fmt.Sprintf("Row %d: ", rowNum))
-			
+
 			// Create meaningful row representation
 			for j, cell := range record {
 				if j < len(header) {
@@ -64,7 +64,7 @@ func (cp *CSVParser) Parse(filePath string) (string, error) {
 }
 
 // ParseWithChunks extracts and chunks content from a CSV file
-func (cp *CSVParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error) {
+func (cp *CSVParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open CSV file: %w", err)
@@ -89,7 +89,7 @@ func (cp *CSVParser) ParseWithChunks(filePath, documentID string) ([]Chunk, erro
 	var chunks []Chunk
 	chunkIndex := 0
 	header := records[0]
-	
+
 	// Create header chunk
 	headerText := fmt.Sprintf("CSV Document Headers: %s", strings.Join(header, " | "))
 	headerChunk := Chunk{
@@ -107,11 +107,11 @@ func (cp *CSVParser) ParseWithChunks(filePath, documentID string) ([]Chunk, erro
 	var currentChunk strings.Builder
 	var rowsInChunk []int
 	estimatedTokens := 0
-	
+
 	for i, record := range records[1:] {
 		rowNum := i + 1
 		rowText := fmt.Sprintf("Row %d: ", rowNum)
-		
+
 		// Create meaningful row representation
 		for j, cell := range record {
 			if j < len(header) {
@@ -124,9 +124,9 @@ func (cp *CSVParser) ParseWithChunks(filePath, documentID string) ([]Chunk, erro
 			}
 		}
 		rowText += "\n"
-		
+
 		rowTokens := cp.chunker.EstimateTokenCount(rowText)
-		
+
 		// If adding this row would exceed chunk size, create a chunk
 		if estimatedTokens+rowTokens > 200 && len(rowsInChunk) > 0 { // Smaller chunks for tabular data
 			chunk := Chunk{
@@ -139,19 +139,19 @@ func (cp *CSVParser) ParseWithChunks(filePath, documentID string) ([]Chunk, erro
 			}
 			chunks = append(chunks, chunk)
 			chunkIndex++
-			
+
 			// Reset for next chunk
 			currentChunk.Reset()
 			rowsInChunk = []int{}
 			estimatedTokens = 0
 		}
-		
+
 		// Add row to current chunk
 		currentChunk.WriteString(rowText)
 		rowsInChunk = append(rowsInChunk, rowNum)
 		estimatedTokens += rowTokens
 	}
-	
+
 	// Add final chunk if there's content
 	if currentChunk.Len() > 0 {
 		chunk := Chunk{

@@ -10,14 +10,14 @@ import (
 type DocumentType string
 
 const (
-	DocumentTypePDF   DocumentType = "pdf"
-	DocumentTypeDOCX  DocumentType = "docx"
-	DocumentTypeXLSX  DocumentType = "xlsx"
-	DocumentTypePPTX  DocumentType = "pptx"
-	DocumentTypeHTML  DocumentType = "html"
-	DocumentTypeCSV   DocumentType = "csv"
-	DocumentTypeTXT   DocumentType = "txt"
-	DocumentTypeODT   DocumentType = "odt"
+	DocumentTypePDF     DocumentType = "pdf"
+	DocumentTypeDOCX    DocumentType = "docx"
+	DocumentTypeXLSX    DocumentType = "xlsx"
+	DocumentTypePPTX    DocumentType = "pptx"
+	DocumentTypeHTML    DocumentType = "html"
+	DocumentTypeCSV     DocumentType = "csv"
+	DocumentTypeTXT     DocumentType = "txt"
+	DocumentTypeODT     DocumentType = "odt"
 	DocumentTypeUnknown DocumentType = "unknown"
 )
 
@@ -25,13 +25,13 @@ const (
 type DocumentParser interface {
 	// Parse extracts text content from a document file
 	Parse(filePath string) (string, error)
-	
+
 	// ParseWithChunks extracts and chunks content optimally for the document type
 	ParseWithChunks(filePath, documentID string) ([]Chunk, error)
-	
+
 	// SupportedExtensions returns the file extensions this parser supports
 	SupportedExtensions() []string
-	
+
 	// DocumentType returns the type of documents this parser handles
 	GetDocumentType() DocumentType
 }
@@ -48,10 +48,10 @@ func NewDocumentHandler(chunker *TextChunker) *DocumentHandler {
 		parsers: make(map[DocumentType]DocumentParser),
 		chunker: chunker,
 	}
-	
+
 	// Register default parsers
 	dh.registerDefaultParsers()
-	
+
 	return dh
 }
 
@@ -59,19 +59,19 @@ func NewDocumentHandler(chunker *TextChunker) *DocumentHandler {
 func (dh *DocumentHandler) registerDefaultParsers() {
 	// PDF parser (already exists)
 	dh.RegisterParser(DocumentTypePDF, NewPDFParser())
-	
+
 	// Text parser (already exists as fallback)
 	dh.RegisterParser(DocumentTypeTXT, NewTextParser())
-	
+
 	// Microsoft Office document parsers
 	dh.RegisterParser(DocumentTypeDOCX, NewDOCXParser())
 	dh.RegisterParser(DocumentTypeXLSX, NewXLSXParser())
 	// dh.RegisterParser(DocumentTypePPTX, NewPPTXParser()) // TODO: Implement PPTX parser
-	
+
 	// Web and data format parsers
 	dh.RegisterParser(DocumentTypeHTML, NewHTMLParser())
 	dh.RegisterParser(DocumentTypeCSV, NewCSVParser())
-	
+
 	// Future parsers will be added here
 	// dh.RegisterParser(DocumentTypeODT, NewODTParser())
 }
@@ -84,7 +84,7 @@ func (dh *DocumentHandler) RegisterParser(docType DocumentType, parser DocumentP
 // DetectDocumentType determines the document type from file extension
 func (dh *DocumentHandler) DetectDocumentType(filePath string) DocumentType {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".pdf":
 		return DocumentTypePDF
@@ -110,7 +110,7 @@ func (dh *DocumentHandler) DetectDocumentType(filePath string) DocumentType {
 // ParseFile parses any supported document file
 func (dh *DocumentHandler) ParseFile(filePath string) (string, error) {
 	docType := dh.DetectDocumentType(filePath)
-	
+
 	parser, exists := dh.parsers[docType]
 	if !exists {
 		// Fallback to text parser for unknown types
@@ -119,14 +119,14 @@ func (dh *DocumentHandler) ParseFile(filePath string) (string, error) {
 			return "", fmt.Errorf("no parser available for document type: %s", docType)
 		}
 	}
-	
+
 	return parser.Parse(filePath)
 }
 
 // ParseFileWithChunks parses and chunks any supported document file
 func (dh *DocumentHandler) ParseFileWithChunks(filePath, documentID string) ([]Chunk, error) {
 	docType := dh.DetectDocumentType(filePath)
-	
+
 	parser, exists := dh.parsers[docType]
 	if !exists {
 		// Fallback to text parser for unknown types
@@ -135,18 +135,18 @@ func (dh *DocumentHandler) ParseFileWithChunks(filePath, documentID string) ([]C
 			return nil, fmt.Errorf("no parser available for document type: %s", docType)
 		}
 	}
-	
+
 	return parser.ParseWithChunks(filePath, documentID)
 }
 
 // GetSupportedFormats returns all supported document formats
 func (dh *DocumentHandler) GetSupportedFormats() map[DocumentType][]string {
 	formats := make(map[DocumentType][]string)
-	
+
 	for docType, parser := range dh.parsers {
 		formats[docType] = parser.SupportedExtensions()
 	}
-	
+
 	return formats
 }
 

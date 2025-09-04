@@ -270,14 +270,14 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 	// Generate embeddings for all chunks
 	embeddings := make([][]float32, len(chunks))
 	var combinedText strings.Builder
-	
+
 	for i, chunk := range chunks {
 		embedding, err := m.embedder.Embed(ctx, chunk.Text)
 		if err != nil {
 			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
 		}
 		embeddings[i] = embedding
-		
+
 		// Build combined text for storage
 		if i > 0 {
 			combinedText.WriteString("\n\n")
@@ -287,7 +287,7 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 
 	// Detect document type for metadata
 	docType := string(m.documentHandler.DetectDocumentType(filePath))
-	
+
 	// Store document with chunks and metadata
 	return m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, docType)
 }

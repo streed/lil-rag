@@ -115,12 +115,12 @@ func (m *MockStorage) GetDocumentByID(_ context.Context, documentID string) (*Do
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
 	}
-	
+
 	text, exists := m.documents[documentID]
 	if !exists {
 		return nil, fmt.Errorf("document not found: %s", documentID)
 	}
-	
+
 	return &DocumentInfo{
 		ID:        documentID,
 		Text:      text,
@@ -133,12 +133,12 @@ func (m *MockStorage) GetDocumentChunks(_ context.Context, documentID string) ([
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
 	}
-	
+
 	chunks, exists := m.chunks[documentID]
 	if !exists {
 		return nil, fmt.Errorf("document not found: %s", documentID)
 	}
-	
+
 	return chunks, nil
 }
 
@@ -146,17 +146,17 @@ func (m *MockStorage) DeleteDocument(_ context.Context, documentID string) error
 	if !m.initialized {
 		return fmt.Errorf("storage not initialized")
 	}
-	
+
 	// Check if document exists
 	if _, exists := m.documents[documentID]; !exists {
 		return fmt.Errorf("document not found: %s", documentID)
 	}
-	
+
 	// Delete document and related data
 	delete(m.documents, documentID)
 	delete(m.embeddings, documentID)
 	delete(m.chunks, documentID)
-	
+
 	return nil
 }
 

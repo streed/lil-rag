@@ -8,6 +8,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Success labels for metrics
+const (
+	SuccessTrue  = "true"
+	SuccessFalse = "false"
+)
+
 var (
 	// HTTP request metrics
 	HTTPRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -23,7 +29,7 @@ var (
 
 	// Search and indexing metrics
 	SearchRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "lilrag_search_duration_seconds", 
+		Name:    "lilrag_search_duration_seconds",
 		Help:    "Duration of search operations in seconds",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	}, []string{"success"})
@@ -64,7 +70,7 @@ var (
 	// Chat/LLM metrics
 	ChatRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "lilrag_chat_duration_seconds",
-		Help:    "Duration of chat/LLM operations in seconds", 
+		Help:    "Duration of chat/LLM operations in seconds",
 		Buckets: []float64{0.5, 1, 2.5, 5, 10, 15, 30, 60, 120},
 	}, []string{"success"})
 
@@ -119,7 +125,7 @@ var (
 func RecordHTTPRequest(method, endpoint string, statusCode int, duration time.Duration) {
 	status := prometheus.Labels{
 		"method":      method,
-		"endpoint":    endpoint, 
+		"endpoint":    endpoint,
 		"status_code": strconv.Itoa(statusCode),
 	}
 	HTTPRequestDuration.With(status).Observe(duration.Seconds())
@@ -127,42 +133,42 @@ func RecordHTTPRequest(method, endpoint string, statusCode int, duration time.Du
 }
 
 func RecordSearchRequest(duration time.Duration, success bool, resultsFound int) {
-	successLabel := "false"
+	successLabel := SuccessFalse
 	if success {
-		successLabel = "true"
+		successLabel = SuccessTrue
 	}
-	
+
 	SearchRequestDuration.WithLabelValues(successLabel).Observe(duration.Seconds())
 	SearchRequestsTotal.WithLabelValues(successLabel).Inc()
-	
+
 	if success {
 		SearchResultsFound.WithLabelValues().Observe(float64(resultsFound))
 	}
 }
 
 func RecordIndexingRequest(duration time.Duration, success bool, characterCount int) {
-	successLabel := "false"
+	successLabel := SuccessFalse
 	if success {
-		successLabel = "true"
+		successLabel = SuccessTrue
 	}
-	
+
 	IndexingRequestDuration.WithLabelValues(successLabel).Observe(duration.Seconds())
 	IndexingRequestsTotal.WithLabelValues(successLabel).Inc()
-	
+
 	if success {
 		DocumentCharactersIndexed.WithLabelValues().Observe(float64(characterCount))
 	}
 }
 
-func RecordChatRequest(duration time.Duration, success bool, sourcesCount int, responseLength int) {
-	successLabel := "false"
+func RecordChatRequest(duration time.Duration, success bool, sourcesCount, responseLength int) {
+	successLabel := SuccessFalse
 	if success {
-		successLabel = "true"
+		successLabel = SuccessTrue
 	}
-	
+
 	ChatRequestDuration.WithLabelValues(successLabel).Observe(duration.Seconds())
 	ChatRequestsTotal.WithLabelValues(successLabel).Inc()
-	
+
 	if success {
 		ChatSourcesRetrieved.WithLabelValues().Observe(float64(sourcesCount))
 		ChatResponseLength.WithLabelValues().Observe(float64(responseLength))
@@ -180,11 +186,11 @@ func EstimateAndRecordTokens(operation, model, text string) {
 }
 
 func RecordQueryOptimization(duration time.Duration, success bool) {
-	successLabel := "false"
+	successLabel := SuccessFalse
 	if success {
-		successLabel = "true"
+		successLabel = SuccessTrue
 	}
-	
+
 	QueryOptimizationDuration.WithLabelValues(successLabel).Observe(duration.Seconds())
 	QueryOptimizationRequestsTotal.WithLabelValues(successLabel).Inc()
 }

@@ -33,7 +33,7 @@ func (hp *HTMLParser) Parse(filePath string) (string, error) {
 	}
 
 	var content strings.Builder
-	
+
 	// Extract title if present
 	title := hp.extractTitle(doc)
 	if title != "" {
@@ -41,7 +41,7 @@ func (hp *HTMLParser) Parse(filePath string) (string, error) {
 		content.WriteString(title)
 		content.WriteString("\n\n")
 	}
-	
+
 	// Extract body text
 	bodyText := hp.extractText(doc)
 	content.WriteString(bodyText)
@@ -52,7 +52,7 @@ func (hp *HTMLParser) Parse(filePath string) (string, error) {
 }
 
 // ParseWithChunks extracts and chunks content from an HTML file
-func (hp *HTMLParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error) {
+func (hp *HTMLParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open HTML file: %w", err)
@@ -71,7 +71,7 @@ func (hp *HTMLParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 
 	var chunks []Chunk
 	chunkIndex := 0
-	
+
 	// Extract title as separate chunk
 	title := hp.extractTitle(doc)
 	if title != "" {
@@ -87,17 +87,17 @@ func (hp *HTMLParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 		chunks = append(chunks, titleChunk)
 		chunkIndex++
 	}
-	
+
 	// Extract structured content by sections
 	sections := hp.extractSections(doc)
-	
+
 	if len(sections) > 0 {
 		// Chunk each section separately to preserve HTML structure
 		for _, section := range sections {
 			if strings.TrimSpace(section) == "" {
 				continue
 			}
-			
+
 			sectionChunks := hp.chunker.ChunkText(section)
 			for _, chunk := range sectionChunks {
 				chunk.Index = chunkIndex
@@ -112,7 +112,7 @@ func (hp *HTMLParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 		if strings.TrimSpace(bodyText) != "" {
 			bodyText = hp.cleanWhitespace(bodyText)
 			bodyChunks := hp.chunker.ChunkText(bodyText)
-			
+
 			for _, chunk := range bodyChunks {
 				chunk.Index = chunkIndex
 				chunk.ChunkType = "html_content"
@@ -130,13 +130,13 @@ func (hp *HTMLParser) extractTitle(n *html.Node) string {
 	if n.Type == html.ElementNode && n.Data == "title" {
 		return hp.extractNodeText(n)
 	}
-	
+
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		if title := hp.extractTitle(c); title != "" {
 			return title
 		}
 	}
-	
+
 	return ""
 }
 
@@ -144,14 +144,14 @@ func (hp *HTMLParser) extractTitle(n *html.Node) string {
 func (hp *HTMLParser) extractSections(n *html.Node) []string {
 	var sections []string
 	var currentSection strings.Builder
-	
+
 	hp.walkSections(n, &sections, &currentSection)
-	
+
 	// Add final section if there's content
 	if currentSection.Len() > 0 {
 		sections = append(sections, currentSection.String())
 	}
-	
+
 	return sections
 }
 
@@ -165,12 +165,12 @@ func (hp *HTMLParser) walkSections(n *html.Node, sections *[]string, currentSect
 				*sections = append(*sections, currentSection.String())
 				currentSection.Reset()
 			}
-			
+
 			// Add heading to new section
 			headingText := hp.extractNodeText(n)
-			currentSection.WriteString(fmt.Sprintf("## %s\n\n", headingText))
+			fmt.Fprintf(currentSection, "## %s\n\n", headingText)
 			return // Don't process children separately
-			
+
 		case "p", "div", "article", "section":
 			text := hp.extractNodeText(n)
 			if strings.TrimSpace(text) != "" {
@@ -178,7 +178,7 @@ func (hp *HTMLParser) walkSections(n *html.Node, sections *[]string, currentSect
 				currentSection.WriteString("\n\n")
 			}
 			return // Don't process children separately
-			
+
 		case "ul", "ol":
 			listText := hp.extractListText(n)
 			if listText != "" {
@@ -188,7 +188,7 @@ func (hp *HTMLParser) walkSections(n *html.Node, sections *[]string, currentSect
 			return // Don't process children separately
 		}
 	}
-	
+
 	// Process children for other node types
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		hp.walkSections(c, sections, currentSection)
@@ -200,14 +200,14 @@ func (hp *HTMLParser) extractText(n *html.Node) string {
 	if n.Type == html.TextNode {
 		return n.Data
 	}
-	
+
 	if n.Type == html.ElementNode {
 		// Skip script and style tags
 		if n.Data == "script" || n.Data == "style" {
 			return ""
 		}
 	}
-	
+
 	var text strings.Builder
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		childText := hp.extractText(c)
@@ -216,7 +216,7 @@ func (hp *HTMLParser) extractText(n *html.Node) string {
 			text.WriteString(" ")
 		}
 	}
-	
+
 	return text.String()
 }
 
@@ -225,19 +225,19 @@ func (hp *HTMLParser) extractNodeText(n *html.Node) string {
 	if n.Type == html.TextNode {
 		return n.Data
 	}
-	
+
 	var text strings.Builder
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		text.WriteString(hp.extractNodeText(c))
 	}
-	
+
 	return text.String()
 }
 
 // extractListText extracts formatted text from lists
 func (hp *HTMLParser) extractListText(n *html.Node) string {
 	var items []string
-	
+
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		if c.Type == html.ElementNode && c.Data == "li" {
 			itemText := strings.TrimSpace(hp.extractNodeText(c))
@@ -246,7 +246,7 @@ func (hp *HTMLParser) extractListText(n *html.Node) string {
 			}
 		}
 	}
-	
+
 	return strings.Join(items, "\n")
 }
 
@@ -255,11 +255,11 @@ func (hp *HTMLParser) cleanWhitespace(text string) string {
 	// Replace multiple whitespace with single spaces
 	re := regexp.MustCompile(`\s+`)
 	cleaned := re.ReplaceAllString(text, " ")
-	
+
 	// Replace multiple newlines with double newlines
 	re = regexp.MustCompile(`\n\s*\n\s*\n+`)
 	cleaned = re.ReplaceAllString(cleaned, "\n\n")
-	
+
 	return strings.TrimSpace(cleaned)
 }
 

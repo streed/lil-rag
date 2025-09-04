@@ -131,11 +131,11 @@ func run() error {
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
-		
+
 		// Update initial metrics
 		ctx := context.Background()
 		handler.UpdateSystemMetrics(ctx)
-		
+
 		for {
 			select {
 			case <-ticker.C:

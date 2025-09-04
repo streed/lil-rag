@@ -20,7 +20,10 @@ func main() {
 
 	pdfPath := os.Args[1]
 	if !filepath.IsAbs(pdfPath) {
-		wd, _ := os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("Failed to get working directory: %v", err)
+		}
 		pdfPath = filepath.Join(wd, pdfPath)
 	}
 
@@ -49,12 +52,12 @@ func main() {
 
 func testPDFCPU(pdfPath string) {
 	start := time.Now()
-	
+
 	parser := lilrag.NewPDFParser()
 	text, err := parser.Parse(pdfPath)
-	
+
 	elapsed := time.Since(start)
-	
+
 	if err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 		return
@@ -63,14 +66,14 @@ func testPDFCPU(pdfPath string) {
 	fmt.Printf("Extraction time: %v\n", elapsed)
 	fmt.Printf("Text length: %d characters\n", len(text))
 	fmt.Printf("Word count: %d\n", len(strings.Fields(text)))
-	
+
 	// Show first 500 characters as sample
 	sample := text
 	if len(sample) > 500 {
 		sample = sample[:500] + "..."
 	}
 	fmt.Printf("\nSample text:\n%s\n", sample)
-	
+
 	// Check for common artifacts
 	artifacts := checkTextArtifacts(text)
 	if len(artifacts) > 0 {
@@ -85,7 +88,7 @@ func testPDFCPU(pdfPath string) {
 
 func testGoFitz(pdfPath string) {
 	start := time.Now()
-	
+
 	doc, err := fitz.New(pdfPath)
 	if err != nil {
 		fmt.Printf("ERROR opening document: %v\n", err)
@@ -95,7 +98,7 @@ func testGoFitz(pdfPath string) {
 
 	var allText strings.Builder
 	pageCount := doc.NumPage()
-	
+
 	for i := 0; i < pageCount; i++ {
 		text, err := doc.Text(i)
 		if err != nil {
@@ -108,19 +111,19 @@ func testGoFitz(pdfPath string) {
 
 	elapsed := time.Since(start)
 	finalText := strings.TrimSpace(allText.String())
-	
+
 	fmt.Printf("Extraction time: %v\n", elapsed)
 	fmt.Printf("Pages processed: %d\n", pageCount)
 	fmt.Printf("Text length: %d characters\n", len(finalText))
 	fmt.Printf("Word count: %d\n", len(strings.Fields(finalText)))
-	
+
 	// Show first 500 characters as sample
 	sample := finalText
 	if len(sample) > 500 {
 		sample = sample[:500] + "..."
 	}
 	fmt.Printf("\nSample text:\n%s\n", sample)
-	
+
 	// Check for common artifacts
 	artifacts := checkTextArtifacts(finalText)
 	if len(artifacts) > 0 {
@@ -144,7 +147,7 @@ func testPDFToText(pdfPath string) {
 
 func checkTextArtifacts(text string) []string {
 	var artifacts []string
-	
+
 	// Check for spaced characters (like "T h i s")
 	spacedPattern := 0
 	for i, r := range text {
@@ -157,7 +160,7 @@ func checkTextArtifacts(text string) []string {
 	if spacedPattern > len(text)/20 { // If more than 5% of text is single spaced chars
 		artifacts = append(artifacts, "Excessive character spacing detected (possible OCR artifact)")
 	}
-	
+
 	// Check for lots of isolated single characters
 	words := strings.Fields(text)
 	singleChars := 0
@@ -169,7 +172,7 @@ func checkTextArtifacts(text string) []string {
 	if len(words) > 0 && singleChars > len(words)/10 {
 		artifacts = append(artifacts, "High number of isolated single characters")
 	}
-	
+
 	// Check for missing spaces between words (like "wordword")
 	concatenatedWords := 0
 	for _, word := range words {
@@ -186,7 +189,7 @@ func checkTextArtifacts(text string) []string {
 	if concatenatedWords > 5 {
 		artifacts = append(artifacts, "Possible concatenated words detected")
 	}
-	
+
 	// Check for unicode/encoding issues
 	nonPrintable := 0
 	for _, r := range text {
@@ -197,6 +200,6 @@ func checkTextArtifacts(text string) []string {
 	if nonPrintable > 10 {
 		artifacts = append(artifacts, "Non-printable control characters detected")
 	}
-	
+
 	return artifacts
 }

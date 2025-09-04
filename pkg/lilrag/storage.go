@@ -486,7 +486,7 @@ func (s *SQLiteStorage) GetDocumentByID(ctx context.Context, documentID string) 
 	var doc DocumentInfo
 	var sourcePath sql.NullString
 	var docType sql.NullString
-	
+
 	err := row.Scan(&doc.ID, &sourcePath, &docType, &doc.ChunkCount, &doc.CreatedAt, &doc.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -497,7 +497,7 @@ func (s *SQLiteStorage) GetDocumentByID(ctx context.Context, documentID string) 
 
 	doc.SourcePath = sourcePath.String
 	doc.DocType = docType.String
-	
+
 	return &doc, nil
 }
 
@@ -524,7 +524,7 @@ func (s *SQLiteStorage) GetDocumentChunks(ctx context.Context, documentID string
 		var compressedText []byte
 		var pageNumber sql.NullInt32
 
-		err := rows.Scan(&chunk.Index, &compressedText, &chunk.StartPos, &chunk.EndPos, 
+		err := rows.Scan(&chunk.Index, &compressedText, &chunk.StartPos, &chunk.EndPos,
 			&chunk.TokenCount, &pageNumber, &chunk.ChunkType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chunk row: %w", err)
