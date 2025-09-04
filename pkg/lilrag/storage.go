@@ -145,7 +145,7 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 	}
 
 	committed := false
-  
+
 	defer func() {
 		if !committed {
 			if rbErr := tx.Rollback(); rbErr != nil {
