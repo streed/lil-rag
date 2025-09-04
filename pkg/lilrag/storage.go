@@ -75,6 +75,8 @@ func (s *SQLiteStorage) createTables() error {
 			original_text_compressed BLOB,
 			content_hash TEXT NOT NULL,
 			file_path TEXT,
+			source_path TEXT,
+			doc_type TEXT,
 			metadata TEXT,
 			chunk_count INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -117,6 +119,12 @@ func (s *SQLiteStorage) createTables() error {
 // IndexChunks indexes a document with its chunks and embeddings
 func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string,
 	chunks []Chunk, embeddings [][]float32) error {
+	return s.IndexChunksWithMetadata(ctx, documentID, text, chunks, embeddings, "", "")
+}
+
+// IndexChunksWithMetadata indexes a document with metadata including original file path
+func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID, text string,
+	chunks []Chunk, embeddings [][]float32, originalFilePath, docType string) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
 	}
@@ -135,10 +143,13 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	var committed bool
 	defer func() {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			// Log rollback error if needed, but don't override the main error
-			fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Log rollback error if needed, but don't override the main error
+				fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+			}
 		}
 	}()
 
@@ -150,9 +161,10 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string
 
 	// Insert or update document
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents (id, original_text_compressed, content_hash, file_path, chunk_count, updated_at) 
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, documentID, compressedText, contentHash, filePath, len(chunks), time.Now().UTC())
+		INSERT OR REPLACE INTO documents (
+			id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunk_count, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, len(chunks), time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to insert document: %w", err)
 	}
@@ -218,7 +230,11 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // Index maintains backward compatibility for single-text indexing
@@ -283,6 +299,7 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 			c.chunk_type,
 			d.original_text_compressed,
 			d.file_path,
+			d.source_path,
 			vec_distance_cosine(e.embedding, ?) as distance
 		FROM chunks c
 		JOIN documents d ON c.document_id = d.id
@@ -309,9 +326,10 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		var pageNumber sql.NullInt32
 		var chunkType string
 		var filePath sql.NullString
+		var sourcePath sql.NullString
 
 		if err := rows.Scan(&result.ID, &compressedChunkText, &chunkIndex, &pageNumber,
-			&chunkType, &compressedOriginalText, &filePath, &distance); err != nil {
+			&chunkType, &compressedOriginalText, &filePath, &sourcePath, &distance); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -358,6 +376,11 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		// Add file path if available
 		if filePath.Valid && filePath.String != "" {
 			metadata["file_path"] = filePath.String
+		}
+
+		// Add source path if available
+		if sourcePath.Valid && sourcePath.String != "" {
+			metadata["source_path"] = sourcePath.String
 		}
 
 		result.Metadata = metadata
@@ -447,6 +470,160 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 	}
 
 	return documents, nil
+}
+
+// GetDocumentByID retrieves document information by ID
+func (s *SQLiteStorage) GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, source_path, doc_type, chunk_count, created_at, updated_at
+		FROM documents 
+		WHERE id = ?
+	`, documentID)
+
+	var doc DocumentInfo
+	var sourcePath sql.NullString
+	var docType sql.NullString
+
+	err := row.Scan(&doc.ID, &sourcePath, &docType, &doc.ChunkCount, &doc.CreatedAt, &doc.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("document not found: %s", documentID)
+		}
+		return nil, fmt.Errorf("failed to get document: %w", err)
+	}
+
+	doc.SourcePath = sourcePath.String
+	doc.DocType = docType.String
+
+	return &doc, nil
+}
+
+// GetDocumentChunks retrieves all chunks for a document
+func (s *SQLiteStorage) GetDocumentChunks(ctx context.Context, documentID string) ([]Chunk, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT chunk_index, chunk_text_compressed, start_pos, end_pos, token_count, page_number, chunk_type
+		FROM chunks 
+		WHERE document_id = ?
+		ORDER BY chunk_index
+	`, documentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query chunks: %w", err)
+	}
+	defer rows.Close()
+
+	var chunks []Chunk
+	for rows.Next() {
+		var chunk Chunk
+		var compressedText []byte
+		var pageNumber sql.NullInt32
+
+		err := rows.Scan(&chunk.Index, &compressedText, &chunk.StartPos, &chunk.EndPos,
+			&chunk.TokenCount, &pageNumber, &chunk.ChunkType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan chunk row: %w", err)
+		}
+
+		// Decompress chunk text
+		chunk.Text, err = DecompressText(compressedText)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress chunk text: %w", err)
+		}
+
+		// Set page number if available
+		if pageNumber.Valid {
+			pageNum := int(pageNumber.Int32)
+			chunk.PageNumber = &pageNum
+		}
+
+		chunks = append(chunks, chunk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during chunk iteration: %w", err)
+	}
+
+	return chunks, nil
+}
+
+// DeleteDocument removes a document and all its associated data
+func (s *SQLiteStorage) DeleteDocument(ctx context.Context, documentID string) error {
+	if s.db == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	var committed bool
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				fmt.Printf("Warning: failed to rollback transaction: %v\n", rbErr)
+			}
+		}
+	}()
+
+	// Get document info before deletion to clean up files
+	var filePath sql.NullString
+	err = tx.QueryRowContext(ctx, "SELECT file_path FROM documents WHERE id = ?", documentID).Scan(&filePath)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("document not found: %s", documentID)
+		}
+		return fmt.Errorf("failed to get document info: %w", err)
+	}
+
+	// Delete embeddings first (foreign key constraints)
+	_, err = tx.ExecContext(ctx, "DELETE FROM embeddings WHERE chunk_id LIKE ?", documentID+"%")
+	if err != nil {
+		return fmt.Errorf("failed to delete embeddings: %w", err)
+	}
+
+	// Delete chunks
+	_, err = tx.ExecContext(ctx, "DELETE FROM chunks WHERE document_id = ?", documentID)
+	if err != nil {
+		return fmt.Errorf("failed to delete chunks: %w", err)
+	}
+
+	// Delete document
+	result, err := tx.ExecContext(ctx, "DELETE FROM documents WHERE id = ?", documentID)
+	if err != nil {
+		return fmt.Errorf("failed to delete document: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("document not found: %s", documentID)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit deletion: %w", err)
+	}
+	committed = true
+
+	// Clean up file after successful deletion
+	if filePath.Valid && filePath.String != "" {
+		if err := os.Remove(filePath.String); err != nil {
+			// Log but don't fail - file cleanup is not critical
+			fmt.Printf("Warning: failed to delete file %s: %v\n", filePath.String, err)
+		}
+	}
+
+	return nil
 }
 
 func (s *SQLiteStorage) Close() error {
