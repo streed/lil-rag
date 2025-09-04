@@ -15,11 +15,12 @@ const (
 )
 
 type LilRag struct {
-	storage   Storage
-	embedder  Embedder
-	chunker   *TextChunker
-	pdfParser *PDFParser
-	config    *Config
+	storage    Storage
+	embedder   Embedder
+	chatClient *OllamaChatClient
+	chunker    *TextChunker
+	pdfParser  *PDFParser
+	config     *Config
 }
 
 type Config struct {
@@ -27,6 +28,7 @@ type Config struct {
 	DataDir      string
 	OllamaURL    string
 	Model        string
+	ChatModel    string
 	VectorSize   int
 	MaxTokens    int
 	Overlap      int
@@ -73,6 +75,9 @@ func New(config *Config) (*LilRag, error) {
 	if config.Model == "" {
 		config.Model = DefaultModel
 	}
+	if config.ChatModel == "" {
+		config.ChatModel = "gemma3:4b"
+	}
 	if config.VectorSize == 0 {
 		config.VectorSize = 768
 	}
@@ -110,6 +115,9 @@ func (m *LilRag) Initialize() error {
 
 	// Initialize PDF parser
 	m.pdfParser = NewPDFParser()
+
+	// Initialize chat client
+	m.chatClient = NewOllamaChatClient(m.config.OllamaURL, m.config.ChatModel)
 
 	return m.storage.Initialize()
 }
@@ -260,6 +268,33 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 	}
 
 	return m.storage.Search(ctx, embedding, limit)
+}
+
+// Chat performs a conversational query using retrieved context
+func (m *LilRag) Chat(ctx context.Context, userMessage string, limit int) (string, []SearchResult, error) {
+	if userMessage == "" {
+		return "", nil, fmt.Errorf("user message cannot be empty")
+	}
+	if limit <= 0 {
+		limit = 5 // Default limit for chat context
+	}
+	if m.chatClient == nil {
+		return "", nil, fmt.Errorf("chat client not initialized")
+	}
+
+	// First, search for relevant documents
+	searchResults, err := m.Search(ctx, userMessage, limit)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to search documents: %w", err)
+	}
+
+	// Generate chat response using the search results as context
+	response, err := m.chatClient.GenerateResponse(ctx, userMessage, searchResults)
+	if err != nil {
+		return "", searchResults, fmt.Errorf("failed to generate chat response: %w", err)
+	}
+
+	return response, searchResults, nil
 }
 
 func (m *LilRag) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {

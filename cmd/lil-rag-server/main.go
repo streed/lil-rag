@@ -31,6 +31,7 @@ func run() error {
 		dataDir     = flag.String("data-dir", "", "Data directory (overrides profile config)")
 		ollamaURL   = flag.String("ollama", "", "Ollama URL (overrides profile config)")
 		model       = flag.String("model", "", "Embedding model (overrides profile config)")
+		chatModel   = flag.String("chat-model", "", "Chat model (overrides profile config)")
 		vectorSize  = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
 		host        = flag.String("host", "", "Server host (overrides profile config)")
 		port        = flag.Int("port", 0, "Server port (overrides profile config)")
@@ -61,6 +62,9 @@ func run() error {
 	if *model != "" {
 		profileConfig.Ollama.EmbeddingModel = *model
 	}
+	if *chatModel != "" {
+		profileConfig.Ollama.ChatModel = *chatModel
+	}
 	if *vectorSize > 0 {
 		profileConfig.Ollama.VectorSize = *vectorSize
 	}
@@ -76,6 +80,7 @@ func run() error {
 		DataDir:      profileConfig.DataDir,
 		OllamaURL:    profileConfig.Ollama.Endpoint,
 		Model:        profileConfig.Ollama.EmbeddingModel,
+		ChatModel:    profileConfig.Ollama.ChatModel,
 		VectorSize:   profileConfig.Ollama.VectorSize,
 		MaxTokens:    profileConfig.Chunking.MaxTokens,
 		Overlap:      profileConfig.Chunking.Overlap,
