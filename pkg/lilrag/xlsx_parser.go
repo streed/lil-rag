@@ -226,15 +226,13 @@ func (xp *XLSXParser) hasNonEmptyData(row []string) bool {
 	return false
 }
 
-// getColumnName converts column index to Excel-style column name (A, B, C, etc.)
+// getColumnName converts column index to Excel-style column name (A, B, C, ..., Z, AA, AB, ..., ZZ, AAA, etc.)
 func (xp *XLSXParser) getColumnName(index int) string {
 	name := ""
 	for index >= 0 {
-		name = string(rune('A'+(index%26))) + name
-		index = index/26 - 1
-		if index < 0 {
-			break
-		}
+		remainder := index % 26
+		name = string(rune('A'+remainder)) + name
+		index = (index / 26) - 1
 	}
 	return name
 }
