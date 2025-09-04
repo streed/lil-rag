@@ -1,8 +1,9 @@
+---
 name: Main Branch Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 env:
   GO_VERSION: '1.23'
@@ -18,43 +19,44 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.new }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Read current version and increment
-      id: version
-      run: |
-        CURRENT_VERSION=$(cat VERSION)
-        echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-        
-        # Increment patch version for main branch builds
-        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-        MAJOR=${VERSION_PARTS[0]}
-        MINOR=${VERSION_PARTS[1]}
-        PATCH=${VERSION_PARTS[2]}
-        
-        NEW_PATCH=$((PATCH + 1))
-        NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
-        
-        echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
-        echo "$NEW_VERSION" > VERSION
-        
-        echo "Version incremented from $CURRENT_VERSION to $NEW_VERSION"
+      - name: Read current version and increment
+        id: version
+        run: |
+          CURRENT_VERSION=$(cat VERSION)
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
-    - name: Commit version update
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add VERSION
-        if git diff --staged --quiet; then
-          echo "No version changes to commit"
-        else
-          git commit -m "Bump version to ${{ steps.version.outputs.new }} [skip ci]"
-          git push
-        fi
+          # Increment patch version for main branch builds
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "$NEW_VERSION" > VERSION
+
+          echo "Version incremented from $CURRENT_VERSION to $NEW_VERSION"
+
+      - name: Commit version update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add VERSION
+          if git diff --staged --quiet; then
+            echo "No version changes to commit"
+          else
+            git commit -m \
+              "Bump version to ${{ steps.version.outputs.new }} [skip ci]"
+            git push
+          fi
 
   build-cross-platform:
     name: Build Native Binaries
@@ -67,14 +69,15 @@ jobs:
             goarch: amd64
             suffix: linux-amd64
             archive: tar.gz
-          - os: ubuntu-latest  
+          - os: ubuntu-latest
             goos: linux
             goarch: arm64
             suffix: linux-arm64
             archive: tar.gz
             cc: aarch64-linux-gnu-gcc
             setup_cross: |
-              sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+              sudo apt-get update && \
+                sudo apt-get install -y gcc-aarch64-linux-gnu
           - os: windows-latest
             goos: windows
             goarch: amd64
@@ -92,155 +95,188 @@ jobs:
             suffix: darwin-arm64
             archive: tar.gz
     runs-on: ${{ matrix.os }}
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-    - name: Set up cross-compilation tools
-      if: matrix.setup_cross
-      run: ${{ matrix.setup_cross }}
+      - name: Set up cross-compilation tools
+        if: matrix.setup_cross
+        run: ${{ matrix.setup_cross }}
 
-    - name: Install dependencies
-      run: go mod download
+      - name: Install dependencies
+        run: go mod download
 
-    - name: Run tests (Linux only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      run: go test -v ./...
+      - name: Run tests (Linux only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: go test -v ./...
 
-    - name: Create dist directory
-      run: mkdir -p dist
+      - name: Create dist directory
+        run: mkdir -p dist
 
-    - name: Build binaries
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 1
-        CC: ${{ matrix.cc }}
-      run: |
-        EXT="${{ matrix.extension }}"
-        SUFFIX="${{ matrix.suffix }}"
-        VERSION="${{ needs.version.outputs.version }}"
-        
-        echo "Building for $GOOS/$GOARCH with version $VERSION"
-        
-        go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/lil-rag-$SUFFIX$EXT" ./cmd/lil-rag
-        go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/lil-rag-server-$SUFFIX$EXT" ./cmd/lil-rag-server  
-        go build -ldflags="-s -w -X main.version=$VERSION" -o "dist/lil-rag-mcp-$SUFFIX$EXT" ./cmd/lil-rag-mcp
+      - name: Build binaries
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+        run: |
+          EXT="${{ matrix.extension }}"
+          SUFFIX="${{ matrix.suffix }}"
+          VERSION="${{ needs.version.outputs.new }}"
 
-    - name: Create archive (tar.gz)
-      if: matrix.archive == 'tar.gz'
-      run: |
-        VERSION="${{ needs.version.outputs.version }}"
-        SUFFIX="${{ matrix.suffix }}"
-        EXT="${{ matrix.extension }}"
-        
-        cd dist
-        tar -czf "lil-rag-$VERSION-$SUFFIX.tar.gz" "lil-rag-$SUFFIX$EXT" "lil-rag-server-$SUFFIX$EXT" "lil-rag-mcp-$SUFFIX$EXT"
+          echo "Building for $GOOS/$GOARCH with version $VERSION"
 
-    - name: Create archive (zip)
-      if: matrix.archive == 'zip'
-      shell: bash
-      run: |
-        VERSION="${{ needs.version.outputs.version }}"
-        SUFFIX="${{ matrix.suffix }}"
-        EXT="${{ matrix.extension }}"
-        
-        cd dist
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          # Use PowerShell on Windows for zip creation
-          powershell -Command "Compress-Archive -Path 'lil-rag-$SUFFIX$EXT', 'lil-rag-server-$SUFFIX$EXT', 'lil-rag-mcp-$SUFFIX$EXT' -DestinationPath 'lil-rag-$VERSION-$SUFFIX.zip'"
-        else
-          zip "lil-rag-$VERSION-$SUFFIX.zip" "lil-rag-$SUFFIX$EXT" "lil-rag-server-$SUFFIX$EXT" "lil-rag-mcp-$SUFFIX$EXT"
-        fi
+          go build -ldflags="-s -w -X main.version=$VERSION" \
+            -o "dist/lil-rag-$SUFFIX$EXT" ./cmd/lil-rag
+          go build -ldflags="-s -w -X main.version=$VERSION" \
+            -o "dist/lil-rag-server-$SUFFIX$EXT" ./cmd/lil-rag-server
+          go build -ldflags="-s -w -X main.version=$VERSION" \
+            -o "dist/lil-rag-mcp-$SUFFIX$EXT" ./cmd/lil-rag-mcp
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: lil-rag-${{ needs.version.outputs.version }}-${{ matrix.suffix }}
-        path: |
-          dist/lil-rag-${{ needs.version.outputs.version }}-${{ matrix.suffix }}.*
-        retention-days: 30
+      - name: Create archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          VERSION="${{ needs.version.outputs.new }}"
+          SUFFIX="${{ matrix.suffix }}"
+          EXT="${{ matrix.extension }}"
+
+          cd dist
+          tar -czf "lil-rag-$VERSION-$SUFFIX.tar.gz" \
+            "lil-rag-$SUFFIX$EXT" \
+            "lil-rag-server-$SUFFIX$EXT" \
+            "lil-rag-mcp-$SUFFIX$EXT"
+
+      - name: Create archive (zip)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          VERSION="${{ needs.version.outputs.new }}"
+          SUFFIX="${{ matrix.suffix }}"
+          EXT="${{ matrix.extension }}"
+
+          cd dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # Use PowerShell on Windows for zip creation
+            powershell -Command "Compress-Archive \
+              -Path 'lil-rag-$SUFFIX$EXT', \
+              'lil-rag-server-$SUFFIX$EXT', \
+              'lil-rag-mcp-$SUFFIX$EXT' \
+              -DestinationPath 'lil-rag-$VERSION-$SUFFIX.zip'"
+          else
+            zip "lil-rag-$VERSION-$SUFFIX.zip" \
+              "lil-rag-$SUFFIX$EXT" \
+              "lil-rag-server-$SUFFIX$EXT" \
+              "lil-rag-mcp-$SUFFIX$EXT"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lil-rag-${{ needs.version.outputs.new }}-${{ matrix.suffix }}
+          path: |
+            dist/lil-rag-${{ needs.version.outputs.new }}-${{ matrix.suffix }}.*
+          retention-days: 30
 
   release:
     name: Create GitHub Release
     needs: [version, build-cross-platform]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        pattern: lil-rag-${{ needs.version.outputs.version }}-*
-        path: dist
-        merge-multiple: true
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: lil-rag-${{ needs.version.outputs.new }}-*
+          path: dist
+          merge-multiple: true
 
-    - name: Generate checksums
-      run: |
-        cd dist
-        find . -name "*.tar.gz" -o -name "*.zip" | xargs sha256sum > checksums.txt
-        ls -la
+      - name: Generate checksums
+        run: |
+          cd dist
+          find . -name "*.tar.gz" -o -name "*.zip" | \
+            xargs sha256sum > checksums.txt
+          ls -la
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: v${{ needs.version.outputs.version }}
-        name: Release v${{ needs.version.outputs.version }}
-        body: |
-          ## 🚀 Release v${{ needs.version.outputs.version }}
-          
-          Auto-generated release from main branch build using native platform compilation.
-          
-          ### 📦 Downloads
-          - **Linux AMD64**: `lil-rag-${{ needs.version.outputs.version }}-linux-amd64.tar.gz`
-          - **Linux ARM64**: `lil-rag-${{ needs.version.outputs.version }}-linux-arm64.tar.gz`
-          - **Windows AMD64**: `lil-rag-${{ needs.version.outputs.version }}-windows-amd64.zip`
-          - **macOS AMD64**: `lil-rag-${{ needs.version.outputs.version }}-darwin-amd64.tar.gz`
-          - **macOS ARM64**: `lil-rag-${{ needs.version.outputs.version }}-darwin-arm64.tar.gz`
-          
-          ### 📋 Quick Install
-          ```bash
-          curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
-          ```
-          
-          ### ✨ What's New
-          This release includes all changes merged to main since the previous release.
-          
-          **Note**: Built using native platform compilation to avoid CGO cross-compilation issues.
-        files: |
-          dist/*.tar.gz
-          dist/*.zip
-          dist/checksums.txt
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.new }}
+          name: Release v${{ needs.version.outputs.new }}
+          body: |
+            ## 🚀 Release v${{ needs.version.outputs.new }}
 
-    - name: Display build summary
-      run: |
-        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "**Version:** ${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Release Tag:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64), macOS (AMD64, ARM64)" >> $GITHUB_STEP_SUMMARY
-        echo "**Build Method:** Native platform compilation" >> $GITHUB_STEP_SUMMARY
-        echo "**Artifacts:** $(ls -1 dist/*.tar.gz dist/*.zip 2>/dev/null | wc -l) archives created" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔗 Release URL" >> $GITHUB_STEP_SUMMARY
-        echo "https://github.com/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
-        ls -la dist/ >> $GITHUB_STEP_SUMMARY
+            Auto-generated release from main branch build using native platform
+            compilation.
+
+            ### 📦 Downloads
+            - **Linux AMD64**:
+              `lil-rag-${{ needs.version.outputs.new }}-linux-amd64.tar.gz`
+            - **Linux ARM64**:
+              `lil-rag-${{ needs.version.outputs.new }}-linux-arm64.tar.gz`
+            - **Windows AMD64**:
+              `lil-rag-${{ needs.version.outputs.new }}-windows-amd64.zip`
+            - **macOS AMD64**:
+              `lil-rag-${{ needs.version.outputs.new }}-darwin-amd64.tar.gz`
+            - **macOS ARM64**:
+              `lil-rag-${{ needs.version.outputs.new }}-darwin-arm64.tar.gz`
+
+            ### 📋 Quick Install
+            ```bash
+            RAW_URL="https://raw.githubusercontent.com/${{ github.repository }}"
+            curl -fsSL \
+              "$RAW_URL/main/install.sh" \
+              | bash
+            ```
+
+            ### ✨ What's New
+            This release includes all changes merged to main since the previous
+            release.
+
+            **Note**: Built using native platform compilation to avoid CGO
+            cross-compilation issues.
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display build summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.version.outputs.new }}" >> \
+            $GITHUB_STEP_SUMMARY
+          echo "**Release Tag:** v${{ needs.version.outputs.new }}" >> \
+            $GITHUB_STEP_SUMMARY
+          PLATFORMS="Linux (AMD64, ARM64), Windows (AMD64), macOS (AMD64,ARM64)"
+          echo "**Platforms:** $PLATFORMS" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Method:** Native platform compilation" >> \
+            $GITHUB_STEP_SUMMARY
+          ARTIFACT_COUNT=$(ls -1 dist/*.tar.gz dist/*.zip 2>/dev/null | wc -l)
+          echo "**Artifacts:** $ARTIFACT_COUNT archives created" >> \
+            $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Release URL" >> $GITHUB_STEP_SUMMARY
+          REPO_URL="https://github.com/${{ github.repository }}"
+          RELEASE_URL="$REPO_URL/releases/tag/v${{ needs.version.outputs.new }}"
+          echo "$RELEASE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
+          ls -la dist/ >> $GITHUB_STEP_SUMMARY

@@ -143,7 +143,9 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	var committed bool
+
+	committed := false
+
 	defer func() {
 		if !committed {
 			if rbErr := tx.Rollback(); rbErr != nil {
