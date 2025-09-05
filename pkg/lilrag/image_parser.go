@@ -26,19 +26,27 @@ import (
 
 // ImageParser handles OCR extraction from image documents using Ollama vision models
 type ImageParser struct {
-	ollamaURL string
-	model     string
-	client    *http.Client
-	chunker   *TextChunker
+	ollamaURL    string
+	model        string
+	client       *http.Client
+	chunker      *TextChunker
+	imageMaxSize int
 }
 
-// NewImageParserWithTimeout creates a new image parser with configurable timeout
-func NewImageParserWithTimeout(ollamaURL, model string, chunker *TextChunker, timeoutSeconds int) *ImageParser {
+// NewImageParserWithTimeout creates a new image parser with configurable timeout and max image size
+func NewImageParserWithTimeout(
+	ollamaURL, model string,
+	chunker *TextChunker,
+	timeoutSeconds, imageMaxSize int,
+) *ImageParser {
 	if ollamaURL == "" {
 		ollamaURL = DefaultOllamaURL
 	}
 	if model == "" {
 		model = "llama3.2-vision" // Default vision model
+	}
+	if imageMaxSize <= 0 {
+		imageMaxSize = 1120 // Default image max size
 	}
 
 	return &ImageParser{
@@ -47,7 +55,8 @@ func NewImageParserWithTimeout(ollamaURL, model string, chunker *TextChunker, ti
 		client: &http.Client{
 			Timeout: time.Duration(timeoutSeconds) * time.Second,
 		},
-		chunker: chunker,
+		chunker:      chunker,
+		imageMaxSize: imageMaxSize,
 	}
 }
 
@@ -161,8 +170,8 @@ func calculateResizeDimensions(origWidth, origHeight, maxSize int) (int, int) {
 
 // Parse extracts text content from an image file using OCR
 func (p *ImageParser) Parse(filePath string) (string, error) {
-	// Resize image to fit within 1120x1120 pixels for optimal OCR processing
-	imageData, err := p.ResizeImage(filePath, 1120)
+	// Resize image to fit within configured max size for optimal OCR processing
+	imageData, err := p.ResizeImage(filePath, p.imageMaxSize)
 	if err != nil {
 		return "", fmt.Errorf("failed to resize image for OCR: %w", err)
 	}

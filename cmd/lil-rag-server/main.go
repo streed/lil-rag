@@ -86,6 +86,7 @@ func run() error {
 		VectorSize:     profileConfig.Ollama.VectorSize,
 		MaxTokens:      profileConfig.Chunking.MaxTokens,
 		Overlap:        profileConfig.Chunking.Overlap,
+		ImageMaxSize:   profileConfig.Ollama.ImageMaxSize,
 	}
 
 	rag, err := lilrag.New(lilragConfig)

@@ -22,6 +22,7 @@ type OllamaConfig struct {
 	ChatModel      string `json:"chat_model"`
 	VisionModel    string `json:"vision_model"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
+	ImageMaxSize   int    `json:"image_max_size"`
 }
 
 type ServerConfig struct {
@@ -50,6 +51,7 @@ func DefaultProfile() *ProfileConfig {
 			ChatModel:      "gemma3:4b",
 			VisionModel:    "llama3.2-vision",
 			TimeoutSeconds: 30,
+			ImageMaxSize:   1120,
 		},
 		StoragePath: filepath.Join(dataDir, "lilrag.db"),
 		DataDir:     dataDir,

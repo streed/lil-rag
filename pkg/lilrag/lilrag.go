@@ -38,6 +38,7 @@ type Config struct {
 	VectorSize     int
 	MaxTokens      int
 	Overlap        int
+	ImageMaxSize   int
 }
 
 type Storage interface {
@@ -155,6 +156,7 @@ func (m *LilRag) Initialize() error {
 		m.config.OllamaURL,
 		m.config.VisionModel,
 		m.config.TimeoutSeconds,
+		m.config.ImageMaxSize,
 	)
 
 	// Initialize chat client

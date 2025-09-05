@@ -26,6 +26,7 @@ type Ollama struct {
 	Model          string `json:"model" yaml:"model"`
 	VisionModel    string `json:"vision_model" yaml:"vision_model"`
 	TimeoutSeconds int    `json:"timeout_seconds" yaml:"timeout_seconds"`
+	ImageMaxSize   int    `json:"image_max_size" yaml:"image_max_size"`
 }
 
 type Server struct {
@@ -49,6 +50,7 @@ func Default() *Config {
 			Model:          "nomic-embed-text",
 			VisionModel:    "llama3.2-vision",
 			TimeoutSeconds: 30,
+			ImageMaxSize:   1120,
 		},
 		Server: Server{
 			Host: "localhost",
