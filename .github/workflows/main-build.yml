@@ -28,7 +28,7 @@ jobs:
       - name: Read current version and increment
         id: version
         run: |
-          CURRENT_VERSION=$(cat VERSION)
+          CURRENT_VERSION=$(cat VERSION | tr -d '[:space:]')
           echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
           # Increment patch version for main branch builds
@@ -69,31 +69,40 @@ jobs:
             goarch: amd64
             suffix: linux-amd64
             archive: tar.gz
+            cgo_enabled: 1
           - os: ubuntu-latest
             goos: linux
             goarch: arm64
             suffix: linux-arm64
             archive: tar.gz
+            cgo_enabled: 1
             cc: aarch64-linux-gnu-gcc
             setup_cross: |
               sudo apt-get update && \
                 sudo apt-get install -y gcc-aarch64-linux-gnu
-          - os: windows-latest
+          - os: ubuntu-latest
             goos: windows
             goarch: amd64
             suffix: windows-amd64
             extension: .exe
             archive: zip
+            cgo_enabled: 1
+            cc: x86_64-w64-mingw32-gcc
+            setup_cross: |
+              sudo apt-get update && \
+                sudo apt-get install -y gcc-mingw-w64
           - os: macos-latest
             goos: darwin
             goarch: amd64
             suffix: darwin-amd64
             archive: tar.gz
+            cgo_enabled: 1
           - os: macos-latest
             goos: darwin
             goarch: arm64
             suffix: darwin-arm64
             archive: tar.gz
+            cgo_enabled: 1
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -127,7 +136,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 1
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
           CC: ${{ matrix.cc }}
         shell: bash
         run: |
@@ -135,7 +144,7 @@ jobs:
           SUFFIX="${{ matrix.suffix }}"
           VERSION="${{ needs.version.outputs.new }}"
 
-          echo "Building for $GOOS/$GOARCH with version $VERSION"
+          echo "Building for $GOOS/$GOARCH with version $VERSION (CGO_ENABLED=$CGO_ENABLED)"
 
           go build -ldflags="-s -w -X main.version=$VERSION" \
             -o "dist/lil-rag-$SUFFIX$EXT" ./cmd/lil-rag
