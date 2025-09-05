@@ -18,6 +18,7 @@ const (
 	DocumentTypeCSV     DocumentType = "csv"
 	DocumentTypeTXT     DocumentType = "txt"
 	DocumentTypeODT     DocumentType = "odt"
+	DocumentTypeImage   DocumentType = "image"
 	DocumentTypeUnknown DocumentType = "unknown"
 )
 
@@ -38,15 +39,35 @@ type DocumentParser interface {
 
 // DocumentHandler manages all document parsers and routes files to appropriate handlers
 type DocumentHandler struct {
-	parsers map[DocumentType]DocumentParser
-	chunker *TextChunker
+	parsers        map[DocumentType]DocumentParser
+	chunker        *TextChunker
+	ollamaURL      string
+	visionModel    string
+	timeoutSeconds int
 }
 
 // NewDocumentHandler creates a new document handler with all supported parsers
 func NewDocumentHandler(chunker *TextChunker) *DocumentHandler {
+	return NewDocumentHandlerWithVision(chunker, DefaultOllamaURL, "llama3.2-vision")
+}
+
+// NewDocumentHandlerWithVision creates a document handler with custom vision model settings
+func NewDocumentHandlerWithVision(chunker *TextChunker, ollamaURL, visionModel string) *DocumentHandler {
+	return NewDocumentHandlerWithVisionAndTimeout(chunker, ollamaURL, visionModel, 300)
+}
+
+// NewDocumentHandlerWithVisionAndTimeout creates a document handler with custom vision model and timeout settings
+func NewDocumentHandlerWithVisionAndTimeout(
+	chunker *TextChunker,
+	ollamaURL, visionModel string,
+	timeoutSeconds int,
+) *DocumentHandler {
 	dh := &DocumentHandler{
-		parsers: make(map[DocumentType]DocumentParser),
-		chunker: chunker,
+		parsers:        make(map[DocumentType]DocumentParser),
+		chunker:        chunker,
+		ollamaURL:      ollamaURL,
+		visionModel:    visionModel,
+		timeoutSeconds: timeoutSeconds,
 	}
 
 	// Register default parsers
@@ -71,6 +92,14 @@ func (dh *DocumentHandler) registerDefaultParsers() {
 	// Web and data format parsers
 	dh.RegisterParser(DocumentTypeHTML, NewHTMLParser())
 	dh.RegisterParser(DocumentTypeCSV, NewCSVParser())
+
+	// Image parser with OCR capabilities
+	dh.RegisterParser(DocumentTypeImage, NewImageParserWithTimeout(
+		dh.ollamaURL,
+		dh.visionModel,
+		dh.chunker,
+		dh.timeoutSeconds*10,
+	))
 
 	// Future parsers will be added here
 	// dh.RegisterParser(DocumentTypeODT, NewODTParser())
@@ -102,6 +131,8 @@ func (dh *DocumentHandler) DetectDocumentType(filePath string) DocumentType {
 		return DocumentTypeTXT
 	case ".odt":
 		return DocumentTypeODT
+	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif":
+		return DocumentTypeImage
 	default:
 		return DocumentTypeUnknown
 	}

@@ -240,14 +240,16 @@ lil-rag reset --force                               # Reset database (skip confi
 ### Flags
 
 ```bash
--db string           Database path (overrides profile config)
--data-dir string     Data directory (overrides profile config)
--ollama string       Ollama URL (overrides profile config)  
--model string        Embedding model (overrides profile config)
--chat-model string   Chat model (overrides profile config)
--vector-size int     Vector size (overrides profile config)
--help               Show help
--version            Show version
+-db string             Database path (overrides profile config)
+-data-dir string       Data directory (overrides profile config)
+-ollama string         Ollama URL (overrides profile config)  
+-model string          Embedding model (overrides profile config)
+-chat-model string     Chat model (overrides profile config)
+-vision-model string   Vision model for image processing (overrides profile config)
+-timeout int           Ollama timeout in seconds (overrides profile config)
+-vector-size int       Vector size (overrides profile config)
+-help                 Show help
+-version              Show version
 ```
 
 ## 🌐 HTTP API
@@ -260,6 +262,9 @@ lil-rag reset --force                               # Reset database (skip confi
 
 # Start with custom host/port  
 ./bin/lil-rag-server --host 0.0.0.0 --port 9000
+
+# Start with custom vision model and timeout
+./bin/lil-rag-server --vision-model llava --timeout 60
 ```
 
 Visit http://localhost:8080 for the web interface with API documentation and interactive chat.
@@ -538,6 +543,8 @@ Example profile configuration (`~/.lilrag/config.json`):
     "endpoint": "http://localhost:11434",
     "embedding_model": "nomic-embed-text",
     "chat_model": "llama3.2",
+    "vision_model": "llama3.2-vision",
+    "timeout_seconds": 30,
     "vector_size": 768
   },
   "storage_path": "/home/user/.lilrag/data/lilrag.db",
@@ -545,8 +552,51 @@ Example profile configuration (`~/.lilrag/config.json`):
   "server": {
     "host": "localhost",
     "port": 8080
+  },
+  "chunking": {
+    "max_tokens": 256,
+    "overlap": 38
   }
 }
+```
+
+### Advanced Configuration
+
+#### Vision Model Configuration
+LilRag supports image processing with configurable vision models for OCR and image analysis:
+
+- **vision_model**: Vision model for image processing (default: "llama3.2-vision")
+- Supports any Ollama vision model (llama3.2-vision, llava, bakllava, etc.)
+- Automatically handles image files (JPG, PNG, PDF with images, etc.)
+
+#### Timeout Configuration
+Configure HTTP timeouts for Ollama API calls:
+
+- **timeout_seconds**: Base timeout for API calls (default: 30 seconds)
+- **Embeddings**: Uses the exact timeout value
+- **Chat operations**: Uses 4x timeout (120s default) for longer responses  
+- **Vision/Image processing**: Uses 10x timeout (300s default) for complex OCR
+
+#### Chunking Configuration
+Optimize text chunking for your use case:
+
+- **max_tokens**: Maximum tokens per chunk (default: 256, optimized for 2025 RAG best practices)
+- **overlap**: Token overlap between chunks (default: 38, 15% overlap ratio)
+- Smaller chunks provide more precise search results
+- Larger chunks preserve more context per result
+
+```bash
+# Optimize for speed (smaller chunks)
+./bin/lil-rag config set chunking.max-tokens 128
+./bin/lil-rag config set chunking.overlap 19
+
+# Optimize for context (larger chunks)  
+./bin/lil-rag config set chunking.max-tokens 512
+./bin/lil-rag config set chunking.overlap 76
+
+# Use legacy chunking settings
+./bin/lil-rag config set chunking.max-tokens 1800
+./bin/lil-rag config set chunking.overlap 200
 ```
 
 ### Updating Configuration
@@ -560,6 +610,12 @@ Example profile configuration (`~/.lilrag/config.json`):
 
 # Change chat model
 ./bin/lil-rag config set ollama.chat-model llama3.2
+
+# Change vision model for image processing
+./bin/lil-rag config set ollama.vision-model llama3.2-vision
+
+# Update Ollama timeout (in seconds)
+./bin/lil-rag config set ollama.timeout-seconds 60
 
 # Update vector size (must match embedding model)
 ./bin/lil-rag config set ollama.vector-size 384
@@ -592,11 +648,16 @@ func main() {
     dataDir := filepath.Join(homeDir, ".lilrag", "data")
     
     config := &lilrag.Config{
-        DatabasePath: filepath.Join(dataDir, "test.db"),
-        DataDir:      dataDir,
-        OllamaURL:    "http://localhost:11434",
-        Model:        "nomic-embed-text", 
-        VectorSize:   768,
+        DatabasePath:   filepath.Join(dataDir, "test.db"),
+        DataDir:        dataDir,
+        OllamaURL:      "http://localhost:11434",
+        Model:          "nomic-embed-text",
+        ChatModel:      "gemma3:4b",
+        VisionModel:    "llama3.2-vision",
+        TimeoutSeconds: 30,
+        VectorSize:     768,
+        MaxTokens:      256,
+        Overlap:        38,
     }
 
     // Initialize LilRag
@@ -747,6 +808,18 @@ lil-rag/
 - Check location: `lil-rag config show`
 - Change location: `lil-rag config set data.dir /path/to/data`
 - Ensure write permissions to the directory
+
+### Vision Model Issues
+- Ensure vision model is available: `ollama list | grep vision`
+- Pull vision model if missing: `ollama pull llama3.2-vision`
+- Change vision model: `lil-rag config set ollama.vision-model llava`
+- Supported models: llama3.2-vision, llava, bakllava, moondream, etc.
+
+### Timeout Issues
+- Increase timeout for slow operations: `lil-rag config set ollama.timeout-seconds 120`
+- Chat timeouts use 4x base timeout (default: 120s)
+- Vision processing uses 10x base timeout (default: 300s)
+- Monitor /api/metrics for average response times
 
 ## License
 

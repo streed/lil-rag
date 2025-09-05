@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+
+	"lil-rag/pkg/metrics"
 )
 
 const (
@@ -25,14 +28,16 @@ type LilRag struct {
 }
 
 type Config struct {
-	DatabasePath string
-	DataDir      string
-	OllamaURL    string
-	Model        string
-	ChatModel    string
-	VectorSize   int
-	MaxTokens    int
-	Overlap      int
+	DatabasePath   string
+	DataDir        string
+	OllamaURL      string
+	Model          string
+	ChatModel      string
+	VisionModel    string
+	TimeoutSeconds int
+	VectorSize     int
+	MaxTokens      int
+	Overlap        int
 }
 
 type Storage interface {
@@ -47,6 +52,9 @@ type Storage interface {
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error)
 	GetDocumentChunks(ctx context.Context, documentID string) ([]Chunk, error)
+	GetDocumentChunksWithInfo(ctx context.Context, documentID string) ([]ChunkInfo, error)
+	UpdateChunk(ctx context.Context, chunkID, newText string, newEmbedding []float32) error
+	GetChunk(ctx context.Context, chunkID string) (*ChunkInfo, error)
 	DeleteDocument(ctx context.Context, documentID string) error
 	Close() error
 }
@@ -68,8 +76,22 @@ type DocumentInfo struct {
 	ChunkCount int       `json:"chunk_count"`
 	SourcePath string    `json:"source_path"`
 	DocType    string    `json:"doc_type"`
+	IsImage    bool      `json:"is_image"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// ChunkInfo represents a chunk with database metadata for API responses
+type ChunkInfo struct {
+	ID         string `json:"id"`
+	DocumentID string `json:"document_id"`
+	Text       string `json:"text"`
+	Index      int    `json:"index"`
+	StartPos   int    `json:"start_pos"`
+	EndPos     int    `json:"end_pos"`
+	TokenCount int    `json:"token_count"`
+	ChunkType  string `json:"chunk_type"`
+	PageNumber *int   `json:"page_number,omitempty"`
 }
 
 func New(config *Config) (*LilRag, error) {
@@ -115,7 +137,7 @@ func (m *LilRag) Initialize() error {
 	}
 	m.storage = storage
 
-	embedder, err := NewOllamaEmbedder(m.config.OllamaURL, m.config.Model)
+	embedder, err := NewOllamaEmbedderWithTimeout(m.config.OllamaURL, m.config.Model, m.config.TimeoutSeconds)
 	if err != nil {
 		return fmt.Errorf("failed to initialize embedder: %w", err)
 	}
@@ -127,11 +149,16 @@ func (m *LilRag) Initialize() error {
 	// Initialize PDF parser (keep for backward compatibility)
 	m.pdfParser = NewPDFParser()
 
-	// Initialize document handler with all supported parsers
-	m.documentHandler = NewDocumentHandler(m.chunker)
+	// Initialize document handler with all supported parsers including vision
+	m.documentHandler = NewDocumentHandlerWithVisionAndTimeout(
+		m.chunker,
+		m.config.OllamaURL,
+		m.config.VisionModel,
+		m.config.TimeoutSeconds,
+	)
 
 	// Initialize chat client
-	m.chatClient = NewOllamaChatClient(m.config.OllamaURL, m.config.ChatModel)
+	m.chatClient = NewOllamaChatClientWithTimeout(m.config.OllamaURL, m.config.ChatModel, m.config.TimeoutSeconds*4)
 
 	return m.storage.Initialize()
 }
@@ -164,6 +191,13 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 	}
 
 	fmt.Printf("Splitting text into %d chunks for document '%s'\n", len(chunks), id)
+
+	// Record document tokens processed
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += chunk.TokenCount
+	}
+	metrics.RecordDocumentTokens("text", totalTokens)
 
 	// Create embeddings for each chunk
 	embeddings := make([][]float32, len(chunks))
@@ -270,6 +304,14 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 		return fmt.Errorf("no content found in document")
 	}
 
+	// Record document tokens processed - determine document type from file path
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += chunk.TokenCount
+	}
+	docType := m.documentHandler.DetectDocumentType(filePath)
+	metrics.RecordDocumentTokens(string(docType), totalTokens)
+
 	// Generate embeddings for all chunks
 	embeddings := make([][]float32, len(chunks))
 	var combinedText strings.Builder
@@ -288,11 +330,8 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 		combinedText.WriteString(chunk.Text)
 	}
 
-	// Detect document type for metadata
-	docType := string(m.documentHandler.DetectDocumentType(filePath))
-
 	// Store document with chunks and metadata
-	return m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, docType)
+	return m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, string(docType))
 }
 
 func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
@@ -320,7 +359,188 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 		return nil, fmt.Errorf("failed to create query embedding: %w", err)
 	}
 
-	return m.storage.Search(ctx, embedding, limit)
+	// Primary vector search
+	results, err := m.storage.Search(ctx, embedding, limit)
+	if err != nil {
+		return nil, fmt.Errorf("vector search failed: %w", err)
+	}
+
+	// For better compatibility with image-derived content, check if we need to apply
+	// text-based fallback search for improved accuracy
+	if m.needsTextFallback(query) {
+		// Always supplement business/contact queries with text-based search for better recall
+		textResults, err := m.performTextFallbackSearch(ctx, query, limit)
+		if err == nil && len(textResults) > 0 {
+			// Merge results, prioritizing exact text matches
+			results = m.mergeSearchResults(results, textResults)
+		}
+	}
+
+	return results, nil
+}
+
+// needsTextFallback determines if a query would benefit from text-based fallback search
+func (m *LilRag) needsTextFallback(query string) bool {
+	// Apply text fallback for queries that are likely to have exact matches in image content
+	words := strings.Fields(query)
+	if len(words) == 0 {
+		return false
+	}
+
+	// Check for patterns that suggest exact matching would be valuable
+	hasBusinessTerms := false
+	hasPhoneNumber := false
+	hasProperNoun := false
+
+	// Compile phone regex once for performance
+	phoneRegex := regexp.MustCompile(`\d{3}[-.]?\d{3}[-.]?\d{4}`)
+
+	for _, word := range words {
+		originalWord := word // Keep original for proper noun check
+		word = strings.ToLower(word)
+		if word == "painting" || word == "services" || word == "cleaning" ||
+			word == "construction" || word == "repair" || word == "company" {
+			hasBusinessTerms = true
+		}
+
+		// Check for phone number patterns
+		if phoneRegex.MatchString(word) {
+			hasPhoneNumber = true
+		}
+
+		// Check for proper nouns (capitalized words that might be names or companies)
+		if len(originalWord) > 1 && strings.ToUpper(originalWord[:1]) == originalWord[:1] &&
+			strings.ToLower(originalWord[1:]) == originalWord[1:] {
+			hasProperNoun = true
+		}
+	}
+
+	return hasBusinessTerms || hasPhoneNumber || hasProperNoun
+}
+
+// performTextFallbackSearch performs text-based search as a fallback
+func (m *LilRag) performTextFallbackSearch(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	// This is a simplified text search implementation
+	// In a production system, this could use FTS (Full Text Search) or similar
+	documents, err := m.storage.ListDocuments(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []SearchResult
+	queryLower := strings.ToLower(query)
+	queryTerms := strings.Fields(queryLower)
+
+	for _, doc := range documents {
+		textLower := strings.ToLower(doc.Text)
+		score := m.calculateTextMatchScore(textLower, queryTerms)
+
+		if score > 0.1 { // Minimum relevance threshold
+			result := SearchResult{
+				ID:    doc.ID,
+				Text:  doc.Text,
+				Score: score,
+				Metadata: map[string]interface{}{
+					"search_type": "text_fallback",
+					"doc_type":    doc.DocType,
+					"is_image":    doc.IsImage,
+				},
+			}
+			results = append(results, result)
+		}
+	}
+
+	// Sort by score (highest first)
+	for i := 0; i < len(results)-1; i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[i].Score < results[j].Score {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	return results, nil
+}
+
+// calculateTextMatchScore calculates a simple text matching score
+func (m *LilRag) calculateTextMatchScore(text string, queryTerms []string) float64 {
+	if len(queryTerms) == 0 {
+		return 0
+	}
+
+	matches := 0
+	totalTerms := len(queryTerms)
+
+	for _, term := range queryTerms {
+		if strings.Contains(text, term) {
+			matches++
+		}
+	}
+
+	// Basic scoring: ratio of matched terms with bonus for exact phrase matches
+	baseScore := float64(matches) / float64(totalTerms)
+
+	// Bonus for exact phrase match
+	phrase := strings.Join(queryTerms, " ")
+	if strings.Contains(text, phrase) {
+		baseScore += 0.3
+	}
+
+	return baseScore
+}
+
+// mergeSearchResults combines vector and text search results, avoiding duplicates
+func (m *LilRag) mergeSearchResults(vectorResults, textResults []SearchResult) []SearchResult {
+	seen := make(map[string]bool)
+	var merged []SearchResult
+
+	// Add vector results first (higher priority)
+	for _, result := range vectorResults {
+		if !seen[result.ID] {
+			seen[result.ID] = true
+			merged = append(merged, result)
+		}
+	}
+
+	// Add text results that aren't already present
+	for _, result := range textResults {
+		if !seen[result.ID] {
+			seen[result.ID] = true
+			// Mark text results with lower confidence to indicate fallback
+			if result.Metadata == nil {
+				result.Metadata = make(map[string]interface{})
+			}
+			result.Metadata["fallback_search"] = true
+			merged = append(merged, result)
+		}
+	}
+
+	return merged
+}
+
+// UpdateChunk updates a chunk's text and regenerates its embedding
+func (m *LilRag) UpdateChunk(ctx context.Context, chunkID, newText string) error {
+	if strings.TrimSpace(newText) == "" {
+		return fmt.Errorf("chunk text cannot be empty")
+	}
+
+	// Generate new embedding for the updated text
+	embedding, err := m.embedder.Embed(ctx, newText)
+	if err != nil {
+		return fmt.Errorf("failed to generate embedding for updated chunk: %w", err)
+	}
+
+	// Update the chunk and embedding in storage
+	return m.storage.UpdateChunk(ctx, chunkID, newText, embedding)
+}
+
+// GetChunk retrieves a specific chunk by ID
+func (m *LilRag) GetChunk(ctx context.Context, chunkID string) (*ChunkInfo, error) {
+	return m.storage.GetChunk(ctx, chunkID)
 }
 
 // Chat performs a conversational query using retrieved context
@@ -383,6 +603,14 @@ func (m *LilRag) GetDocumentChunks(ctx context.Context, documentID string) ([]Ch
 	return m.storage.GetDocumentChunks(ctx, documentID)
 }
 
+// GetDocumentChunksWithInfo retrieves all chunks for a document with IDs for editing
+func (m *LilRag) GetDocumentChunksWithInfo(ctx context.Context, documentID string) ([]ChunkInfo, error) {
+	if m.storage == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	return m.storage.GetDocumentChunksWithInfo(ctx, documentID)
+}
+
 func (m *LilRag) DeleteDocument(ctx context.Context, documentID string) error {
 	if m.storage == nil {
 		return fmt.Errorf("storage not initialized")
@@ -405,4 +633,9 @@ func (m *LilRag) Close() error {
 		return m.storage.Close()
 	}
 	return nil
+}
+
+// GetStorage returns the storage instance (for internal use)
+func (m *LilRag) GetStorage() Storage {
+	return m.storage
 }

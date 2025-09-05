@@ -45,7 +45,7 @@ func TestNew(t *testing.T) {
 	}
 
 	// Test versioned constructor
-	versionedHandler := NewWithVersion(ragInstance, "1.2.3")
+	versionedHandler := NewWithVersion(ragInstance, "1.2.3", "/tmp/data")
 	if versionedHandler.version != "1.2.3" {
 		t.Error("Expected version to be '1.2.3'")
 	}
@@ -493,8 +493,8 @@ func TestHandler_Static(t *testing.T) {
 				if !strings.Contains(body, "<!DOCTYPE html>") {
 					t.Error("Expected HTML document in response")
 				}
-				if !strings.Contains(body, "Simple RAG System") {
-					t.Error("Expected 'Simple RAG System' in HTML response")
+				if !strings.Contains(body, "Lil-RAG") {
+					t.Error("Expected 'Lil-RAG' in HTML response")
 				}
 			}
 		})
@@ -622,9 +622,9 @@ func TestIsPDFFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
-			result := isPDFFile(tt.filename)
+			result := lilrag.IsPDFFile(tt.filename)
 			if result != tt.expected {
-				t.Errorf("isPDFFile(%q) = %v, want %v", tt.filename, result, tt.expected)
+				t.Errorf("lilrag.IsPDFFile(%q) = %v, want %v", tt.filename, result, tt.expected)
 			}
 		})
 	}

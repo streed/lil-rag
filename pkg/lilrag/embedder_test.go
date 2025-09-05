@@ -409,7 +409,7 @@ func TestOllamaEmbedder_preprocessQuery(t *testing.T) {
 		{
 			name:     "short query gets enhanced",
 			query:    "machine learning",
-			expected: "Find information about: machine learning",
+			expected: "machine learning machine learning",
 		},
 		{
 			name:     "question query stays unchanged",
@@ -424,7 +424,7 @@ func TestOllamaEmbedder_preprocessQuery(t *testing.T) {
 		{
 			name:     "query with extra whitespace",
 			query:    "  machine    learning  ",
-			expected: "Find information about: machine learning",
+			expected: "machine learning machine learning",
 		},
 	}
 

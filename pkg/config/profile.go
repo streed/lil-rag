@@ -20,6 +20,8 @@ type OllamaConfig struct {
 	EmbeddingModel string `json:"embedding_model"`
 	VectorSize     int    `json:"vector_size"`
 	ChatModel      string `json:"chat_model"`
+	VisionModel    string `json:"vision_model"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
 }
 
 type ServerConfig struct {
@@ -46,6 +48,8 @@ func DefaultProfile() *ProfileConfig {
 			EmbeddingModel: "nomic-embed-text",
 			VectorSize:     768,
 			ChatModel:      "gemma3:4b",
+			VisionModel:    "llama3.2-vision",
+			TimeoutSeconds: 30,
 		},
 		StoragePath: filepath.Join(dataDir, "lilrag.db"),
 		DataDir:     dataDir,
@@ -151,8 +155,10 @@ func (p *ProfileConfig) ToLilRagConfig() *Config {
 			VectorSize: p.Ollama.VectorSize,
 		},
 		Ollama: Ollama{
-			URL:   p.Ollama.Endpoint,
-			Model: p.Ollama.EmbeddingModel,
+			URL:            p.Ollama.Endpoint,
+			Model:          p.Ollama.EmbeddingModel,
+			VisionModel:    p.Ollama.VisionModel,
+			TimeoutSeconds: p.Ollama.TimeoutSeconds,
 		},
 		Server: Server{
 			Host: p.Server.Host,

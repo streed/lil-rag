@@ -91,11 +91,49 @@ var (
 		Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
 	}, []string{})
 
-	// LLM token usage (estimated - would need Ollama integration for actual tokens)
+	// LLM token usage metrics - comprehensive tracking
 	LLMTokensUsed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "lilrag_llm_tokens_used_total",
 		Help: "Estimated total LLM tokens used (input + output)",
-	}, []string{"operation", "model"})
+	}, []string{"operation", "model", "direction"}) // direction: input/output
+
+	// Token usage by operation type
+	EmbeddingTokensUsed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "lilrag_embedding_tokens_total",
+		Help: "Total tokens sent for embedding generation",
+	}, []string{"model", "cache_hit"})
+
+	ChatTokensUsed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "lilrag_chat_tokens_total",
+		Help: "Total tokens used in chat operations",
+	}, []string{"model", "direction"}) // direction: input/output
+
+	QueryOptimizationTokensUsed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "lilrag_query_optimization_tokens_total",
+		Help: "Total tokens used in query optimization",
+	}, []string{"model", "direction"}) // direction: input/output
+
+	ImageOCRTokensUsed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "lilrag_image_ocr_tokens_total",
+		Help: "Total tokens used in image OCR operations",
+	}, []string{"model", "direction"}) // direction: input/output
+
+	DocumentTokensProcessed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "lilrag_document_tokens_processed_total",
+		Help: "Total tokens processed during document indexing",
+	}, []string{"document_type"})
+
+	// Token efficiency metrics
+	TokenCacheHitRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "lilrag_token_cache_hit_rate",
+		Help: "Cache hit rate for token operations (0-1)",
+	}, []string{"operation_type"})
+
+	// Current token usage per session/model
+	ActiveTokenUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "lilrag_active_token_usage",
+		Help: "Current estimated token usage per model",
+	}, []string{"model", "operation_type"})
 
 	// Query optimization metrics
 	QueryOptimizationDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -182,7 +220,79 @@ func UpdateDocumentCount(count int) {
 func EstimateAndRecordTokens(operation, model, text string) {
 	// Rough estimation: ~4 characters per token for English text
 	estimatedTokens := len(text) / 4
-	LLMTokensUsed.WithLabelValues(operation, model).Add(float64(estimatedTokens))
+	LLMTokensUsed.WithLabelValues(operation, model, "unknown").Add(float64(estimatedTokens))
+}
+
+// Enhanced token tracking functions
+func RecordEmbeddingTokens(model, text string, cacheHit bool) int {
+	estimatedTokens := estimateTokens(text)
+	cacheHitStr := "false"
+	if cacheHit {
+		cacheHitStr = "true"
+	}
+	EmbeddingTokensUsed.WithLabelValues(model, cacheHitStr).Add(float64(estimatedTokens))
+	LLMTokensUsed.WithLabelValues("embedding", model, "input").Add(float64(estimatedTokens))
+	return estimatedTokens
+}
+
+func RecordChatInputTokens(model, text string) int {
+	estimatedTokens := estimateTokens(text)
+	ChatTokensUsed.WithLabelValues(model, "input").Add(float64(estimatedTokens))
+	LLMTokensUsed.WithLabelValues("chat", model, "input").Add(float64(estimatedTokens))
+	return estimatedTokens
+}
+
+func RecordChatOutputTokens(model, text string) int {
+	estimatedTokens := estimateTokens(text)
+	ChatTokensUsed.WithLabelValues(model, "output").Add(float64(estimatedTokens))
+	LLMTokensUsed.WithLabelValues("chat", model, "output").Add(float64(estimatedTokens))
+	return estimatedTokens
+}
+
+func RecordQueryOptimizationTokens(model, inputQuery, outputQuery string) (inputTokens, outputTokens int) {
+	inputTokens = estimateTokens(inputQuery)
+	outputTokens = estimateTokens(outputQuery)
+	QueryOptimizationTokensUsed.WithLabelValues(model, "input").Add(float64(inputTokens))
+	QueryOptimizationTokensUsed.WithLabelValues(model, "output").Add(float64(outputTokens))
+	LLMTokensUsed.WithLabelValues("query_optimization", model, "input").Add(float64(inputTokens))
+	LLMTokensUsed.WithLabelValues("query_optimization", model, "output").Add(float64(outputTokens))
+	return inputTokens, outputTokens
+}
+
+func RecordImageOCRTokens(model, prompt, extractedText string) (inputTokens, outputTokens int) {
+	inputTokens = estimateTokens(prompt)
+	outputTokens = estimateTokens(extractedText)
+	ImageOCRTokensUsed.WithLabelValues(model, "input").Add(float64(inputTokens))
+	ImageOCRTokensUsed.WithLabelValues(model, "output").Add(float64(outputTokens))
+	LLMTokensUsed.WithLabelValues("image_ocr", model, "input").Add(float64(inputTokens))
+	LLMTokensUsed.WithLabelValues("image_ocr", model, "output").Add(float64(outputTokens))
+	return inputTokens, outputTokens
+}
+
+func RecordDocumentTokens(documentType string, totalTokens int) {
+	DocumentTokensProcessed.WithLabelValues(documentType).Add(float64(totalTokens))
+}
+
+func UpdateTokenCacheHitRate(operationType string, hitRate float64) {
+	TokenCacheHitRate.WithLabelValues(operationType).Set(hitRate)
+}
+
+func UpdateActiveTokenUsage(model, operationType string, tokenCount int) {
+	ActiveTokenUsage.WithLabelValues(model, operationType).Set(float64(tokenCount))
+}
+
+// Helper function for consistent token estimation
+func estimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	// More sophisticated estimation:
+	// - ~4 characters per token for English
+	// - Account for punctuation and special characters
+	// - Add a small buffer for model-specific variations
+	baseTokens := len(text) / 4
+	// Add 10% buffer for tokenization variations
+	return int(float64(baseTokens) * 1.1)
 }
 
 func RecordQueryOptimization(duration time.Duration, success bool) {

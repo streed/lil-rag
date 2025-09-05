@@ -22,6 +22,11 @@ type OllamaChatClient struct {
 
 // NewOllamaChatClient creates a new Ollama chat client
 func NewOllamaChatClient(baseURL, model string) *OllamaChatClient {
+	return NewOllamaChatClientWithTimeout(baseURL, model, 120)
+}
+
+// NewOllamaChatClientWithTimeout creates a new Ollama chat client with configurable timeout
+func NewOllamaChatClientWithTimeout(baseURL, model string, timeoutSeconds int) *OllamaChatClient {
 	if baseURL == "" {
 		baseURL = DefaultOllamaURL
 	}
@@ -33,7 +38,7 @@ func NewOllamaChatClient(baseURL, model string) *OllamaChatClient {
 		baseURL: baseURL,
 		model:   model,
 		client: &http.Client{
-			Timeout: 120 * time.Second, // Longer timeout for chat generation
+			Timeout: time.Duration(timeoutSeconds) * time.Second,
 		},
 	}
 }
@@ -72,6 +77,10 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 	searchResults []SearchResult) (string, error) {
 	// Create system prompt with search results context
 	systemPrompt := c.createSystemPrompt(searchResults)
+
+	// Record input tokens
+	metrics.RecordChatInputTokens(c.model, systemPrompt)
+	metrics.RecordChatInputTokens(c.model, userMessage)
 
 	// Build chat messages
 	messages := []ChatMessage{
@@ -132,6 +141,9 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
 		return "", fmt.Errorf("failed to decode chat response: %w", err)
 	}
+
+	// Record output tokens
+	metrics.RecordChatOutputTokens(c.model, chatResp.Message.Content)
 
 	return chatResp.Message.Content, nil
 }
@@ -250,6 +262,9 @@ Examples:
 
 Respond with ONLY the optimized query, no explanations or additional text.`
 
+	// Record input tokens for query optimization system prompt
+	metrics.RecordChatInputTokens(c.model, systemPrompt)
+
 	// Build chat messages for query optimization
 	messages := []ChatMessage{
 		{
@@ -326,6 +341,9 @@ Respond with ONLY the optimized query, no explanations or additional text.`
 		metrics.RecordQueryOptimization(optimizationDuration, false)
 		return userQuery, nil // Fall back to original query if optimization failed
 	}
+
+	// Record token usage for query optimization
+	metrics.RecordQueryOptimizationTokens(c.model, userQuery, optimizedQuery)
 
 	optimizationDuration := time.Since(optimizationStart)
 	metrics.RecordQueryOptimization(optimizationDuration, true)

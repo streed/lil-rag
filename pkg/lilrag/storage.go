@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -428,7 +429,7 @@ func (s *SQLiteStorage) hasMultipleChunks(ctx context.Context, documentID string
 
 func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, original_text_compressed, chunk_count, updated_at 
+		SELECT id, original_text_compressed, chunk_count, source_path, doc_type, created_at, updated_at 
 		FROM documents 
 		ORDER BY updated_at DESC
 	`)
@@ -441,12 +442,20 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 	for rows.Next() {
 		var doc DocumentInfo
 		var compressedText []byte
+		var sourcePath sql.NullString
+		var docType sql.NullString
 		var updatedAtStr string
+		var createdAtStr string
 
-		err := rows.Scan(&doc.ID, &compressedText, &doc.ChunkCount, &updatedAtStr)
+		err := rows.Scan(&doc.ID, &compressedText, &doc.ChunkCount, &sourcePath, &docType, &createdAtStr, &updatedAtStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan document row: %w", err)
 		}
+
+		// Set metadata fields
+		doc.SourcePath = sourcePath.String
+		doc.DocType = docType.String
+		doc.IsImage = docType.String == "image"
 
 		// Decompress the text
 		doc.Text, err = DecompressText(compressedText)
@@ -454,13 +463,22 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 			return nil, fmt.Errorf("failed to decompress document text for %s: %w", doc.ID, err)
 		}
 
-		// Parse the timestamp
+		// Parse the timestamps
+		doc.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			// Try alternative format if RFC3339 fails
+			doc.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse created_at timestamp for %s: %w", doc.ID, err)
+			}
+		}
+
 		doc.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
 		if err != nil {
 			// Try alternative format if RFC3339 fails
 			doc.UpdatedAt, err = time.Parse("2006-01-02 15:04:05", updatedAtStr)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse timestamp for %s: %w", doc.ID, err)
+				return nil, fmt.Errorf("failed to parse updated_at timestamp for %s: %w", doc.ID, err)
 			}
 		}
 
@@ -500,6 +518,7 @@ func (s *SQLiteStorage) GetDocumentByID(ctx context.Context, documentID string) 
 
 	doc.SourcePath = sourcePath.String
 	doc.DocType = docType.String
+	doc.IsImage = docType.String == "image"
 
 	return &doc, nil
 }
@@ -628,9 +647,175 @@ func (s *SQLiteStorage) DeleteDocument(ctx context.Context, documentID string) e
 	return nil
 }
 
+// UpdateChunk updates a specific chunk's text and embedding
+func (s *SQLiteStorage) UpdateChunk(ctx context.Context, chunkID, newText string, newEmbedding []float32) error {
+	if s.db == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+			log.Printf("Failed to rollback transaction: %v", rollbackErr)
+		}
+	}()
+
+	// Update chunk text and token count
+	tokenCount := len(strings.Fields(newText)) // Simple token estimation
+	_, err = tx.ExecContext(ctx, `
+		UPDATE chunks 
+		SET chunk_text = ?, token_count = ?
+		WHERE chunk_id = ?
+	`, newText, tokenCount, chunkID)
+	if err != nil {
+		return fmt.Errorf("failed to update chunk: %w", err)
+	}
+
+	// Update embedding
+	embeddingJSON, err := json.Marshal(newEmbedding)
+	if err != nil {
+		return fmt.Errorf("failed to marshal embedding: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE embeddings 
+		SET embedding = ?
+		WHERE chunk_id = ?
+	`, string(embeddingJSON), chunkID)
+	if err != nil {
+		return fmt.Errorf("failed to update embedding: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// GetChunk retrieves a specific chunk by ID
+func (s *SQLiteStorage) GetChunk(ctx context.Context, chunkID string) (*ChunkInfo, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+
+	var chunk ChunkInfo
+	row := s.db.QueryRowContext(ctx, `
+		SELECT chunk_id, document_id, chunk_text, chunk_index, start_pos, end_pos, token_count, chunk_type, page_number
+		FROM chunks 
+		WHERE chunk_id = ?
+	`, chunkID)
+
+	var pageNumber sql.NullInt64
+	var chunkText sql.NullString
+	err := row.Scan(&chunk.ID, &chunk.DocumentID, &chunkText, &chunk.Index,
+		&chunk.StartPos, &chunk.EndPos, &chunk.TokenCount, &chunk.ChunkType, &pageNumber)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("chunk not found: %s", chunkID)
+		}
+		return nil, fmt.Errorf("failed to get chunk: %w", err)
+	}
+
+	// Handle compressed text (chunk_text might be null if using compressed storage)
+	if chunkText.Valid {
+		chunk.Text = chunkText.String
+	} else {
+		// Try to get from compressed field if regular text is null
+		var compressedText []byte
+		row = s.db.QueryRowContext(ctx, `
+			SELECT chunk_text_compressed FROM chunks WHERE chunk_id = ?
+		`, chunkID)
+		if err := row.Scan(&compressedText); err == nil && len(compressedText) > 0 {
+			if decompressed, err := DecompressText(compressedText); err == nil {
+				chunk.Text = decompressed
+			}
+		}
+	}
+
+	if pageNumber.Valid {
+		pageNum := int(pageNumber.Int64)
+		chunk.PageNumber = &pageNum
+	}
+
+	return &chunk, nil
+}
+
+// GetDocumentChunksWithInfo retrieves all chunks for a document with full metadata including IDs
+func (s *SQLiteStorage) GetDocumentChunksWithInfo(ctx context.Context, documentID string) ([]ChunkInfo, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT chunk_id, document_id, chunk_text, chunk_text_compressed, chunk_index, 
+		       start_pos, end_pos, token_count, page_number, chunk_type
+		FROM chunks 
+		WHERE document_id = ?
+		ORDER BY chunk_index
+	`, documentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query chunks: %w", err)
+	}
+	defer rows.Close()
+
+	var chunks []ChunkInfo
+	for rows.Next() {
+		var chunk ChunkInfo
+		var compressedText []byte
+		var chunkText sql.NullString
+		var pageNumber sql.NullInt64
+
+		err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunkText, &compressedText, &chunk.Index,
+			&chunk.StartPos, &chunk.EndPos, &chunk.TokenCount, &pageNumber, &chunk.ChunkType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan chunk row: %w", err)
+		}
+
+		// Handle text (prefer uncompressed if available)
+		if chunkText.Valid && chunkText.String != "" {
+			chunk.Text = chunkText.String
+		} else if len(compressedText) > 0 {
+			decompressed, err := DecompressText(compressedText)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decompress chunk text: %w", err)
+			}
+			chunk.Text = decompressed
+		}
+
+		if pageNumber.Valid {
+			pageNum := int(pageNumber.Int64)
+			chunk.PageNumber = &pageNum
+		}
+
+		chunks = append(chunks, chunk)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during chunk iteration: %w", err)
+	}
+
+	return chunks, nil
+}
+
 func (s *SQLiteStorage) Close() error {
 	if s.db != nil {
 		return s.db.Close()
 	}
+	return nil
+}
+
+// UpdateDocumentSourcePath updates the source path for a document
+func (s *SQLiteStorage) UpdateDocumentSourcePath(ctx context.Context, documentID, sourcePath string) error {
+	if s.db == nil {
+		return fmt.Errorf("storage not initialized")
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE documents SET source_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		sourcePath, documentID)
+	if err != nil {
+		return fmt.Errorf("failed to update document source path: %w", err)
+	}
+
 	return nil
 }
