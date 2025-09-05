@@ -28,16 +28,16 @@ type LilRag struct {
 }
 
 type Config struct {
-	DatabasePath     string
-	DataDir          string
-	OllamaURL        string
-	Model            string
-	ChatModel        string
-	VisionModel      string
-	TimeoutSeconds   int
-	VectorSize       int
-	MaxTokens        int
-	Overlap          int
+	DatabasePath   string
+	DataDir        string
+	OllamaURL      string
+	Model          string
+	ChatModel      string
+	VisionModel    string
+	TimeoutSeconds int
+	VectorSize     int
+	MaxTokens      int
+	Overlap        int
 }
 
 type Storage interface {
@@ -150,7 +150,12 @@ func (m *LilRag) Initialize() error {
 	m.pdfParser = NewPDFParser()
 
 	// Initialize document handler with all supported parsers including vision
-	m.documentHandler = NewDocumentHandlerWithVisionAndTimeout(m.chunker, m.config.OllamaURL, m.config.VisionModel, m.config.TimeoutSeconds)
+	m.documentHandler = NewDocumentHandlerWithVisionAndTimeout(
+		m.chunker,
+		m.config.OllamaURL,
+		m.config.VisionModel,
+		m.config.TimeoutSeconds,
+	)
 
 	// Initialize chat client
 	m.chatClient = NewOllamaChatClientWithTimeout(m.config.OllamaURL, m.config.ChatModel, m.config.TimeoutSeconds*4)
@@ -386,27 +391,30 @@ func (m *LilRag) needsTextFallback(query string) bool {
 	hasBusinessTerms := false
 	hasPhoneNumber := false
 	hasProperNoun := false
-	
+
+	// Compile phone regex once for performance
+	phoneRegex := regexp.MustCompile(`\d{3}[-.]?\d{3}[-.]?\d{4}`)
+
 	for _, word := range words {
-		originalWord := word  // Keep original for proper noun check
+		originalWord := word // Keep original for proper noun check
 		word = strings.ToLower(word)
-		if word == "painting" || word == "services" || word == "cleaning" || 
-		   word == "construction" || word == "repair" || word == "company" {
+		if word == "painting" || word == "services" || word == "cleaning" ||
+			word == "construction" || word == "repair" || word == "company" {
 			hasBusinessTerms = true
 		}
-		
+
 		// Check for phone number patterns
-		if matched, _ := regexp.MatchString(`\d{3}[-.]?\d{3}[-.]?\d{4}`, word); matched {
+		if phoneRegex.MatchString(word) {
 			hasPhoneNumber = true
 		}
-		
+
 		// Check for proper nouns (capitalized words that might be names or companies)
-		if len(originalWord) > 1 && strings.ToUpper(originalWord[:1]) == originalWord[:1] && 
-		   strings.ToLower(originalWord[1:]) == originalWord[1:] {
+		if len(originalWord) > 1 && strings.ToUpper(originalWord[:1]) == originalWord[:1] &&
+			strings.ToLower(originalWord[1:]) == originalWord[1:] {
 			hasProperNoun = true
 		}
 	}
-	
+
 	return hasBusinessTerms || hasPhoneNumber || hasProperNoun
 }
 
@@ -418,15 +426,15 @@ func (m *LilRag) performTextFallbackSearch(ctx context.Context, query string, li
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var results []SearchResult
 	queryLower := strings.ToLower(query)
 	queryTerms := strings.Fields(queryLower)
-	
+
 	for _, doc := range documents {
 		textLower := strings.ToLower(doc.Text)
 		score := m.calculateTextMatchScore(textLower, queryTerms)
-		
+
 		if score > 0.1 { // Minimum relevance threshold
 			result := SearchResult{
 				ID:    doc.ID,
@@ -441,7 +449,7 @@ func (m *LilRag) performTextFallbackSearch(ctx context.Context, query string, li
 			results = append(results, result)
 		}
 	}
-	
+
 	// Sort by score (highest first)
 	for i := 0; i < len(results)-1; i++ {
 		for j := i + 1; j < len(results); j++ {
@@ -450,11 +458,11 @@ func (m *LilRag) performTextFallbackSearch(ctx context.Context, query string, li
 			}
 		}
 	}
-	
+
 	if len(results) > limit {
 		results = results[:limit]
 	}
-	
+
 	return results, nil
 }
 
@@ -463,25 +471,25 @@ func (m *LilRag) calculateTextMatchScore(text string, queryTerms []string) float
 	if len(queryTerms) == 0 {
 		return 0
 	}
-	
+
 	matches := 0
 	totalTerms := len(queryTerms)
-	
+
 	for _, term := range queryTerms {
 		if strings.Contains(text, term) {
 			matches++
 		}
 	}
-	
+
 	// Basic scoring: ratio of matched terms with bonus for exact phrase matches
 	baseScore := float64(matches) / float64(totalTerms)
-	
+
 	// Bonus for exact phrase match
 	phrase := strings.Join(queryTerms, " ")
 	if strings.Contains(text, phrase) {
 		baseScore += 0.3
 	}
-	
+
 	return baseScore
 }
 
@@ -489,7 +497,7 @@ func (m *LilRag) calculateTextMatchScore(text string, queryTerms []string) float
 func (m *LilRag) mergeSearchResults(vectorResults, textResults []SearchResult) []SearchResult {
 	seen := make(map[string]bool)
 	var merged []SearchResult
-	
+
 	// Add vector results first (higher priority)
 	for _, result := range vectorResults {
 		if !seen[result.ID] {
@@ -497,7 +505,7 @@ func (m *LilRag) mergeSearchResults(vectorResults, textResults []SearchResult) [
 			merged = append(merged, result)
 		}
 	}
-	
+
 	// Add text results that aren't already present
 	for _, result := range textResults {
 		if !seen[result.ID] {
@@ -510,7 +518,7 @@ func (m *LilRag) mergeSearchResults(vectorResults, textResults []SearchResult) [
 			merged = append(merged, result)
 		}
 	}
-	
+
 	return merged
 }
 

@@ -16,13 +16,13 @@ import (
 )
 
 type OllamaEmbedder struct {
-	baseURL      string
-	model        string
-	client       *http.Client
-	cache        map[string][]float32
-	cacheMutex   sync.RWMutex
-	cacheMaxSize int
-	preprocessor *TextPreprocessor
+	baseURL       string
+	model         string
+	client        *http.Client
+	cache         map[string][]float32
+	cacheMutex    sync.RWMutex
+	cacheMaxSize  int
+	preprocessor  *TextPreprocessor
 	totalRequests int64
 	cacheHits     int64
 }
@@ -158,38 +158,38 @@ func (tp *TextPreprocessor) enhanceImageContent(text string) string {
 	hasMarkdownHeaders := strings.Contains(text, "###") || strings.Contains(text, "**")
 	hasStructuredData := strings.Contains(text, "+ ") || strings.Contains(text, "\t+")
 	hasBusinessInfo := strings.Contains(text, "Phone:") || strings.Contains(text, "Email:")
-	
+
 	if hasMarkdownHeaders || hasStructuredData || hasBusinessInfo {
 		// Clean up markdown formatting for better semantic matching
 		enhanced := text
-		
+
 		// Remove markdown formatting but preserve content
-		enhanced = regexp.MustCompile(`\*\*([^*]+)\*\*`).ReplaceAllString(enhanced, "$1")  // **bold** -> bold
-		enhanced = regexp.MustCompile(`\*([^*]+)\*`).ReplaceAllString(enhanced, "$1")      // *italic* -> italic
-		enhanced = regexp.MustCompile(`#{1,6}\s*`).ReplaceAllString(enhanced, "")           // ### headers -> content
-		enhanced = regexp.MustCompile(`\t\+\s*`).ReplaceAllString(enhanced, " ")           // \t+ -> space
-		enhanced = regexp.MustCompile(`^\s*[\+\-\*]\s*`).ReplaceAllStringFunc(enhanced, func(s string) string {
+		enhanced = regexp.MustCompile(`\*\*([^*]+)\*\*`).ReplaceAllString(enhanced, "$1") // **bold** -> bold
+		enhanced = regexp.MustCompile(`\*([^*]+)\*`).ReplaceAllString(enhanced, "$1")     // *italic* -> italic
+		enhanced = regexp.MustCompile(`#{1,6}\s*`).ReplaceAllString(enhanced, "")         // ### headers -> content
+		enhanced = regexp.MustCompile(`\t\+\s*`).ReplaceAllString(enhanced, " ")          // \t+ -> space
+		enhanced = regexp.MustCompile(`^\s*[\+\-\*]\s*`).ReplaceAllStringFunc(enhanced, func(_ string) string {
 			return " " // Convert bullet points to spaces
 		})
-		
+
 		// Extract key searchable terms and add them at the beginning for better retrieval
 		var keyTerms []string
-		
+
 		// Extract business/contact info
-		phoneRegex := regexp.MustCompile(`(?i)phone:\s*([^\n\s]+(?:\s+[^\n\s]+)*)`)
+		phoneRegex := regexp.MustCompile(`(?i)phone:\s*(\S+(?:\s+\S+)*)`)
 		if matches := phoneRegex.FindAllStringSubmatch(text, -1); matches != nil {
 			for _, match := range matches {
 				keyTerms = append(keyTerms, "phone "+match[1])
 			}
 		}
-		
-		emailRegex := regexp.MustCompile(`(?i)email:\s*([^\n\s]+(?:\s+[^\n\s]+)*)`)
+
+		emailRegex := regexp.MustCompile(`(?i)email:\s*(\S+(?:\s+\S+)*)`)
 		if matches := emailRegex.FindAllStringSubmatch(text, -1); matches != nil {
 			for _, match := range matches {
 				keyTerms = append(keyTerms, "email "+match[1])
 			}
 		}
-		
+
 		// Extract company/service names (look for capitalized words before phone/email)
 		companyRegex := regexp.MustCompile(`\*\*([^*]+)\*\*(?:\s|\n)*(?:[^\n]*(?:Phone|Email|Services):)`)
 		if matches := companyRegex.FindAllStringSubmatch(text, -1); matches != nil {
@@ -197,7 +197,7 @@ func (tp *TextPreprocessor) enhanceImageContent(text string) string {
 				keyTerms = append(keyTerms, match[1])
 			}
 		}
-		
+
 		// Extract services mentioned
 		servicesRegex := regexp.MustCompile(`(?i)services?:\s*([^\n]+)`)
 		if matches := servicesRegex.FindAllStringSubmatch(text, -1); matches != nil {
@@ -212,15 +212,15 @@ func (tp *TextPreprocessor) enhanceImageContent(text string) string {
 				}
 			}
 		}
-		
+
 		// Prepend key terms to the enhanced text for better semantic matching
 		if len(keyTerms) > 0 {
 			enhanced = strings.Join(keyTerms, " ") + " " + enhanced
 		}
-		
+
 		return enhanced
 	}
-	
+
 	return text
 }
 
@@ -369,15 +369,15 @@ func (o *OllamaEmbedder) preprocessQuery(query string) string {
 		// For simple queries that might match business cards or structured content,
 		// create multiple search variants to improve matching
 		var variants []string
-		
-		// Add the original query
-		variants = append(variants, query)
-		
+
+		// Add the original query twice for basic enhancement
+		variants = append(variants, query, query)
+
 		// Check if query looks like a business name, phone number, or person name
 		isBusinessQuery := regexp.MustCompile(`(?i)(painting|services?|cleaning|construction|repair)`).MatchString(query)
 		isPhoneQuery := regexp.MustCompile(`\d{3}[-.]?\d{3}[-.]?\d{4}`).MatchString(query)
 		isNameQuery := regexp.MustCompile(`^[A-Z][a-z]+\s+[A-Z][a-z]+$`).MatchString(query)
-		
+
 		if isBusinessQuery {
 			variants = append(variants, "business company service provider "+query)
 		}
@@ -387,10 +387,15 @@ func (o *OllamaEmbedder) preprocessQuery(query string) string {
 		if isNameQuery {
 			variants = append(variants, "person owner operator name "+query)
 		}
-		
+
+		// For simple queries, just return the doubled query to avoid too much noise
+		if !isBusinessQuery && !isPhoneQuery && !isNameQuery {
+			return query + " " + query
+		}
+
 		// Combine variants for better semantic matching
 		enhancedQuery := strings.Join(variants, " ")
-		
+
 		// Keep it concise but semantically rich
 		return enhancedQuery
 	}

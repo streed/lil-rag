@@ -57,7 +57,11 @@ func NewDocumentHandlerWithVision(chunker *TextChunker, ollamaURL, visionModel s
 }
 
 // NewDocumentHandlerWithVisionAndTimeout creates a document handler with custom vision model and timeout settings
-func NewDocumentHandlerWithVisionAndTimeout(chunker *TextChunker, ollamaURL, visionModel string, timeoutSeconds int) *DocumentHandler {
+func NewDocumentHandlerWithVisionAndTimeout(
+	chunker *TextChunker,
+	ollamaURL, visionModel string,
+	timeoutSeconds int,
+) *DocumentHandler {
 	dh := &DocumentHandler{
 		parsers:        make(map[DocumentType]DocumentParser),
 		chunker:        chunker,
@@ -90,7 +94,12 @@ func (dh *DocumentHandler) registerDefaultParsers() {
 	dh.RegisterParser(DocumentTypeCSV, NewCSVParser())
 
 	// Image parser with OCR capabilities
-	dh.RegisterParser(DocumentTypeImage, NewImageParserWithTimeout(dh.ollamaURL, dh.visionModel, dh.chunker, dh.timeoutSeconds*10))
+	dh.RegisterParser(DocumentTypeImage, NewImageParserWithTimeout(
+		dh.ollamaURL,
+		dh.visionModel,
+		dh.chunker,
+		dh.timeoutSeconds*10,
+	))
 
 	// Future parsers will be added here
 	// dh.RegisterParser(DocumentTypeODT, NewODTParser())
