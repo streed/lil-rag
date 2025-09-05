@@ -24,6 +24,7 @@ func main() {
 		OllamaURL:    profileConfig.Ollama.Endpoint,
 		Model:        profileConfig.Ollama.EmbeddingModel,
 		VectorSize:   profileConfig.Ollama.VectorSize,
+		ImageMaxSize: profileConfig.Ollama.ImageMaxSize,
 	}
 
 	rag, err := lilrag.New(ragConfig)

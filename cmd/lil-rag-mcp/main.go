@@ -98,6 +98,7 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 			VectorSize:   getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),
 			MaxTokens:    getEnvIntOrDefault("LILRAG_MAX_TOKENS", 200),
 			Overlap:      getEnvIntOrDefault("LILRAG_OVERLAP", 50),
+			ImageMaxSize: getEnvIntOrDefault("LILRAG_IMAGE_MAX_SIZE", 1120),
 		}
 	} else {
 		// Convert profile config to RAG config
@@ -110,6 +111,7 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 			VectorSize:   profileConfig.Ollama.VectorSize,
 			MaxTokens:    profileConfig.Chunking.MaxTokens,
 			Overlap:      profileConfig.Chunking.Overlap,
+			ImageMaxSize: profileConfig.Ollama.ImageMaxSize,
 		}
 	}
 

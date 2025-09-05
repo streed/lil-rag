@@ -44,6 +44,7 @@ type DocumentHandler struct {
 	ollamaURL      string
 	visionModel    string
 	timeoutSeconds int
+	imageMaxSize   int
 }
 
 // NewDocumentHandler creates a new document handler with all supported parsers
@@ -53,14 +54,14 @@ func NewDocumentHandler(chunker *TextChunker) *DocumentHandler {
 
 // NewDocumentHandlerWithVision creates a document handler with custom vision model settings
 func NewDocumentHandlerWithVision(chunker *TextChunker, ollamaURL, visionModel string) *DocumentHandler {
-	return NewDocumentHandlerWithVisionAndTimeout(chunker, ollamaURL, visionModel, 300)
+	return NewDocumentHandlerWithVisionAndTimeout(chunker, ollamaURL, visionModel, 300, 1120)
 }
 
 // NewDocumentHandlerWithVisionAndTimeout creates a document handler with custom vision model and timeout settings
 func NewDocumentHandlerWithVisionAndTimeout(
 	chunker *TextChunker,
 	ollamaURL, visionModel string,
-	timeoutSeconds int,
+	timeoutSeconds, imageMaxSize int,
 ) *DocumentHandler {
 	dh := &DocumentHandler{
 		parsers:        make(map[DocumentType]DocumentParser),
@@ -68,6 +69,7 @@ func NewDocumentHandlerWithVisionAndTimeout(
 		ollamaURL:      ollamaURL,
 		visionModel:    visionModel,
 		timeoutSeconds: timeoutSeconds,
+		imageMaxSize:   imageMaxSize,
 	}
 
 	// Register default parsers
@@ -99,6 +101,7 @@ func (dh *DocumentHandler) registerDefaultParsers() {
 		dh.visionModel,
 		dh.chunker,
 		dh.timeoutSeconds*10,
+		dh.imageMaxSize,
 	))
 
 	// Future parsers will be added here
