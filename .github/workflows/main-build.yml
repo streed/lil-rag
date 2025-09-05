@@ -129,6 +129,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.cc }}
+        shell: bash
         run: |
           EXT="${{ matrix.extension }}"
           SUFFIX="${{ matrix.suffix }}"
