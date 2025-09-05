@@ -76,14 +76,16 @@ func run() error {
 	}
 
 	lilragConfig := &lilrag.Config{
-		DatabasePath: profileConfig.StoragePath,
-		DataDir:      profileConfig.DataDir,
-		OllamaURL:    profileConfig.Ollama.Endpoint,
-		Model:        profileConfig.Ollama.EmbeddingModel,
-		ChatModel:    profileConfig.Ollama.ChatModel,
-		VectorSize:   profileConfig.Ollama.VectorSize,
-		MaxTokens:    profileConfig.Chunking.MaxTokens,
-		Overlap:      profileConfig.Chunking.Overlap,
+		DatabasePath:   profileConfig.StoragePath,
+		DataDir:        profileConfig.DataDir,
+		OllamaURL:      profileConfig.Ollama.Endpoint,
+		Model:          profileConfig.Ollama.EmbeddingModel,
+		ChatModel:      profileConfig.Ollama.ChatModel,
+		VisionModel:    profileConfig.Ollama.VisionModel,
+		TimeoutSeconds: profileConfig.Ollama.TimeoutSeconds,
+		VectorSize:     profileConfig.Ollama.VectorSize,
+		MaxTokens:      profileConfig.Chunking.MaxTokens,
+		Overlap:        profileConfig.Chunking.Overlap,
 	}
 
 	rag, err := lilrag.New(lilragConfig)

@@ -38,7 +38,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, r *http.Request) {
 			PageName:    "chat",
 			PageContent: "chat.html",
 		}
-		
+
 		w.Header().Set("Content-Type", "text/html")
 		if err := h.renderer.RenderPage(w, "base.html", data); err != nil {
 			log.Printf("Template rendering error: %v", err)
@@ -46,7 +46,7 @@ func (h *Handler) serveChatInterface(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	
+
 	// Fallback to original HTML
 	h.fallbackChatPage(w, r)
 }
@@ -875,9 +875,7 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metrics.RecordChatRequest(chatDuration, true, len(searchResults), len(response))
-	// Estimate tokens for chat input and output
-	metrics.EstimateAndRecordTokens("chat_input", "unknown", req.Message)
-	metrics.EstimateAndRecordTokens("chat_output", "unknown", response)
+	// Token tracking is now handled within the chat client itself
 
 	log.Printf("Chat completed successfully - found %d sources, response length: %d", len(searchResults), len(response))
 	w.Header().Set("Content-Type", "application/json")

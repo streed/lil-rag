@@ -24,7 +24,7 @@ func (h *Handler) Static() http.HandlerFunc {
 				PageName:    "home",
 				PageContent: "home.html",
 			}
-			
+
 			w.Header().Set("Content-Type", "text/html")
 			if err := h.renderer.RenderPage(w, "base.html", data); err != nil {
 				log.Printf("Template rendering error: %v", err)
@@ -32,14 +32,14 @@ func (h *Handler) Static() http.HandlerFunc {
 			}
 			return
 		}
-		
+
 		// Fallback to original HTML
 		h.fallbackHomePage(w, r)
 	}
 }
 
 // fallbackHomePage serves the original home page HTML as fallback
-func (h *Handler) fallbackHomePage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) fallbackHomePage(w http.ResponseWriter, _ *http.Request) {
 	html := `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -81,7 +81,7 @@ func (h *Handler) DocumentsList() http.HandlerFunc {
 				PageName:    "documents",
 				PageContent: "documents.html",
 			}
-			
+
 			w.Header().Set("Content-Type", "text/html")
 			if err := h.renderer.RenderPage(w, "base.html", data); err != nil {
 				log.Printf("Template rendering error: %v", err)
@@ -89,14 +89,14 @@ func (h *Handler) DocumentsList() http.HandlerFunc {
 			}
 			return
 		}
-		
+
 		// Fallback to original HTML
 		h.fallbackDocumentsPage(w, r)
 	}
 }
 
-// fallbackDocumentsPage serves the original documents page HTML as fallback  
-func (h *Handler) fallbackDocumentsPage(w http.ResponseWriter, r *http.Request) {
+// fallbackDocumentsPage serves the original documents page HTML as fallback
+func (h *Handler) fallbackDocumentsPage(w http.ResponseWriter, _ *http.Request) {
 	html := `<!DOCTYPE html>
 <html>
 <head>

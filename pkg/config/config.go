@@ -22,8 +22,10 @@ type Database struct {
 }
 
 type Ollama struct {
-	URL   string `json:"url" yaml:"url"`
-	Model string `json:"model" yaml:"model"`
+	URL            string `json:"url" yaml:"url"`
+	Model          string `json:"model" yaml:"model"`
+	VisionModel    string `json:"vision_model" yaml:"vision_model"`
+	TimeoutSeconds int    `json:"timeout_seconds" yaml:"timeout_seconds"`
 }
 
 type Server struct {
@@ -43,8 +45,10 @@ func Default() *Config {
 			VectorSize: 768,
 		},
 		Ollama: Ollama{
-			URL:   "http://localhost:11434",
-			Model: "nomic-embed-text",
+			URL:            "http://localhost:11434",
+			Model:          "nomic-embed-text",
+			VisionModel:    "llama3.2-vision",
+			TimeoutSeconds: 30,
 		},
 		Server: Server{
 			Host: "localhost",

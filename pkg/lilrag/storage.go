@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -654,7 +655,11 @@ func (s *SQLiteStorage) UpdateChunk(ctx context.Context, chunkID, newText string
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+			log.Printf("Failed to rollback transaction: %v", rollbackErr)
+		}
+	}()
 
 	// Update chunk text and token count
 	tokenCount := len(strings.Fields(newText)) // Simple token estimation
@@ -700,7 +705,7 @@ func (s *SQLiteStorage) GetChunk(ctx context.Context, chunkID string) (*ChunkInf
 
 	var pageNumber sql.NullInt64
 	var chunkText sql.NullString
-	err := row.Scan(&chunk.ID, &chunk.DocumentID, &chunkText, &chunk.Index, 
+	err := row.Scan(&chunk.ID, &chunk.DocumentID, &chunkText, &chunk.Index,
 		&chunk.StartPos, &chunk.EndPos, &chunk.TokenCount, &chunk.ChunkType, &pageNumber)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -738,9 +743,10 @@ func (s *SQLiteStorage) GetDocumentChunksWithInfo(ctx context.Context, documentI
 	if s.db == nil {
 		return nil, fmt.Errorf("storage not initialized")
 	}
-	
+
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT chunk_id, document_id, chunk_text, chunk_text_compressed, chunk_index, start_pos, end_pos, token_count, page_number, chunk_type
+		SELECT chunk_id, document_id, chunk_text, chunk_text_compressed, chunk_index, 
+		       start_pos, end_pos, token_count, page_number, chunk_type
 		FROM chunks 
 		WHERE document_id = ?
 		ORDER BY chunk_index
@@ -757,7 +763,7 @@ func (s *SQLiteStorage) GetDocumentChunksWithInfo(ctx context.Context, documentI
 		var chunkText sql.NullString
 		var pageNumber sql.NullInt64
 
-		err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunkText, &compressedText, &chunk.Index, 
+		err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunkText, &compressedText, &chunk.Index,
 			&chunk.StartPos, &chunk.EndPos, &chunk.TokenCount, &pageNumber, &chunk.ChunkType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chunk row: %w", err)
@@ -802,7 +808,7 @@ func (s *SQLiteStorage) UpdateDocumentSourcePath(ctx context.Context, documentID
 		return fmt.Errorf("storage not initialized")
 	}
 
-	_, err := s.db.ExecContext(ctx, 
+	_, err := s.db.ExecContext(ctx,
 		"UPDATE documents SET source_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
 		sourcePath, documentID)
 	if err != nil {

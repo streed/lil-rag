@@ -74,12 +74,13 @@ func (h *Handler) Index() http.HandlerFunc {
 		}
 
 		metrics.RecordIndexingRequest(indexDuration, true, len(req.Text))
-		// Estimate tokens for LLM embedding generation
-		metrics.EstimateAndRecordTokens("embedding", "unknown", req.Text)
+		// Token tracking for embeddings is handled within the embedder itself
 
 		log.Printf("Successfully indexed document %s", req.ID)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "indexed", "id": req.ID})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "indexed", "id": req.ID}); err != nil {
+			log.Printf("Failed to encode response: %v", err)
+		}
 	}
 }
 
@@ -148,8 +149,7 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 	}
 
 	metrics.RecordSearchRequest(searchDuration, true, len(results))
-	// Estimate tokens for embedding search
-	metrics.EstimateAndRecordTokens("search", "unknown", query)
+	// Token tracking for search embeddings is handled within the embedder itself
 
 	log.Printf("Search completed - found %d results for query '%s'", len(results), query)
 	response := SearchResponse{Results: results}
@@ -189,7 +189,6 @@ func (h *Handler) UpdateSystemMetrics(ctx context.Context) {
 	// Get document count and update metrics
 	if documents, err := h.rag.ListDocuments(ctx); err == nil {
 		metrics.UpdateDocumentCount(len(documents))
-		log.Printf("Updated system metrics - document count: %d", len(documents))
 	} else {
 		log.Printf("Failed to update document count metric: %v", err)
 	}
@@ -280,13 +279,13 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	if h.dataDir != "" && lilrag.IsImageFile(tempFile.Name()) {
 		// Create images directory
 		imagesDir := filepath.Join(h.dataDir, "images")
-		if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		if err := os.MkdirAll(imagesDir, 0o755); err != nil {
 			log.Printf("Warning: Failed to create images directory: %v", err)
 		} else {
 			// Generate a unique filename
 			ext := filepath.Ext(header.Filename)
 			permanentPath = filepath.Join(imagesDir, id+ext)
-			
+
 			// Copy the temporary file to the permanent location
 			if err := copyFile(tempFile.Name(), permanentPath); err != nil {
 				log.Printf("Warning: Failed to preserve image file: %v", err)
@@ -300,12 +299,12 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	// Index the file using document handler
 	if err := h.rag.IndexFile(ctx, tempFile.Name(), id); err != nil {
 		log.Printf("Failed to index file %s: %v", header.Filename, err)
-		
+
 		// Check if this is a client error (bad input) vs server error
 		errorMessage := err.Error()
-		if strings.Contains(errorMessage, "no content found") || 
-		   strings.Contains(errorMessage, "unsupported file format") ||
-		   strings.Contains(errorMessage, "failed to parse") {
+		if strings.Contains(errorMessage, "no content found") ||
+			strings.Contains(errorMessage, "unsupported file format") ||
+			strings.Contains(errorMessage, "failed to parse") {
 			// Client error - bad file content or format
 			h.writeError(w, http.StatusBadRequest, "failed to index file", errorMessage)
 		} else {
@@ -324,10 +323,12 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Successfully indexed file %s as document %s", header.Filename, id)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status": "indexed",
 		"id":     id,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // updateDocumentSourcePath updates the source path for a document
@@ -380,7 +381,9 @@ func (h *Handler) serveDocumentText(w http.ResponseWriter, r *http.Request, docu
 		content, err := h.rag.ParseDocumentFile(docInfo.SourcePath)
 		if err == nil {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Write([]byte(content))
+			if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+				log.Printf("Failed to write response: %v", writeErr)
+			}
 			return
 		}
 		log.Printf("Failed to parse document file %s: %v", docInfo.SourcePath, err)

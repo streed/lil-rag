@@ -164,22 +164,22 @@ func (m *MockStorage) GetChunk(_ context.Context, chunkID string) (*ChunkInfo, e
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
 	}
-	
+
 	// Parse the chunk ID to get document ID and chunk index
 	// Format is typically: documentID_chunk_N
 	parts := strings.Split(chunkID, "_")
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("chunk not found")
 	}
-	
+
 	// Reconstruct document ID (everything except the last two parts)
 	documentID := strings.Join(parts[:len(parts)-2], "_")
-	
+
 	chunks, exists := m.chunks[documentID]
 	if !exists {
 		return nil, fmt.Errorf("chunk not found")
 	}
-	
+
 	// Find the chunk by generating ID and comparing
 	for _, chunk := range chunks {
 		generatedID := GetChunkID(documentID, chunk.Index)
@@ -197,7 +197,7 @@ func (m *MockStorage) GetChunk(_ context.Context, chunkID string) (*ChunkInfo, e
 			}, nil
 		}
 	}
-	
+
 	return nil, fmt.Errorf("chunk not found")
 }
 
@@ -205,12 +205,12 @@ func (m *MockStorage) GetDocumentChunksWithInfo(_ context.Context, documentID st
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
 	}
-	
+
 	chunks, exists := m.chunks[documentID]
 	if !exists {
 		return []ChunkInfo{}, nil
 	}
-	
+
 	var chunkInfos []ChunkInfo
 	for _, chunk := range chunks {
 		chunkInfo := ChunkInfo{
@@ -226,7 +226,7 @@ func (m *MockStorage) GetDocumentChunksWithInfo(_ context.Context, documentID st
 		}
 		chunkInfos = append(chunkInfos, chunkInfo)
 	}
-	
+
 	return chunkInfos, nil
 }
 
@@ -234,21 +234,21 @@ func (m *MockStorage) UpdateChunk(_ context.Context, chunkID, newText string, ne
 	if !m.initialized {
 		return fmt.Errorf("storage not initialized")
 	}
-	
+
 	// Parse the chunk ID to get document ID and chunk index
 	parts := strings.Split(chunkID, "_")
 	if len(parts) < 3 {
 		return fmt.Errorf("chunk not found")
 	}
-	
+
 	// Reconstruct document ID (everything except the last two parts)
 	documentID := strings.Join(parts[:len(parts)-2], "_")
-	
+
 	chunks, exists := m.chunks[documentID]
 	if !exists {
 		return fmt.Errorf("chunk not found")
 	}
-	
+
 	// Find and update the chunk
 	for i, chunk := range chunks {
 		generatedID := GetChunkID(documentID, chunk.Index)
@@ -261,7 +261,7 @@ func (m *MockStorage) UpdateChunk(_ context.Context, chunkID, newText string, ne
 			return nil
 		}
 	}
-	
+
 	return fmt.Errorf("chunk not found")
 }
 

@@ -308,7 +308,9 @@ func (h *Handler) UpdateChunk() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Failed to encode response: %v", err)
+		}
 	}
 }
 
@@ -344,7 +346,9 @@ func (h *Handler) GetChunk() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(chunk)
+		if err := json.NewEncoder(w).Encode(chunk); err != nil {
+			log.Printf("Failed to encode response: %v", err)
+		}
 	}
 }
 
@@ -358,8 +362,9 @@ func (h *Handler) serveDocumentContent(
 		return
 	}
 
-	// Use new template system if available
-	if h.renderer != nil {
+	// Use new template system if available - currently disabled for document view fallback
+	// TODO: Re-enable when document-view.html template is properly implemented
+	if false && h.renderer != nil {
 		// Create template data with document info in Data field
 		data := &theme.TemplateData{
 			Title:    fmt.Sprintf("Document: %s", docInfo.ID),
@@ -371,7 +376,7 @@ func (h *Handler) serveDocumentContent(
 				"HighlightChunk": highlightChunk,
 			},
 		}
-		
+
 		w.Header().Set("Content-Type", "text/html")
 		if err := h.renderer.RenderPage(w, "document-view.html", data); err != nil {
 			log.Printf("Template rendering error: %v", err)
@@ -385,7 +390,12 @@ func (h *Handler) serveDocumentContent(
 }
 
 // fallbackDocumentView serves the original document view HTML as fallback
-func (h *Handler) fallbackDocumentView(w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int) {
+func (h *Handler) fallbackDocumentView(
+	w http.ResponseWriter,
+	_ *http.Request,
+	docInfo *lilrag.DocumentInfo,
+	highlightChunk int,
+) {
 	// For non-image documents, serve a simple HTML viewer with the document content
 	w.Header().Set("Content-Type", "text/html")
 
@@ -1088,9 +1098,11 @@ func (h *Handler) fallbackImageDocumentView(
                     // Create chunk content HTML with edit functionality
                     chunkDiv.innerHTML = 
                         '<div class="chunk-actions">' +
-                            '<button class="edit-btn" onclick="editChunk(\'' + chunk.id + '\')">✏️ Edit</button>' +
+                            '<button class="edit-btn" onclick="editChunk(\'' + chunk.id + '\')">' + 
+                            '✏️ Edit</button>' +
                         '</div>' +
-                        '<div class="chunk-text" id="text-' + chunk.id + '">' + chunk.text.replace(/\\n/g, '<br>') + '</div>';
+                        '<div class="chunk-text" id="text-' + chunk.id + '">' + 
+                        chunk.text.replace(/\\n/g, '<br>') + '</div>';
                     
                     contentDiv.appendChild(chunkDiv);
                 });
@@ -1166,14 +1178,18 @@ func (h *Handler) fallbackImageDocumentView(
                     
                     // Remove editor and indicator
                     editor.remove();
-                    chunkDiv.querySelector('.editing-indicator') && chunkDiv.querySelector('.editing-indicator').remove();
+                    const indicator = chunkDiv.querySelector('.editing-indicator');
+                    indicator && indicator.remove();
                     
                     // Restore edit button
-                    actionsDiv.innerHTML = '<button class="edit-btn" onclick="editChunk(\'' + chunkId + '\')">✏️ Edit</button>';
+                    actionsDiv.innerHTML = '<button class="edit-btn" onclick="editChunk(\'' + 
+                        chunkId + '\')">✏️ Edit</button>';
                     
                     // Show success message briefly
                     const successMsg = document.createElement('div');
-                    successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000;';
+                    successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; ' + 
+                        'background: #28a745; color: white; padding: 10px 20px; ' +
+                        'border-radius: 4px; z-index: 1000;';
                     successMsg.textContent = '✅ Chunk updated and embeddings regenerated';
                     document.body.appendChild(successMsg);
                     setTimeout(() => successMsg.remove(), 3000);
@@ -1247,9 +1263,9 @@ func (h *Handler) fallbackImageDocumentView(
 		docInfo.ChunkCount, // chunks
 		docInfo.SourcePath, // source
 		docInfo.UpdatedAt.Format("2006-01-02 15:04:05"), // updated
-		docInfo.ID,         // image src path
-		highlightChunk,     // highlightChunk JS variable
-		docInfo.ID,         // fetch chunks URL
+		docInfo.ID,     // image src path
+		highlightChunk, // highlightChunk JS variable
+		docInfo.ID,     // fetch chunks URL
 	)
 
 	if _, err := w.Write([]byte(html)); err != nil {

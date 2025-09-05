@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Configurable Vision Models**: Vision model for image processing now configurable in profile config
+- **Configurable HTTP Timeouts**: Ollama API timeouts now configurable with intelligent multipliers
+- **Advanced Configuration**: Enhanced configuration system with fine-tuned chunking options
+- **Comprehensive Documentation**: New configuration reference guide with all options explained
 - Initial release of Lil-RAG
 - CLI interface for indexing and searching documents
 - HTTP API server with RESTful endpoints
@@ -19,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile-based configuration system
 - File upload support for HTTP API
 - Comprehensive examples and documentation
+
+### Enhanced  
+- **Configuration System**: Added `vision_model` and `timeout_seconds` fields to profile configuration
+- **Chunking Defaults**: Updated to 256 tokens with 15% overlap for 2025 RAG best practices
+- **HTTP Clients**: All HTTP clients (embeddings, chat, vision) now respect configurable timeouts
+- **Command Line Flags**: Added `--vision-model` and `--timeout` flags for server and CLI
 
 ### Features
 - 🔍 Semantic vector search with cosine similarity

@@ -20,6 +20,8 @@ import (
 	"golang.org/x/image/draw"
 	"golang.org/x/image/tiff"
 	"golang.org/x/image/webp"
+
+	"lil-rag/pkg/metrics"
 )
 
 // ImageParser handles OCR extraction from image documents using Ollama vision models
@@ -30,8 +32,8 @@ type ImageParser struct {
 	chunker   *TextChunker
 }
 
-// NewImageParser creates a new image parser with OCR capabilities
-func NewImageParser(ollamaURL, model string, chunker *TextChunker) *ImageParser {
+// NewImageParserWithTimeout creates a new image parser with configurable timeout
+func NewImageParserWithTimeout(ollamaURL, model string, chunker *TextChunker, timeoutSeconds int) *ImageParser {
 	if ollamaURL == "" {
 		ollamaURL = DefaultOllamaURL
 	}
@@ -43,7 +45,7 @@ func NewImageParser(ollamaURL, model string, chunker *TextChunker) *ImageParser 
 		ollamaURL: ollamaURL,
 		model:     model,
 		client: &http.Client{
-			Timeout: 300 * time.Second, // Longer timeout for vision processing
+			Timeout: time.Duration(timeoutSeconds) * time.Second,
 		},
 		chunker: chunker,
 	}
@@ -51,16 +53,16 @@ func NewImageParser(ollamaURL, model string, chunker *TextChunker) *ImageParser 
 
 // VisionRequest represents a request to Ollama's vision API
 type VisionRequest struct {
-	Model    string           `json:"model"`
-	Messages []VisionMessage  `json:"messages"`
-	Stream   bool             `json:"stream"`
-	Options  *VisionOptions   `json:"options,omitempty"`
+	Model    string          `json:"model"`
+	Messages []VisionMessage `json:"messages"`
+	Stream   bool            `json:"stream"`
+	Options  *VisionOptions  `json:"options,omitempty"`
 }
 
 // VisionMessage represents a message with image content
 type VisionMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string   `json:"role"`
+	Content string   `json:"content"`
 	Images  []string `json:"images,omitempty"` // Base64 encoded images
 }
 
@@ -118,7 +120,9 @@ func (p *ImageParser) ResizeImage(imagePath string, maxSize int) ([]byte, error)
 
 	// If no resizing needed, return original
 	if newWidth == origWidth && newHeight == origHeight {
-		file.Seek(0, 0)
+		if _, err := file.Seek(0, 0); err != nil {
+			return nil, fmt.Errorf("failed to seek to beginning of file: %w", err)
+		}
 		return io.ReadAll(file)
 	}
 
@@ -142,18 +146,17 @@ func calculateResizeDimensions(origWidth, origHeight, maxSize int) (int, int) {
 	}
 
 	aspectRatio := float64(origWidth) / float64(origHeight)
-	
+
 	if origWidth > origHeight {
 		// Width is the limiting dimension
 		newWidth := maxSize
 		newHeight := int(float64(maxSize) / aspectRatio)
 		return newWidth, newHeight
-	} else {
-		// Height is the limiting dimension
-		newHeight := maxSize
-		newWidth := int(float64(maxSize) * aspectRatio)
-		return newWidth, newHeight
 	}
+	// Height is the limiting dimension
+	newHeight := maxSize
+	newWidth := int(float64(maxSize) * aspectRatio)
+	return newWidth, newHeight
 }
 
 // Parse extracts text content from an image file using OCR
@@ -199,7 +202,8 @@ func (p *ImageParser) Parse(filePath string) (string, error) {
 - If text is unclear or partially obscured, indicate with *[unclear text]*
 
 **OUTPUT FORMAT:**
-Provide ONLY the extracted text content in proper markdown format, without any additional commentary, explanations, or meta-text.`
+Provide ONLY the extracted text content in proper markdown format, without any additional ` +
+		`commentary, explanations, or meta-text.`
 
 	// Create vision request
 	messages := []VisionMessage{
@@ -259,11 +263,14 @@ Provide ONLY the extracted text content in proper markdown format, without any a
 		return "", fmt.Errorf("no text could be extracted from the image")
 	}
 
+	// Record token usage for OCR
+	metrics.RecordImageOCRTokens(p.model, ocrPrompt, extractedText)
+
 	return extractedText, nil
 }
 
 // ParseWithChunks extracts text from image and creates chunks optimized for the content
-func (p *ImageParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error) {
+func (p *ImageParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	// Extract text using OCR
 	text, err := p.Parse(filePath)
 	if err != nil {
@@ -287,7 +294,7 @@ func (p *ImageParser) ParseWithChunks(filePath, documentID string) ([]Chunk, err
 
 	// Use chunker to split the extracted text
 	chunks := p.chunker.ChunkText(text)
-	
+
 	// Update chunk metadata to indicate these are from image OCR
 	for i := range chunks {
 		chunks[i].ChunkType = "image_ocr"
@@ -310,7 +317,7 @@ func (p *ImageParser) GetDocumentType() DocumentType {
 func (p *ImageParser) TestVisionModel(ctx context.Context) error {
 	// Create a simple test request with a minimal image (1x1 pixel PNG)
 	testImage := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
-	
+
 	messages := []VisionMessage{
 		{
 			Role:    "user",
@@ -362,7 +369,7 @@ func (p *ImageParser) TestVisionModel(ctx context.Context) error {
 func IsImageFile(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	supportedExts := []string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
-	
+
 	for _, supportedExt := range supportedExts {
 		if ext == supportedExt {
 			return true

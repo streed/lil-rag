@@ -60,7 +60,7 @@ func New(rag *lilrag.LilRag) *Handler {
 	return &Handler{rag: rag, version: "dev", dataDir: "", renderer: renderer}
 }
 
-func NewWithVersion(rag *lilrag.LilRag, version string, dataDir string) *Handler {
+func NewWithVersion(rag *lilrag.LilRag, version, dataDir string) *Handler {
 	renderer, err := theme.NewRenderer()
 	if err != nil {
 		log.Printf("Failed to create theme renderer: %v", err)

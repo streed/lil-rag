@@ -1,33 +1,31 @@
 {{define "documents-content"}}
 <div class="container">
-    <div class="card">
-        <div style="padding: 30px; border-bottom: 1px solid var(--gray-200);">
-            <h1 class="text-center" style="border: none; margin: 0 0 10px 0;">📚 Documents</h1>
+    <div style="padding: 30px; border-bottom: 1px solid var(--gray-200);">
+        <h1 class="text-center" style="border: none; margin: 0 0 10px 0;">📚 Documents</h1>
+    </div>
+    
+    <div style="padding: 30px; flex: 1; overflow-y: auto;">
+        <div class="alert alert-info" id="loading">Loading documents...</div>
+        <div class="alert alert-error" id="error" style="display: none;"></div>
+        <div id="documents-container" style="display: none;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Chunks</th>
+                        <th>Indexed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="documents-body">
+                </tbody>
+            </table>
         </div>
-        
-        <div style="padding: 30px; flex: 1; overflow-y: auto;">
-            <div class="alert alert-info" id="loading">Loading documents...</div>
-            <div class="alert alert-error" id="error" style="display: none;"></div>
-            <div id="documents-container" style="display: none;">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Title</th>
-                            <th>Type</th>
-                            <th>Chunks</th>
-                            <th>Indexed</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="documents-body">
-                    </tbody>
-                </table>
-            </div>
-            <div style="text-align: center; padding: 60px 20px; color: var(--gray-600); display: none;" id="empty-state">
-                <h3 style="margin: 0 0 15px 0; color: var(--gray-800);">No documents found</h3>
-                <p>Upload your first document to get started.</p>
-            </div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--gray-600); display: none;" id="empty-state">
+            <h3 style="margin: 0 0 15px 0; color: var(--gray-800);">No documents found</h3>
+            <p>Upload your first document to get started.</p>
         </div>
     </div>
 </div>
