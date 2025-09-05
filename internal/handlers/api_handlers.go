@@ -300,7 +300,18 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	// Index the file using document handler
 	if err := h.rag.IndexFile(ctx, tempFile.Name(), id); err != nil {
 		log.Printf("Failed to index file %s: %v", header.Filename, err)
-		h.writeError(w, http.StatusInternalServerError, "failed to index file", err.Error())
+		
+		// Check if this is a client error (bad input) vs server error
+		errorMessage := err.Error()
+		if strings.Contains(errorMessage, "no content found") || 
+		   strings.Contains(errorMessage, "unsupported file format") ||
+		   strings.Contains(errorMessage, "failed to parse") {
+			// Client error - bad file content or format
+			h.writeError(w, http.StatusBadRequest, "failed to index file", errorMessage)
+		} else {
+			// Server error - embedding service, storage, etc.
+			h.writeError(w, http.StatusInternalServerError, "failed to index file", errorMessage)
+		}
 		return
 	}
 

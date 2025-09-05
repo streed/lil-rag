@@ -160,6 +160,111 @@ func (m *MockStorage) DeleteDocument(_ context.Context, documentID string) error
 	return nil
 }
 
+func (m *MockStorage) GetChunk(_ context.Context, chunkID string) (*ChunkInfo, error) {
+	if !m.initialized {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	
+	// Parse the chunk ID to get document ID and chunk index
+	// Format is typically: documentID_chunk_N
+	parts := strings.Split(chunkID, "_")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("chunk not found")
+	}
+	
+	// Reconstruct document ID (everything except the last two parts)
+	documentID := strings.Join(parts[:len(parts)-2], "_")
+	
+	chunks, exists := m.chunks[documentID]
+	if !exists {
+		return nil, fmt.Errorf("chunk not found")
+	}
+	
+	// Find the chunk by generating ID and comparing
+	for _, chunk := range chunks {
+		generatedID := GetChunkID(documentID, chunk.Index)
+		if generatedID == chunkID {
+			return &ChunkInfo{
+				ID:         generatedID,
+				DocumentID: documentID,
+				Text:       chunk.Text,
+				Index:      chunk.Index,
+				StartPos:   chunk.StartPos,
+				EndPos:     chunk.EndPos,
+				TokenCount: chunk.TokenCount,
+				ChunkType:  chunk.ChunkType,
+				PageNumber: chunk.PageNumber,
+			}, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("chunk not found")
+}
+
+func (m *MockStorage) GetDocumentChunksWithInfo(_ context.Context, documentID string) ([]ChunkInfo, error) {
+	if !m.initialized {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	
+	chunks, exists := m.chunks[documentID]
+	if !exists {
+		return []ChunkInfo{}, nil
+	}
+	
+	var chunkInfos []ChunkInfo
+	for _, chunk := range chunks {
+		chunkInfo := ChunkInfo{
+			ID:         GetChunkID(documentID, chunk.Index),
+			DocumentID: documentID,
+			Text:       chunk.Text,
+			Index:      chunk.Index,
+			StartPos:   chunk.StartPos,
+			EndPos:     chunk.EndPos,
+			TokenCount: chunk.TokenCount,
+			ChunkType:  chunk.ChunkType,
+			PageNumber: chunk.PageNumber,
+		}
+		chunkInfos = append(chunkInfos, chunkInfo)
+	}
+	
+	return chunkInfos, nil
+}
+
+func (m *MockStorage) UpdateChunk(_ context.Context, chunkID, newText string, newEmbedding []float32) error {
+	if !m.initialized {
+		return fmt.Errorf("storage not initialized")
+	}
+	
+	// Parse the chunk ID to get document ID and chunk index
+	parts := strings.Split(chunkID, "_")
+	if len(parts) < 3 {
+		return fmt.Errorf("chunk not found")
+	}
+	
+	// Reconstruct document ID (everything except the last two parts)
+	documentID := strings.Join(parts[:len(parts)-2], "_")
+	
+	chunks, exists := m.chunks[documentID]
+	if !exists {
+		return fmt.Errorf("chunk not found")
+	}
+	
+	// Find and update the chunk
+	for i, chunk := range chunks {
+		generatedID := GetChunkID(documentID, chunk.Index)
+		if generatedID == chunkID {
+			chunks[i].Text = newText
+			// Update the document text if this is the only chunk
+			if len(chunks) == 1 {
+				m.documents[documentID] = newText
+			}
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("chunk not found")
+}
+
 func (m *MockStorage) Close() error {
 	m.closed = true
 	return nil
