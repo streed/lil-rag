@@ -47,6 +47,9 @@ type Storage interface {
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error)
 	GetDocumentChunks(ctx context.Context, documentID string) ([]Chunk, error)
+	GetDocumentChunksWithInfo(ctx context.Context, documentID string) ([]ChunkInfo, error)
+	UpdateChunk(ctx context.Context, chunkID, newText string, newEmbedding []float32) error
+	GetChunk(ctx context.Context, chunkID string) (*ChunkInfo, error)
 	DeleteDocument(ctx context.Context, documentID string) error
 	Close() error
 }
@@ -68,8 +71,22 @@ type DocumentInfo struct {
 	ChunkCount int       `json:"chunk_count"`
 	SourcePath string    `json:"source_path"`
 	DocType    string    `json:"doc_type"`
+	IsImage    bool      `json:"is_image"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// ChunkInfo represents a chunk with database metadata for API responses
+type ChunkInfo struct {
+	ID         string `json:"id"`
+	DocumentID string `json:"document_id"`
+	Text       string `json:"text"`
+	Index      int    `json:"index"`
+	StartPos   int    `json:"start_pos"`
+	EndPos     int    `json:"end_pos"`
+	TokenCount int    `json:"token_count"`
+	ChunkType  string `json:"chunk_type"`
+	PageNumber *int   `json:"page_number,omitempty"`
 }
 
 func New(config *Config) (*LilRag, error) {
@@ -127,8 +144,8 @@ func (m *LilRag) Initialize() error {
 	// Initialize PDF parser (keep for backward compatibility)
 	m.pdfParser = NewPDFParser()
 
-	// Initialize document handler with all supported parsers
-	m.documentHandler = NewDocumentHandler(m.chunker)
+	// Initialize document handler with all supported parsers including vision
+	m.documentHandler = NewDocumentHandlerWithVision(m.chunker, m.config.OllamaURL, "llama3.2-vision")
 
 	// Initialize chat client
 	m.chatClient = NewOllamaChatClient(m.config.OllamaURL, m.config.ChatModel)
@@ -323,6 +340,27 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 	return m.storage.Search(ctx, embedding, limit)
 }
 
+// UpdateChunk updates a chunk's text and regenerates its embedding
+func (m *LilRag) UpdateChunk(ctx context.Context, chunkID, newText string) error {
+	if strings.TrimSpace(newText) == "" {
+		return fmt.Errorf("chunk text cannot be empty")
+	}
+
+	// Generate new embedding for the updated text
+	embedding, err := m.embedder.Embed(ctx, newText)
+	if err != nil {
+		return fmt.Errorf("failed to generate embedding for updated chunk: %w", err)
+	}
+
+	// Update the chunk and embedding in storage
+	return m.storage.UpdateChunk(ctx, chunkID, newText, embedding)
+}
+
+// GetChunk retrieves a specific chunk by ID
+func (m *LilRag) GetChunk(ctx context.Context, chunkID string) (*ChunkInfo, error) {
+	return m.storage.GetChunk(ctx, chunkID)
+}
+
 // Chat performs a conversational query using retrieved context
 func (m *LilRag) Chat(ctx context.Context, userMessage string, limit int) (string, []SearchResult, error) {
 	if userMessage == "" {
@@ -383,6 +421,14 @@ func (m *LilRag) GetDocumentChunks(ctx context.Context, documentID string) ([]Ch
 	return m.storage.GetDocumentChunks(ctx, documentID)
 }
 
+// GetDocumentChunksWithInfo retrieves all chunks for a document with IDs for editing
+func (m *LilRag) GetDocumentChunksWithInfo(ctx context.Context, documentID string) ([]ChunkInfo, error) {
+	if m.storage == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	return m.storage.GetDocumentChunksWithInfo(ctx, documentID)
+}
+
 func (m *LilRag) DeleteDocument(ctx context.Context, documentID string) error {
 	if m.storage == nil {
 		return fmt.Errorf("storage not initialized")
@@ -405,4 +451,9 @@ func (m *LilRag) Close() error {
 		return m.storage.Close()
 	}
 	return nil
+}
+
+// GetStorage returns the storage instance (for internal use)
+func (m *LilRag) GetStorage() Storage {
+	return m.storage
 }

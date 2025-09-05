@@ -96,7 +96,7 @@ func run() error {
 	}
 	defer rag.Close()
 
-	handler := handlers.NewWithVersion(rag, version)
+	handler := handlers.NewWithVersion(rag, version, profileConfig.DataDir)
 	mux := http.NewServeMux()
 
 	mux.Handle("/api/index", handler.Index())
@@ -104,12 +104,20 @@ func run() error {
 	mux.Handle("/api/chat", handler.Chat())
 	mux.Handle("/api/documents", handler.Documents())
 	mux.Handle("/api/documents/", handler.DocumentRouter())
+	mux.HandleFunc("/api/chunks/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			handler.UpdateChunk()(w, r)
+		} else {
+			handler.GetChunk()(w, r)
+		}
+	})
 	mux.Handle("/api/health", handler.Health())
 	mux.Handle("/api/metrics", handler.Metrics())
 	mux.Handle("/chat", handler.Chat())
 	mux.Handle("/documents", handler.DocumentsList())
 	mux.Handle("/docs", handler.Documentation())
 	mux.Handle("/view/", handler.ViewDocument())
+	mux.Handle("/file/", handler.ServeFile())
 	mux.Handle("/", handler.Static())
 
 	// Wrap the mux with logging middleware

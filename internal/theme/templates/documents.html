@@ -1,0 +1,143 @@
+{{define "documents-content"}}
+<div class="container">
+    <div class="card">
+        <div style="padding: 30px; border-bottom: 1px solid var(--gray-200);">
+            <h1 class="text-center" style="border: none; margin: 0 0 10px 0;">📚 Documents</h1>
+        </div>
+        
+        <div style="padding: 30px; flex: 1; overflow-y: auto;">
+            <div class="alert alert-info" id="loading">Loading documents...</div>
+            <div class="alert alert-error" id="error" style="display: none;"></div>
+            <div id="documents-container" style="display: none;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Type</th>
+                            <th>Chunks</th>
+                            <th>Indexed</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="documents-body">
+                    </tbody>
+                </table>
+            </div>
+            <div style="text-align: center; padding: 60px 20px; color: var(--gray-600); display: none;" id="empty-state">
+                <h3 style="margin: 0 0 15px 0; color: var(--gray-800);">No documents found</h3>
+                <p>Upload your first document to get started.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "documents-scripts"}}
+<script>
+    async function loadDocuments() {
+        try {
+            const response = await fetch('/api/documents');
+            if (!response.ok) {
+                throw new Error('Failed to fetch documents');
+            }
+            
+            const data = await response.json();
+            displayDocuments(data.documents || data);
+        } catch (error) {
+            showError('Failed to load documents: ' + error.message);
+        }
+    }
+    
+    function displayDocuments(documents) {
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const container = document.getElementById('documents-container');
+        const emptyState = document.getElementById('empty-state');
+        const tbody = document.getElementById('documents-body');
+        
+        loading.style.display = 'none';
+        errorDiv.style.display = 'none';
+        
+        if (!documents || documents.length === 0) {
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        container.style.display = 'block';
+        tbody.innerHTML = '';
+        
+        documents.forEach(doc => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><span style="font-family: 'Courier New', monospace; color: var(--primary-color); font-weight: 500;">${escapeHtml(doc.id)}</span></td>
+                <td><span style="font-weight: 500; color: var(--gray-800);">${escapeHtml(doc.id)}</span></td>
+                <td>${escapeHtml(doc.doc_type || 'text')}</td>
+                <td>${doc.chunk_count || 0}</td>
+                <td><span style="color: var(--gray-600); font-size: 0.9em;">${formatDate(doc.created_at)}</span></td>
+                <td>
+                    <a href="/view/${escapeHtml(doc.id)}" class="btn btn-success" style="margin-right: 8px; padding: 6px 12px; font-size: 0.85em;">View</a>
+                    <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85em;" 
+                            onclick="deleteDocument('${escapeHtml(doc.id)}')">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+    
+    function showError(message) {
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        
+        loading.style.display = 'none';
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+    
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    
+    function formatDate(dateString) {
+        if (!dateString) return 'Unknown';
+        const date = new Date(dateString);
+        return date.toLocaleString();
+    }
+    
+    async function deleteDocument(docId) {
+        if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+            return;
+        }
+        
+        const button = event.target;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Deleting...';
+        
+        try {
+            const response = await fetch('/api/documents/' + encodeURIComponent(docId), {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to delete document');
+            }
+            
+            // Reload the documents list
+            loadDocuments();
+        } catch (error) {
+            alert('Failed to delete document: ' + error.message);
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+    
+    // Load documents when page loads
+    loadDocuments();
+</script>
+{{end}}

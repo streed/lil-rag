@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Lil-RAG</title>
+    <style>
+        :root {
+            --primary-color: {{.Theme.PrimaryColor}};
+            --secondary-color: {{.Theme.SecondaryColor}};
+            --accent-color: {{.Theme.AccentColor}};
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            --white: #ffffff;
+            --gray-50: #f8f9fa;
+            --gray-100: #f1f3f5;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-400: #ced4da;
+            --gray-500: #adb5bd;
+            --gray-600: #6c757d;
+            --gray-700: #495057;
+            --gray-800: #343a40;
+            --gray-900: #212529;
+            --success: #28a745;
+            --info: #17a2b8;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100%;
+        }
+        
+        body {
+            font-family: var(--font-family);
+            line-height: 1.6;
+            color: var(--gray-800);
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        /* Navigation Header */
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-link {
+            color: var(--white);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255,255,255,0.2);
+        }
+
+        .nav-link.active {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        .logo {
+            color: var(--white);
+            font-size: 1.2em;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        /* Main Container */
+        .container {
+            background: var(--white);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--gray-900);
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            color: var(--gray-900);
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h2 {
+            color: var(--primary-color);
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: var(--white);
+            border: 1px solid var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background: color-mix(in srgb, var(--primary-color) 85%, black);
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background: var(--gray-500);
+            color: var(--white);
+            border: 1px solid var(--gray-500);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-600);
+            transform: scale(1.05);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: var(--white);
+        }
+
+        .btn-success:hover {
+            background: color-mix(in srgb, var(--success) 85%, black);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: var(--white);
+        }
+
+        .btn-danger:hover {
+            background: color-mix(in srgb, var(--danger) 85%, black);
+            transform: translateY(-1px);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--gray-900);
+        }
+
+        .btn-warning:hover {
+            background: color-mix(in srgb, var(--warning) 85%, black);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: var(--gray-400);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--white);
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+
+        /* Forms */
+        .form-control {
+            width: 100%;
+            padding: 12px 18px;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 10%, transparent);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--gray-700);
+        }
+
+        /* Tables */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--white);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .table th {
+            background: var(--gray-50);
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--gray-800);
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        .table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--gray-200);
+            vertical-align: top;
+        }
+
+        .table tr:hover {
+            background: var(--gray-50);
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: color-mix(in srgb, var(--success) 10%, var(--white));
+            color: color-mix(in srgb, var(--success) 80%, black);
+            border: 1px solid color-mix(in srgb, var(--success) 20%, transparent);
+        }
+
+        .alert-error {
+            background: color-mix(in srgb, var(--danger) 10%, var(--white));
+            color: color-mix(in srgb, var(--danger) 80%, black);
+            border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+        }
+
+        .alert-warning {
+            background: color-mix(in srgb, var(--warning) 10%, var(--white));
+            color: color-mix(in srgb, var(--warning) 80%, black);
+            border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
+        }
+
+        .alert-info {
+            background: color-mix(in srgb, var(--info) 10%, var(--white));
+            color: color-mix(in srgb, var(--info) 80%, black);
+            border: 1px solid color-mix(in srgb, var(--info) 20%, transparent);
+        }
+
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        
+        .mt-0 { margin-top: 0; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-3 { margin-top: 1rem; }
+        .mt-4 { margin-top: 1.5rem; }
+        .mt-5 { margin-top: 3rem; }
+        
+        .mb-0 { margin-bottom: 0; }
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 1rem; }
+        .mb-4 { margin-bottom: 1.5rem; }
+        .mb-5 { margin-bottom: 3rem; }
+        
+        .p-0 { padding: 0; }
+        .p-1 { padding: 0.25rem; }
+        .p-2 { padding: 0.5rem; }
+        .p-3 { padding: 1rem; }
+        .p-4 { padding: 1.5rem; }
+        .p-5 { padding: 3rem; }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                max-width: 100%;
+            }
+
+            .container {
+                padding: 20px;
+                margin: 10px 0;
+            }
+
+            .nav-header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 20px;
+            }
+
+            .nav-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+                text-align: left;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 15px;
+            }
+
+            .nav-header {
+                padding: 15px;
+            }
+
+            .nav-link {
+                padding: 6px 12px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+    {{if eq .PageContent "chat.html"}}
+        {{template "chat-head" .}}
+    {{else if eq .PageContent "document-view.html"}}
+        {{template "document-view-head" .}}
+    {{else if eq .PageContent "image-view.html"}}
+        {{template "image-view-head" .}}
+    {{end}}
+</head>
+<body>
+    <div class="nav-header">
+        <a href="/" class="logo">🚀 Lil-RAG</a>
+        <div class="nav-links">
+            <a href="/" class="nav-link{{if eq .PageName "home"}} active{{end}}">🏠 Home</a>
+            <a href="/chat" class="nav-link{{if eq .PageName "chat"}} active{{end}}">💬 Chat</a>
+            <a href="/documents" class="nav-link{{if eq .PageName "documents"}} active{{end}}">📚 Documents</a>
+        </div>
+    </div>
+
+    {{if eq .PageContent "home.html"}}
+        {{template "content" .}}
+    {{else if eq .PageContent "chat.html"}}
+        {{template "chat-content" .}}
+    {{else if eq .PageContent "documents.html"}}
+        {{template "documents-content" .}}
+    {{else if eq .PageContent "document-view.html"}}
+        {{template "document-view-content" .}}
+    {{else if eq .PageContent "image-view.html"}}
+        {{template "image-view-content" .}}
+    {{else}}
+        {{template "content" .}}
+    {{end}}
+
+    {{if eq .PageContent "chat.html"}}
+        {{template "chat-scripts" .}}
+    {{else if eq .PageContent "documents.html"}}
+        {{template "documents-scripts" .}}
+    {{else if eq .PageContent "document-view.html"}}
+        {{template "document-view-scripts" .}}
+    {{else if eq .PageContent "image-view.html"}}
+        {{template "image-view-scripts" .}}
+    {{end}}
+</body>
+</html>

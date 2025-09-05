@@ -1,0 +1,392 @@
+{{define "image-view-head"}}
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<style>
+    .image-document-header {
+        border-bottom: 1px solid var(--gray-200);
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        position: relative;
+    }
+    
+    .image-document-title {
+        font-size: 1.5em;
+        margin: 0 0 10px 0;
+        color: var(--gray-800);
+        text-align: center;
+    }
+    
+    .image-document-meta {
+        color: var(--gray-600);
+        font-size: 0.9em;
+        text-align: center;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+        margin-top: 15px;
+    }
+    
+    .image-content {
+        background: var(--white);
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: row;
+        gap: 30px;
+    }
+    
+    .image-viewer {
+        flex: 1;
+        max-width: 60%;
+    }
+    
+    .document-image {
+        width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .ocr-content {
+        flex: 1;
+        max-width: 40%;
+    }
+    
+    .content-section-title {
+        font-size: 1.2em;
+        margin: 0 0 15px 0;
+        color: var(--gray-800);
+        border-bottom: 2px solid var(--primary-color);
+        padding-bottom: 5px;
+    }
+    
+    .chunk {
+        margin-bottom: 24px;
+        padding: 20px;
+        border-left: 4px solid var(--gray-300);
+        background: var(--gray-50);
+        border-radius: 0 8px 8px 0;
+        transition: all 0.3s ease;
+    }
+    
+    .chunk.highlighted-chunk {
+        background: color-mix(in srgb, var(--warning) 10%, var(--white));
+        border-left-color: var(--warning);
+        box-shadow: 0 0 12px color-mix(in srgb, var(--warning) 20%, transparent);
+        transform: translateX(4px);
+    }
+    
+    .chunk-text {
+        line-height: 1.6;
+    }
+    
+    .chunk-text h1, .chunk-text h2, .chunk-text h3, 
+    .chunk-text h4, .chunk-text h5, .chunk-text h6 {
+        color: var(--primary-color);
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+    }
+    
+    .chunk-text h1:first-child, .chunk-text h2:first-child, 
+    .chunk-text h3:first-child, .chunk-text h4:first-child,
+    .chunk-text h5:first-child, .chunk-text h6:first-child {
+        margin-top: 0;
+    }
+    
+    .chunk-text p {
+        margin-bottom: 1em;
+    }
+    
+    .chunk-text ul, .chunk-text ol {
+        margin: 1em 0;
+        padding-left: 2em;
+    }
+    
+    .chunk-text li {
+        margin-bottom: 0.5em;
+    }
+    
+    .chunk-text blockquote {
+        border-left: 4px solid var(--primary-color);
+        margin: 1.5em 0;
+        padding: 1em 1.5em;
+        background: var(--gray-50);
+        font-style: italic;
+    }
+    
+    .chunk-text code {
+        background: var(--gray-100);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'JetBrainsMono NL', 'Monaco', 'Consolas', monospace;
+        font-size: 0.9em;
+    }
+    
+    .chunk-text pre {
+        background: var(--gray-800);
+        color: var(--gray-100);
+        padding: 1.5em;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 1.5em 0;
+    }
+    
+    .chunk-text pre code {
+        background: none;
+        padding: 0;
+        color: inherit;
+    }
+    
+    .chunk-text table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.5em 0;
+    }
+    
+    .chunk-text th, .chunk-text td {
+        border: 1px solid var(--gray-300);
+        padding: 8px 12px;
+        text-align: left;
+    }
+    
+    .chunk-text th {
+        background: var(--gray-100);
+        font-weight: 600;
+    }
+    
+    .delete-button {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: var(--danger);
+        color: var(--white);
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+    }
+    
+    .delete-button:hover {
+        background: color-mix(in srgb, var(--danger) 85%, black);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--danger) 30%, transparent);
+    }
+    
+    .loading {
+        text-align: center;
+        color: var(--gray-600);
+        font-size: 1.1em;
+        padding: 40px;
+    }
+    
+    .error {
+        background: color-mix(in srgb, var(--danger) 10%, var(--white));
+        color: color-mix(in srgb, var(--danger) 80%, black);
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+    }
+    
+    @media (max-width: 1024px) {
+        .image-content {
+            flex-direction: column;
+        }
+        
+        .image-viewer, .ocr-content {
+            max-width: 100%;
+        }
+        
+        .image-document-title {
+            text-align: left;
+        }
+        
+        .delete-button {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin-bottom: 15px;
+            display: block;
+            width: fit-content;
+        }
+        
+        .image-document-meta {
+            grid-template-columns: 1fr;
+            text-align: left;
+        }
+    }
+</style>
+{{end}}
+
+{{define "image-view-content"}}
+<div class="container">
+    <div class="image-document-header">
+        <button class="delete-button" onclick="deleteDocument('{{index .Data "DocumentID"}}')" id="deleteBtn">🗑️ Delete</button>
+        <h1 class="image-document-title">🖼️ {{(index .Data "DocumentInfo").ID}}</h1>
+        <div class="image-document-meta">
+            <div><strong>Type:</strong> {{(index .Data "DocumentInfo").DocType}} (Image Document)</div>
+            <div><strong>OCR Chunks:</strong> {{(index .Data "DocumentInfo").ChunkCount}}</div>
+            <div><strong>Source:</strong> {{(index .Data "DocumentInfo").SourcePath}}</div>
+            <div><strong>Updated:</strong> {{(index .Data "DocumentInfo").UpdatedAt.Format "2006-01-02 15:04:05"}}</div>
+        </div>
+    </div>
+    
+    <div class="image-content">
+        <div class="image-viewer">
+            <h3 class="content-section-title">📷 Original Image</h3>
+            <img src="/file/{{index .Data "DocumentID"}}" alt="Document Image" class="document-image" />
+        </div>
+        
+        <div class="ocr-content">
+            <h3 class="content-section-title">📝 Extracted Content (Markdown)</h3>
+            <div class="loading" id="loading">Loading OCR content...</div>
+            <div class="error" id="error" style="display: none;"></div>
+            <div id="content"></div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "image-view-scripts"}}
+<script>
+    const highlightChunk = {{index .Data "HighlightChunk"}};
+    const documentId = '{{index .Data "DocumentID"}}';
+    
+    // Add debugging
+    console.log('Image document view script loaded');
+    console.log('Document ID:', documentId);
+    console.log('Highlight chunk:', highlightChunk);
+    
+    // Wait for marked.js to load, then load document chunks and render as markdown
+    function loadImageDocumentContent() {
+        console.log('Loading image document content for:', documentId);
+        console.log('Marked.js available:', typeof marked !== 'undefined' && !!marked.parse);
+        
+        fetch('/api/documents/' + documentId + '/chunks')
+        .then(response => response.json())
+        .then(chunks => {
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const contentDiv = document.getElementById('content');
+            
+            loadingDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            if (!chunks || chunks.length === 0) {
+                contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text"><p>No OCR content available for this image.</p></div></div>';
+                return;
+            }
+            
+            contentDiv.innerHTML = '';
+            
+            chunks.forEach((chunk, index) => {
+                const chunkDiv = document.createElement('div');
+                chunkDiv.className = 'chunk';
+                if (index === highlightChunk) {
+                    chunkDiv.className += ' highlighted-chunk';
+                }
+                
+                // Create chunk content with markdown rendering
+                const chunkTextDiv = document.createElement('div');
+                chunkTextDiv.className = 'chunk-text';
+                
+                // Use marked.js to render markdown
+                const rawText = chunk.Text || chunk.text || '';
+                if (typeof marked !== 'undefined' && marked.parse) {
+                    try {
+                        chunkTextDiv.innerHTML = marked.parse(rawText);
+                    } catch (error) {
+                        console.error('Markdown parsing error:', error);
+                        chunkTextDiv.innerHTML = rawText.replace(/\n/g, '<br>');
+                    }
+                } else {
+                    console.log('Marked.js not available for image view, using fallback');
+                    // Fallback if marked.js fails to load
+                    chunkTextDiv.innerHTML = rawText.replace(/\n/g, '<br>');
+                }
+                
+                chunkDiv.appendChild(chunkTextDiv);
+                contentDiv.appendChild(chunkDiv);
+            });
+            
+            // Scroll to highlighted chunk if specified
+            if (highlightChunk >= 0 && highlightChunk < chunks.length) {
+                const highlightedChunk = contentDiv.children[highlightChunk];
+                if (highlightedChunk) {
+                    setTimeout(() => {
+                        highlightedChunk.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading image document chunks:', error);
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').textContent = 'Failed to load OCR content: ' + error.message;
+            document.getElementById('error').style.display = 'block';
+        });
+    }
+    
+    // Wait for marked.js to load before loading content
+    function waitForMarked(callback, maxWait = 5000) {
+        const startTime = Date.now();
+        function check() {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                callback();
+            } else if (Date.now() - startTime < maxWait) {
+                setTimeout(check, 100);
+            } else {
+                console.warn('Marked.js failed to load within timeout, proceeding with fallback');
+                callback();
+            }
+        }
+        check();
+    }
+    
+    // Start loading content when page loads
+    if (document.readyState === 'loading') {
+        console.log('Document still loading, waiting for DOMContentLoaded');
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, waiting for marked.js');
+            waitForMarked(loadImageDocumentContent);
+        });
+    } else {
+        console.log('Document already loaded, waiting for marked.js');
+        waitForMarked(loadImageDocumentContent);
+    }
+
+    function deleteDocument(documentId) {
+        if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+            return;
+        }
+        
+        const deleteBtn = document.getElementById('deleteBtn');
+        const originalText = deleteBtn.textContent;
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = '⏳ Deleting...';
+        
+        fetch('/api/documents/' + documentId, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Document deleted successfully!');
+                window.location.href = '/documents';
+            } else {
+                return response.json().then(error => {
+                    throw new Error(error.message || 'Failed to delete document');
+                });
+            }
+        })
+        .catch(error => {
+            alert('Error deleting document: ' + error.message);
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = originalText;
+        });
+    }
+</script>
+{{end}}
