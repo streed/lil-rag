@@ -25,6 +25,9 @@ type LilRag struct {
 	pdfParser       *PDFParser // Keep for backward compatibility
 	documentHandler *DocumentHandler
 	config          *Config
+
+	// New service-oriented architecture
+	services *LilRagServices
 }
 
 type Config struct {
@@ -44,10 +47,15 @@ type Config struct {
 type Storage interface {
 	Initialize() error
 	Index(ctx context.Context, id string, text string, embedding []float32) error
+	IndexWithNamespace(ctx context.Context, id string, text string, embedding []float32, namespace string) error
 	IndexChunks(ctx context.Context, documentID string, text string, chunks []Chunk, embeddings [][]float32) error
 	IndexChunksWithMetadata(
 		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
 		originalFilePath, docType string,
+	) error
+	IndexChunksWithNamespace(
+		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
+		originalFilePath, docType, namespace string,
 	) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
@@ -78,6 +86,7 @@ type DocumentInfo struct {
 	SourcePath string    `json:"source_path"`
 	DocType    string    `json:"doc_type"`
 	IsImage    bool      `json:"is_image"`
+	Namespace  string    `json:"namespace"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -640,4 +649,48 @@ func (m *LilRag) Close() error {
 // GetStorage returns the storage instance (for internal use)
 func (m *LilRag) GetStorage() Storage {
 	return m.storage
+}
+
+// Services returns the modern service interfaces
+func (m *LilRag) Services() *LilRagServices {
+	return m.services
+}
+
+// initializeLegacyComponents initializes the legacy components for backward compatibility
+func (m *LilRag) initializeLegacyComponents() error {
+	if m.config.DataDir == "" {
+		m.config.DataDir = "data"
+	}
+
+	storage, err := NewSQLiteStorage(m.config.DatabasePath, m.config.VectorSize, m.config.DataDir)
+	if err != nil {
+		return fmt.Errorf("failed to initialize storage: %w", err)
+	}
+	m.storage = storage
+
+	embedder, err := NewOllamaEmbedderWithTimeout(m.config.OllamaURL, m.config.Model, m.config.TimeoutSeconds)
+	if err != nil {
+		return fmt.Errorf("failed to initialize embedder: %w", err)
+	}
+	m.embedder = embedder
+
+	// Initialize text chunker
+	m.chunker = NewTextChunker(m.config.MaxTokens, m.config.Overlap)
+
+	// Initialize PDF parser (keep for backward compatibility)
+	m.pdfParser = NewPDFParser()
+
+	// Initialize document handler with all supported parsers including vision
+	m.documentHandler = NewDocumentHandlerWithVisionAndTimeout(
+		m.chunker,
+		m.config.OllamaURL,
+		m.config.VisionModel,
+		m.config.TimeoutSeconds,
+		m.config.ImageMaxSize,
+	)
+
+	// Initialize chat client
+	m.chatClient = NewOllamaChatClientWithTimeout(m.config.OllamaURL, m.config.ChatModel, m.config.TimeoutSeconds*4)
+
+	return m.storage.Initialize()
 }
