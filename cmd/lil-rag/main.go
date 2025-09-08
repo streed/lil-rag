@@ -117,6 +117,8 @@ func run() error {
 		return handleChat(ctx, rag, profileConfig, args[1:])
 	case "documents", "docs":
 		return handleDocuments(ctx, rag, args[1:])
+	case "show", "view":
+		return handleShow(ctx, rag, args[1:])
 	case "delete", "rm":
 		return handleDelete(ctx, rag, args[1:])
 	case "health":
@@ -132,15 +134,33 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [id] <text|file|-> [--namespace=<namespace>]")
 	}
 
 	var id string
 	var input string
+	var namespace *string
+	var nonFlagArgs []string
 
-	if len(args) == 1 {
-		// Only one argument - could be ID with stdin, or direct text/file without ID
-		arg := args[0]
+	// Parse arguments, separating flags from positional arguments
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--namespace=") {
+			ns := strings.TrimPrefix(arg, "--namespace=")
+			if ns != "" {
+				namespace = &ns
+			}
+		} else {
+			nonFlagArgs = append(nonFlagArgs, arg)
+		}
+	}
+
+	if len(nonFlagArgs) == 0 {
+		return fmt.Errorf("no input provided")
+	}
+
+	if len(nonFlagArgs) == 1 {
+		// Only one non-flag argument - could be ID with stdin, or direct text/file without ID
+		arg := nonFlagArgs[0]
 
 		if arg == "-" {
 			// Reading from stdin without explicit ID
@@ -155,8 +175,12 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 
 			// Generate ID automatically
 			id = lilrag.GenerateDocumentID()
-			fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
-			if err := rag.Index(ctx, text, id); err != nil {
+			namespaceInfo := ""
+			if namespace != nil {
+				namespaceInfo = fmt.Sprintf(" (namespace: %s)", *namespace)
+			}
+			fmt.Printf("Indexing text with auto-generated ID '%s'%s...\n", id, namespaceInfo)
+			if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
 
@@ -167,8 +191,12 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		if fileExists(arg) {
 			// File exists, index with auto-generated ID
 			id = lilrag.GenerateDocumentID()
-			fmt.Printf("Indexing file '%s' with auto-generated ID '%s'...\n", arg, id)
-			if err := rag.IndexFile(ctx, arg, id); err != nil {
+			namespaceInfo := ""
+			if namespace != nil {
+				namespaceInfo = fmt.Sprintf(" (namespace: %s)", *namespace)
+			}
+			fmt.Printf("Indexing file '%s' with auto-generated ID '%s'%s...\n", arg, id, namespaceInfo)
+			if err := rag.IndexFileWithNamespace(ctx, arg, id, namespace); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
 			fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", arg, id)
@@ -182,8 +210,12 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		id = lilrag.GenerateDocumentID()
-		fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
-		if err := rag.Index(ctx, text, id); err != nil {
+		namespaceInfo := ""
+		if namespace != nil {
+			namespaceInfo = fmt.Sprintf(" (namespace: %s)", *namespace)
+		}
+		fmt.Printf("Indexing text with auto-generated ID '%s'%s...\n", id, namespaceInfo)
+		if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
 
@@ -192,8 +224,13 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	}
 
 	// Two arguments: first is ID, second is input
-	id = args[0]
-	input = args[1]
+	id = nonFlagArgs[0]
+	input = nonFlagArgs[1]
+
+	namespaceInfo := ""
+	if namespace != nil {
+		namespaceInfo = fmt.Sprintf(" (namespace: %s)", *namespace)
+	}
 
 	if input == "-" {
 		// Read from stdin with explicit ID
@@ -206,8 +243,8 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			return fmt.Errorf("no text to index")
 		}
 
-		fmt.Printf("Indexing text with ID '%s'...\n", id)
-		if err := rag.Index(ctx, text, id); err != nil {
+		fmt.Printf("Indexing text with ID '%s'%s...\n", id, namespaceInfo)
+		if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
 
@@ -217,8 +254,8 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 
 	if fileExists(input) {
 		// Handle file using the document handler (supports PDF, DOCX, XLSX, HTML, CSV, etc.)
-		fmt.Printf("Indexing file '%s' with ID '%s'...\n", input, id)
-		if err := rag.IndexFile(ctx, input, id); err != nil {
+		fmt.Printf("Indexing file '%s' with ID '%s'%s...\n", input, id, namespaceInfo)
+		if err := rag.IndexFileWithNamespace(ctx, input, id, namespace); err != nil {
 			return fmt.Errorf("failed to index file: %w", err)
 		}
 		fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", input, id)
@@ -231,8 +268,8 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		return fmt.Errorf("no text to index")
 	}
 
-	fmt.Printf("Indexing text with ID '%s'...\n", id)
-	if err := rag.Index(ctx, text, id); err != nil {
+	fmt.Printf("Indexing text with ID '%s'%s...\n", id, namespaceInfo)
+	if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 		return fmt.Errorf("failed to index: %w", err)
 	}
 
@@ -242,20 +279,43 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 
 func handleSearch(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag search <query> [limit]")
+		return fmt.Errorf("usage: lil-rag search <query> [limit] [--namespace=<namespace>]")
 	}
 
-	query := args[0]
+	var query string
+	var namespace *string
 	limit := 10
 
-	if len(args) > 1 {
-		if _, err := fmt.Sscanf(args[1], "%d", &limit); err != nil {
-			return fmt.Errorf("invalid limit: %s", args[1])
+	// Parse arguments
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+
+		if strings.HasPrefix(arg, "--namespace=") {
+			ns := strings.TrimPrefix(arg, "--namespace=")
+			if ns != "" {
+				namespace = &ns
+			}
+		} else if i == 0 {
+			query = arg
+		} else if i == 1 {
+			if _, err := fmt.Sscanf(arg, "%d", &limit); err != nil {
+				return fmt.Errorf("invalid limit: %s", arg)
+			}
 		}
+		i++
 	}
 
-	fmt.Printf("Searching for: %s\n", query)
-	results, err := rag.Search(ctx, query, limit)
+	if query == "" {
+		return fmt.Errorf("query is required")
+	}
+
+	namespaceInfo := ""
+	if namespace != nil {
+		namespaceInfo = fmt.Sprintf(" (namespace: %s)", *namespace)
+	}
+	fmt.Printf("Searching for: %s%s\n", query, namespaceInfo)
+	results, err := rag.SearchWithNamespace(ctx, query, limit, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to search: %w", err)
 	}
@@ -598,6 +658,80 @@ func handleDocuments(ctx context.Context, rag *lilrag.LilRag, args []string) err
 		}
 		fmt.Printf("   Created: %s\n", doc.CreatedAt.Format("2006-01-02 15:04:05"))
 		fmt.Printf("   Updated: %s\n\n", doc.UpdatedAt.Format("2006-01-02 15:04:05"))
+	}
+
+	return nil
+}
+
+func handleShow(ctx context.Context, rag *lilrag.LilRag, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: lil-rag show <document-id> [--chunks]")
+	}
+
+	documentID := args[0]
+	showChunks := false
+
+	// Parse flags
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--chunks" {
+			showChunks = true
+		}
+	}
+
+	// Get document info
+	doc, err := rag.GetDocumentByID(ctx, documentID)
+	if err != nil {
+		return fmt.Errorf("failed to get document: %w", err)
+	}
+
+	// Display document details
+	fmt.Printf("Document ID: %s\n", doc.ID)
+	fmt.Printf("Type: %s\n", doc.DocType)
+	fmt.Printf("Chunks: %d\n", doc.ChunkCount)
+	if doc.SourcePath != "" {
+		fmt.Printf("Source: %s\n", doc.SourcePath)
+	}
+	if doc.Namespace != nil {
+		fmt.Printf("Namespace: %s\n", *doc.Namespace)
+	}
+	fmt.Printf("Created: %s\n", doc.CreatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Updated: %s\n", doc.UpdatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Content (%d chars):\n", len(doc.Text))
+	fmt.Println("---")
+
+	// Truncate very long content
+	content := doc.Text
+	if len(content) > 2000 {
+		content = content[:2000] + "\n... (truncated, " + fmt.Sprintf("%d", len(doc.Text)-2000) + " more chars)"
+	}
+	fmt.Println(content)
+	fmt.Println("---")
+
+	// Show chunks if requested
+	if showChunks {
+		chunks, err := rag.GetDocumentChunksWithInfo(ctx, documentID)
+		if err != nil {
+			return fmt.Errorf("failed to get chunks: %w", err)
+		}
+
+		fmt.Printf("\nChunks (%d):\n", len(chunks))
+		for i, chunk := range chunks {
+			fmt.Printf("\n%d. Chunk ID: %s\n", i+1, chunk.ID)
+			fmt.Printf("   Index: %d\n", chunk.Index)
+			if chunk.PageNumber != nil {
+				fmt.Printf("   Page: %d\n", *chunk.PageNumber)
+			}
+			fmt.Printf("   Type: %s\n", chunk.ChunkType)
+			fmt.Printf("   Tokens: %d\n", chunk.TokenCount)
+			fmt.Printf("   Content (%d chars):\n", len(chunk.Text))
+
+			// Truncate chunk content
+			chunkContent := chunk.Text
+			if len(chunkContent) > 500 {
+				chunkContent = chunkContent[:500] + "\n... (truncated)"
+			}
+			fmt.Printf("   %s\n", strings.ReplaceAll(chunkContent, "\n", "\n   "))
+		}
 	}
 
 	return nil

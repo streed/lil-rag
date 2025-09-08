@@ -63,6 +63,11 @@ func (m *MockStorage) IndexChunksWithMetadata(_ context.Context, documentID, tex
 	return m.IndexChunks(context.Background(), documentID, text, chunks, embeddings)
 }
 
+func (m *MockStorage) IndexChunksWithNamespace(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType string, namespace *string) error {
+	// For the mock, we'll just call the regular IndexChunks method and ignore namespace
+	return m.IndexChunks(context.Background(), documentID, text, chunks, embeddings)
+}
+
 func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]SearchResult, error) {
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
@@ -91,6 +96,11 @@ func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]Searc
 		}
 	}
 	return results, nil
+}
+
+func (m *MockStorage) SearchWithNamespace(_ context.Context, _ []float32, limit int, namespace *string) ([]SearchResult, error) {
+	// For the mock, we'll just call the regular Search method and ignore namespace
+	return m.Search(context.Background(), nil, limit)
 }
 
 func (m *MockStorage) ListDocuments(_ context.Context) ([]DocumentInfo, error) {

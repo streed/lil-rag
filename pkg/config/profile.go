@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -41,7 +42,9 @@ func DefaultProfile() *ProfileConfig {
 		// Fallback to current directory if home directory cannot be determined
 		homeDir = "."
 	}
-	dataDir := filepath.Join(homeDir, ".lilrag", "data")
+
+	// Follow XDG Base Directory specification like ml-notes
+	dataDir := filepath.Join(homeDir, ".local", "share", "lil-rag")
 
 	return &ProfileConfig{
 		Ollama: OllamaConfig{
@@ -53,11 +56,11 @@ func DefaultProfile() *ProfileConfig {
 			TimeoutSeconds: 30,
 			ImageMaxSize:   1120,
 		},
-		StoragePath: filepath.Join(dataDir, "lilrag.db"),
+		StoragePath: filepath.Join(dataDir, "lil-rag.db"),
 		DataDir:     dataDir,
 		Server: ServerConfig{
 			Host: "localhost",
-			Port: 8080,
+			Port: 12121,
 		},
 		Chunking: ChunkConfig{
 			MaxTokens: 256, // Optimized for 2025 RAG best practices (128-512 range)
@@ -72,7 +75,9 @@ func GetProfileConfigPath() (string, error) {
 		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	configDir := filepath.Join(homeDir, ".lilrag")
+	// Follow XDG Base Directory specification like ml-notes
+	// Config goes to ~/.config/lil-rag/config.json
+	configDir := filepath.Join(homeDir, ".config", "lil-rag")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
@@ -81,6 +86,11 @@ func GetProfileConfigPath() (string, error) {
 }
 
 func LoadProfile() (*ProfileConfig, error) {
+	// Check for migration from old config location
+	if err := migrateOldConfig(); err != nil {
+		return nil, fmt.Errorf("failed to migrate old config: %w", err)
+	}
+
 	configPath, err := GetProfileConfigPath()
 	if err != nil {
 		return nil, err
@@ -175,4 +185,129 @@ func (p *ProfileConfig) ToLilRagConfig() *Config {
 
 func (p *ProfileConfig) GetDataPath(filename string) string {
 	return filepath.Join(p.DataDir, filename)
+}
+
+// migrateOldConfig migrates configuration from the old location (~/.lilrag/)
+// to the new XDG-compliant location (~/.config/lil-rag/)
+func migrateOldConfig() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil // Skip migration if we can't get home directory
+	}
+
+	// Old config paths
+	oldConfigDir := filepath.Join(homeDir, ".lilrag")
+	oldConfigFile := filepath.Join(oldConfigDir, "config.json")
+	oldDataDir := filepath.Join(oldConfigDir, "data")
+
+	// New config paths
+	newConfigPath, err := GetProfileConfigPath()
+	if err != nil {
+		return nil // Skip migration if we can't get new config path
+	}
+
+	// Only migrate if old config exists and new config doesn't
+	if _, err := os.Stat(oldConfigFile); os.IsNotExist(err) {
+		return nil // No old config to migrate
+	}
+
+	if _, err := os.Stat(newConfigPath); err == nil {
+		return nil // New config already exists, don't migrate
+	}
+
+	fmt.Printf("Migrating configuration from %s to %s...\n", oldConfigFile, newConfigPath)
+
+	// Read old config
+	data, err := os.ReadFile(oldConfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to read old config: %w", err)
+	}
+
+	var oldConfig ProfileConfig
+	if err := json.Unmarshal(data, &oldConfig); err != nil {
+		return fmt.Errorf("failed to parse old config: %w", err)
+	}
+
+	// Update paths to new locations
+	newDataDir := filepath.Join(homeDir, ".local", "share", "lil-rag")
+
+	// Migrate data directory if it was in the old location
+	if oldConfig.DataDir == oldDataDir {
+		oldConfig.DataDir = newDataDir
+	}
+
+	// Update storage path if it was in the old location
+	if oldConfig.StoragePath == filepath.Join(oldDataDir, "lilrag.db") {
+		oldConfig.StoragePath = filepath.Join(newDataDir, "lil-rag.db")
+	}
+
+	// Save to new location
+	if err := oldConfig.Save(); err != nil {
+		return fmt.Errorf("failed to save migrated config: %w", err)
+	}
+
+	// Migrate data directory if it exists
+	if _, err := os.Stat(oldDataDir); err == nil {
+		fmt.Printf("Migrating data directory from %s to %s...\n", oldDataDir, newDataDir)
+
+		// Create new data directory
+		if err := os.MkdirAll(newDataDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create new data directory: %w", err)
+		}
+
+		// Copy files from old to new data directory
+		if err := copyDirectory(oldDataDir, newDataDir); err != nil {
+			return fmt.Errorf("failed to copy data directory: %w", err)
+		}
+	}
+
+	fmt.Printf("Migration completed successfully.\n")
+	fmt.Printf("Old configuration directory %s can be safely removed.\n", oldConfigDir)
+
+	return nil
+}
+
+// copyDirectory recursively copies a directory
+func copyDirectory(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Calculate the destination path
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		destPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			// Create directory
+			return os.MkdirAll(destPath, info.Mode())
+		}
+
+		// Copy file
+		return copyFile(path, destPath, info.Mode())
+	})
+}
+
+// copyFile copies a single file
+func copyFile(src, dst string, mode os.FileMode) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err
+	}
+
+	return os.Chmod(dst, mode)
 }

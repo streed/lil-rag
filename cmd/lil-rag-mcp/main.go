@@ -218,6 +218,10 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 						"type":        "string",
 						"description": "Optional document ID. If not provided, one will be auto-generated",
 					},
+					"namespace": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional namespace for organizing documents",
+					},
 				},
 				"required": []string{"text"},
 			},
@@ -235,6 +239,10 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					"id": map[string]interface{}{
 						"type":        "string",
 						"description": "Optional document ID. If not provided, filename will be used",
+					},
+					"namespace": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional namespace for organizing documents",
 					},
 				},
 				"required": []string{"file_path"},
@@ -254,6 +262,10 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 						"type":        "integer",
 						"description": "Maximum number of results to return (default: 10, max: 50)",
 						"default":     10,
+					},
+					"namespace": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional namespace to filter search results",
 					},
 				},
 				"required": []string{"query"},
@@ -301,6 +313,34 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 				"required": []string{"document_id"},
 			},
 		},
+		{
+			Name:        "lilrag_get_document",
+			Description: "Get details about a specific document",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"document_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The ID of the document to retrieve",
+					},
+				},
+				"required": []string{"document_id"},
+			},
+		},
+		{
+			Name:        "lilrag_get_document_chunks",
+			Description: "Get chunks for a specific document",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"document_id": map[string]interface{}{
+						"type":        "string",
+						"description": "The ID of the document to get chunks for",
+					},
+				},
+				"required": []string{"document_id"},
+			},
+		},
 	}
 
 	return &MCPMessage{
@@ -338,6 +378,10 @@ func (s *LilRagMCPServer) handleToolsCall(message MCPMessage) *MCPMessage {
 		return s.handleListDocuments(message.ID, callParams.Arguments)
 	case "lilrag_delete_document":
 		return s.handleDeleteDocument(message.ID, callParams.Arguments)
+	case "lilrag_get_document":
+		return s.handleGetDocument(message.ID, callParams.Arguments)
+	case "lilrag_get_document_chunks":
+		return s.handleGetDocumentChunks(message.ID, callParams.Arguments)
 	default:
 		return s.errorResponse(message.ID, -32601, "Tool not found")
 	}
@@ -355,9 +399,17 @@ func (s *LilRagMCPServer) handleIndex(id interface{}, args map[string]interface{
 		docID = lilrag.GenerateDocumentID()
 	}
 
+	// Extract optional namespace
+	var namespace *string
+	if ns, exists := args["namespace"]; exists {
+		if nsStr, ok := ns.(string); ok && nsStr != "" {
+			namespace = &nsStr
+		}
+	}
+
 	// Index the content
 	ctx := context.Background()
-	if err := s.rag.Index(ctx, text, docID); err != nil {
+	if err := s.rag.IndexWithNamespace(ctx, text, docID, namespace); err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to index content: %v", err))
 	}
 
@@ -393,9 +445,17 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 		docID = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	}
 
+	// Extract optional namespace
+	var namespace *string
+	if ns, exists := args["namespace"]; exists {
+		if nsStr, ok := ns.(string); ok && nsStr != "" {
+			namespace = &nsStr
+		}
+	}
+
 	// Index the file
 	ctx := context.Background()
-	if err := s.rag.IndexFile(ctx, filePath, docID); err != nil {
+	if err := s.rag.IndexFileWithNamespace(ctx, filePath, docID, namespace); err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to index file: %v", err))
 	}
 
@@ -434,9 +494,17 @@ func (s *LilRagMCPServer) handleSearch(id interface{}, args map[string]interface
 		limit = 50
 	}
 
+	// Extract optional namespace
+	var namespace *string
+	if ns, exists := args["namespace"]; exists {
+		if nsStr, ok := ns.(string); ok && nsStr != "" {
+			namespace = &nsStr
+		}
+	}
+
 	// Perform search
 	ctx := context.Background()
-	results, err := s.rag.Search(ctx, query, limit)
+	results, err := s.rag.SearchWithNamespace(ctx, query, limit, namespace)
 	if err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Search failed: %v", err))
 	}
@@ -629,6 +697,112 @@ func (s *LilRagMCPServer) handleDeleteDocument(id interface{}, args map[string]i
 			}{{
 				Type: "text",
 				Text: fmt.Sprintf("Successfully deleted document: %s", documentID),
+			}},
+		},
+	}
+}
+
+func (s *LilRagMCPServer) handleGetDocument(id interface{}, args map[string]interface{}) *MCPMessage {
+	// Extract parameters
+	documentID, ok := args["document_id"].(string)
+	if !ok || documentID == "" {
+		return s.errorResponse(id, -32602, "document_id parameter is required and must be a non-empty string")
+	}
+
+	// Get document
+	ctx := context.Background()
+	doc, err := s.rag.GetDocumentByID(ctx, documentID)
+	if err != nil {
+		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to get document: %v", err))
+	}
+
+	// Format response
+	var response strings.Builder
+	response.WriteString(fmt.Sprintf("Document ID: %s\n", doc.ID))
+	response.WriteString(fmt.Sprintf("Type: %s\n", doc.DocType))
+	response.WriteString(fmt.Sprintf("Chunks: %d\n", doc.ChunkCount))
+	if doc.SourcePath != "" {
+		response.WriteString(fmt.Sprintf("Source: %s\n", doc.SourcePath))
+	}
+	if doc.Namespace != nil {
+		response.WriteString(fmt.Sprintf("Namespace: %s\n", *doc.Namespace))
+	}
+	response.WriteString(fmt.Sprintf("Created: %s\n", doc.CreatedAt.Format("2006-01-02 15:04:05")))
+	response.WriteString(fmt.Sprintf("Updated: %s\n", doc.UpdatedAt.Format("2006-01-02 15:04:05")))
+	response.WriteString(fmt.Sprintf("Content (%d chars):\n", len(doc.Text)))
+	response.WriteString("---\n")
+
+	// Truncate very long content
+	content := doc.Text
+	if len(content) > 2000 {
+		content = content[:2000] + "\n... (truncated, " + fmt.Sprintf("%d", len(doc.Text)-2000) + " more chars)"
+	}
+	response.WriteString(content)
+	response.WriteString("\n---")
+
+	return &MCPMessage{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: MCPCallToolResult{
+			Content: []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}{{
+				Type: "text",
+				Text: response.String(),
+			}},
+		},
+	}
+}
+
+func (s *LilRagMCPServer) handleGetDocumentChunks(id interface{}, args map[string]interface{}) *MCPMessage {
+	// Extract parameters
+	documentID, ok := args["document_id"].(string)
+	if !ok || documentID == "" {
+		return s.errorResponse(id, -32602, "document_id parameter is required and must be a non-empty string")
+	}
+
+	// Get chunks
+	ctx := context.Background()
+	chunks, err := s.rag.GetDocumentChunksWithInfo(ctx, documentID)
+	if err != nil {
+		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to get document chunks: %v", err))
+	}
+
+	// Format response
+	var response strings.Builder
+	response.WriteString(fmt.Sprintf("Document Chunks (%d):\n\n", len(chunks)))
+
+	for i, chunk := range chunks {
+		response.WriteString(fmt.Sprintf("%d. Chunk ID: %s\n", i+1, chunk.ID))
+		response.WriteString(fmt.Sprintf("   Index: %d\n", chunk.Index))
+		if chunk.PageNumber != nil {
+			response.WriteString(fmt.Sprintf("   Page: %d\n", *chunk.PageNumber))
+		}
+		response.WriteString(fmt.Sprintf("   Type: %s\n", chunk.ChunkType))
+		response.WriteString(fmt.Sprintf("   Tokens: %d\n", chunk.TokenCount))
+		response.WriteString(fmt.Sprintf("   Content (%d chars):\n", len(chunk.Text)))
+
+		// Truncate chunk content
+		chunkContent := chunk.Text
+		if len(chunkContent) > 500 {
+			chunkContent = chunkContent[:500] + "\n... (truncated)"
+		}
+		response.WriteString("   ")
+		response.WriteString(strings.ReplaceAll(chunkContent, "\n", "\n   "))
+		response.WriteString("\n\n")
+	}
+
+	return &MCPMessage{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: MCPCallToolResult{
+			Content: []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}{{
+				Type: "text",
+				Text: response.String(),
 			}},
 		},
 	}

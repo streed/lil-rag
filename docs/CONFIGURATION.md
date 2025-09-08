@@ -1,10 +1,11 @@
 # Configuration Reference
 
-LilRag uses a profile-based configuration system that stores settings in `~/.lilrag/config.json`. This document provides comprehensive reference for all configuration options.
+LilRag uses a profile-based configuration system following XDG Base Directory specification. Configuration is stored in `~/.config/lil-rag/config.json` and data is stored in `~/.local/share/lil-rag/`. This document provides comprehensive reference for all configuration options.
 
 ## Configuration File Location
 
-- **Default location**: `~/.lilrag/config.json`
+- **Configuration location**: `~/.config/lil-rag/config.json`
+- **Data storage location**: `~/.local/share/lil-rag/`
 - **Created automatically** when you run any LilRag command for the first time
 - **User-specific**: Each user has their own configuration profile
 
@@ -20,11 +21,11 @@ LilRag uses a profile-based configuration system that stores settings in `~/.lil
     "vision_model": "llama3.2-vision",
     "timeout_seconds": 30
   },
-  "storage_path": "/home/user/.lilrag/data/lilrag.db",
-  "data_dir": "/home/user/.lilrag/data",
+  "storage_path": "/home/user/.local/share/lil-rag/lil-rag.db",
+  "data_dir": "/home/user/.local/share/lil-rag",
   "server": {
     "host": "localhost",
-    "port": 8080
+    "port": 12121
   },
   "chunking": {
     "max_tokens": 256,
@@ -185,7 +186,7 @@ Controls integration with Ollama for embeddings, chat, and vision processing.
 
 #### `port`
 - **Type**: Integer  
-- **Default**: `8080`
+- **Default**: `12121`
 - **Description**: HTTP server port
 - **Examples**:
   ```bash
@@ -329,7 +330,7 @@ rm ~/.lilrag/config.json
 
 # Test with health check
 ./bin/lil-rag health
-./bin/lil-rag-server & curl http://localhost:8080/api/health
+./bin/lil-rag-server & curl http://localhost:12121/api/health
 ```
 
 ### Common Issues

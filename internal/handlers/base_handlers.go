@@ -21,13 +21,15 @@ type Handler struct {
 
 // Request and Response types
 type IndexRequest struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
+	ID        string  `json:"id"`
+	Text      string  `json:"text"`
+	Namespace *string `json:"namespace,omitempty"`
 }
 
 type SearchRequest struct {
-	Query string `json:"query"`
-	Limit int    `json:"limit,omitempty"`
+	Query     string  `json:"query"`
+	Limit     int     `json:"limit,omitempty"`
+	Namespace *string `json:"namespace,omitempty"`
 }
 
 type ChatRequest struct {

@@ -54,7 +54,7 @@ func Default() *Config {
 		},
 		Server: Server{
 			Host: "localhost",
-			Port: 8080,
+			Port: 12121,
 		},
 		Chunking: Chunk{
 			MaxTokens: 1800,

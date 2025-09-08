@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server implementation for LilRag, allowing AI as
 
 ## Features
 
-The LilRag MCP server exposes three main tools:
+The LilRag MCP server exposes eight main tools:
 
 ### 1. `lilrag_index`
 Index text content into the RAG system for later retrieval.
@@ -12,6 +12,7 @@ Index text content into the RAG system for later retrieval.
 **Parameters:**
 - `text` (string, required): The text content to index
 - `id` (string, optional): Document ID. Auto-generated if not provided
+- `namespace` (string, optional): Namespace to organize documents
 
 **Example:**
 ```json
@@ -30,6 +31,7 @@ Index a text or PDF file into the RAG system.
 **Parameters:**
 - `file_path` (string, required): Path to the file to index (supports .txt and .pdf files)
 - `id` (string, optional): Document ID. Uses filename if not provided
+- `namespace` (string, optional): Namespace to organize documents
 
 **Example:**
 ```json
@@ -48,6 +50,7 @@ Search for relevant content using semantic similarity.
 **Parameters:**
 - `query` (string, required): The search query
 - `limit` (integer, optional): Maximum results to return (default: 10, max: 50)
+- `namespace` (string, optional): Search within specific namespace only
 
 **Example:**
 ```json
@@ -56,6 +59,56 @@ Search for relevant content using semantic similarity.
   "arguments": {
     "query": "machine learning algorithms",
     "limit": 5
+  }
+}
+```
+
+### 4. `lilrag_chat`
+Interactive chat with RAG context.
+
+**Parameters:**
+- `message` (string, required): Question or message  
+- `limit` (integer, optional): Max context documents (default: 5, max: 20)
+
+### 5. `lilrag_list_documents`
+List all indexed documents with metadata.
+
+**Parameters:** None
+
+### 6. `lilrag_delete_document`
+Delete a document and all its chunks.
+
+**Parameters:**
+- `document_id` (string, required): ID of document to delete
+
+### 7. `lilrag_get_document`
+Get details about a specific document.
+
+**Parameters:**
+- `document_id` (string, required): ID of document to retrieve
+
+**Example:**
+```json
+{
+  "name": "lilrag_get_document",
+  "arguments": {
+    "document_id": "important-doc"
+  }
+}
+```
+
+### 8. `lilrag_get_document_chunks`
+Get all chunks for a specific document.
+
+**Parameters:**
+- `document_id` (string, required): ID of document to get chunks for
+
+**Example:**
+```json
+{
+  "name": "lilrag_get_document_chunks",
+  "arguments": {
+    "document_id": "important-doc"
   }
 }
 ```

@@ -49,7 +49,12 @@ type Storage interface {
 		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
 		originalFilePath, docType string,
 	) error
+	IndexChunksWithNamespace(
+		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
+		originalFilePath, docType string, namespace *string,
+	) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
+	SearchWithNamespace(ctx context.Context, embedding []float32, limit int, namespace *string) ([]SearchResult, error)
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error)
 	GetDocumentChunks(ctx context.Context, documentID string) ([]Chunk, error)
@@ -78,6 +83,7 @@ type DocumentInfo struct {
 	SourcePath string    `json:"source_path"`
 	DocType    string    `json:"doc_type"`
 	IsImage    bool      `json:"is_image"`
+	Namespace  *string   `json:"namespace,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -166,6 +172,10 @@ func (m *LilRag) Initialize() error {
 }
 
 func (m *LilRag) Index(ctx context.Context, text, id string) error {
+	return m.IndexWithNamespace(ctx, text, id, nil)
+}
+
+func (m *LilRag) IndexWithNamespace(ctx context.Context, text, id string, namespace *string) error {
 	if text == "" {
 		return fmt.Errorf("text cannot be empty")
 	}
@@ -183,7 +193,17 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create embedding: %w", err)
 		}
-		return m.storage.Index(ctx, id, text, embedding)
+		// Create a single chunk for namespace-aware storage
+		chunk := Chunk{
+			Text:       text,
+			Index:      0,
+			StartPos:   0,
+			EndPos:     len(text),
+			TokenCount: len(strings.Fields(text)), // Simple token estimation
+			ChunkType:  "text",
+			PageNumber: nil,
+		}
+		return m.storage.IndexChunksWithNamespace(ctx, id, text, []Chunk{chunk}, [][]float32{embedding}, "", "text", namespace)
 	}
 
 	// Complex case: text needs to be chunked
@@ -213,11 +233,16 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 	}
 
 	// Store document with chunks
-	return m.storage.IndexChunks(ctx, id, text, chunks, embeddings)
+	return m.storage.IndexChunksWithNamespace(ctx, id, text, chunks, embeddings, "", "text", namespace)
 }
 
 // IndexPDF indexes a PDF file with page-based chunking
 func (m *LilRag) IndexPDF(ctx context.Context, filePath, id string) error {
+	return m.IndexPDFWithNamespace(ctx, filePath, id, nil)
+}
+
+// IndexPDFWithNamespace indexes a PDF file with page-based chunking and namespace
+func (m *LilRag) IndexPDFWithNamespace(ctx context.Context, filePath, id string, namespace *string) error {
 	if filePath == "" {
 		return fmt.Errorf("file path cannot be empty")
 	}
@@ -274,21 +299,26 @@ func (m *LilRag) IndexPDF(ctx context.Context, filePath, id string) error {
 	}
 
 	// Store document with page chunks
-	return m.storage.IndexChunks(ctx, id, combinedText.String(), chunks, embeddings)
+	return m.storage.IndexChunksWithNamespace(ctx, id, combinedText.String(), chunks, embeddings, filePath, "pdf", namespace)
 }
 
 // IndexFile indexes a file, automatically detecting the format and using appropriate parser
 func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
+	return m.IndexFileWithNamespace(ctx, filePath, id, nil)
+}
+
+// IndexFileWithNamespace indexes a file with a namespace
+func (m *LilRag) IndexFileWithNamespace(ctx context.Context, filePath, id string, namespace *string) error {
 	if m.documentHandler == nil {
 		// Fallback to legacy behavior if document handler not initialized
 		if IsPDFFile(filePath) {
-			return m.IndexPDF(ctx, filePath, id)
+			return m.IndexPDFWithNamespace(ctx, filePath, id, namespace)
 		}
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-		return m.Index(ctx, string(content), id)
+		return m.IndexWithNamespace(ctx, string(content), id, namespace)
 	}
 
 	// Use document handler for all supported formats
@@ -333,10 +363,14 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 	}
 
 	// Store document with chunks and metadata
-	return m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, string(docType))
+	return m.storage.IndexChunksWithNamespace(ctx, id, combinedText.String(), chunks, embeddings, filePath, string(docType), namespace)
 }
 
 func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	return m.SearchWithNamespace(ctx, query, limit, nil)
+}
+
+func (m *LilRag) SearchWithNamespace(ctx context.Context, query string, limit int, namespace *string) ([]SearchResult, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query cannot be empty")
 	}
@@ -362,7 +396,7 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 	}
 
 	// Primary vector search
-	results, err := m.storage.Search(ctx, embedding, limit)
+	results, err := m.storage.SearchWithNamespace(ctx, embedding, limit, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("vector search failed: %w", err)
 	}
@@ -371,7 +405,7 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 	// text-based fallback search for improved accuracy
 	if m.needsTextFallback(query) {
 		// Always supplement business/contact queries with text-based search for better recall
-		textResults, err := m.performTextFallbackSearch(ctx, query, limit)
+		textResults, err := m.performTextFallbackSearchWithNamespace(ctx, query, limit, namespace)
 		if err == nil && len(textResults) > 0 {
 			// Merge results, prioritizing exact text matches
 			results = m.mergeSearchResults(results, textResults)
@@ -422,6 +456,11 @@ func (m *LilRag) needsTextFallback(query string) bool {
 
 // performTextFallbackSearch performs text-based search as a fallback
 func (m *LilRag) performTextFallbackSearch(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	return m.performTextFallbackSearchWithNamespace(ctx, query, limit, nil)
+}
+
+// performTextFallbackSearchWithNamespace performs text-based search as a fallback with namespace filtering
+func (m *LilRag) performTextFallbackSearchWithNamespace(ctx context.Context, query string, limit int, namespace *string) ([]SearchResult, error) {
 	// This is a simplified text search implementation
 	// In a production system, this could use FTS (Full Text Search) or similar
 	documents, err := m.storage.ListDocuments(ctx)
@@ -434,6 +473,13 @@ func (m *LilRag) performTextFallbackSearch(ctx context.Context, query string, li
 	queryTerms := strings.Fields(queryLower)
 
 	for _, doc := range documents {
+		// Filter by namespace if provided
+		if namespace != nil {
+			if doc.Namespace == nil || *doc.Namespace != *namespace {
+				continue
+			}
+		}
+
 		textLower := strings.ToLower(doc.Text)
 		score := m.calculateTextMatchScore(textLower, queryTerms)
 

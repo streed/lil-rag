@@ -79,6 +79,7 @@ func (s *SQLiteStorage) createTables() error {
 			source_path TEXT,
 			doc_type TEXT,
 			metadata TEXT,
+			namespace TEXT,
 			chunk_count INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -126,6 +127,12 @@ func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string
 // IndexChunksWithMetadata indexes a document with metadata including original file path
 func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID, text string,
 	chunks []Chunk, embeddings [][]float32, originalFilePath, docType string) error {
+	return s.IndexChunksWithNamespace(ctx, documentID, text, chunks, embeddings, originalFilePath, docType, nil)
+}
+
+// IndexChunksWithNamespace indexes a document with metadata including namespace
+func (s *SQLiteStorage) IndexChunksWithNamespace(ctx context.Context, documentID, text string,
+	chunks []Chunk, embeddings [][]float32, originalFilePath, docType string, namespace *string) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
 	}
@@ -165,9 +172,9 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 	// Insert or update document
 	_, err = tx.ExecContext(ctx, `
 		INSERT OR REPLACE INTO documents (
-			id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunk_count, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, len(chunks), time.Now().UTC())
+			id, original_text_compressed, content_hash, file_path, source_path, doc_type, namespace, chunk_count, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, namespace, len(chunks), time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to insert document: %w", err)
 	}
@@ -279,6 +286,10 @@ func (s *SQLiteStorage) storeContent(id, text, contentHash string) (string, erro
 }
 
 func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error) {
+	return s.SearchWithNamespace(ctx, embedding, limit, nil)
+}
+
+func (s *SQLiteStorage) SearchWithNamespace(ctx context.Context, embedding []float32, limit int, namespace *string) ([]SearchResult, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("storage not initialized - call Initialize() first")
 	}
@@ -293,25 +304,51 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 	}
 
 	// Search through chunks and return best matches
-	query := `
-		SELECT 
-			c.document_id,
-			c.chunk_text_compressed,
-			c.chunk_index,
-			c.page_number,
-			c.chunk_type,
-			d.original_text_compressed,
-			d.file_path,
-			d.source_path,
-			vec_distance_cosine(e.embedding, ?) as distance
-		FROM chunks c
-		JOIN documents d ON c.document_id = d.id
-		JOIN embeddings e ON c.chunk_id = e.chunk_id
-		ORDER BY distance
-		LIMIT ?
-	`
+	var query string
+	var args []interface{}
 
-	rows, err := s.db.QueryContext(ctx, query, string(embeddingJSON), limit)
+	if namespace != nil {
+		query = `
+			SELECT 
+				c.document_id,
+				c.chunk_text_compressed,
+				c.chunk_index,
+				c.page_number,
+				c.chunk_type,
+				d.original_text_compressed,
+				d.file_path,
+				d.source_path,
+				vec_distance_cosine(e.embedding, ?) as distance
+			FROM chunks c
+			JOIN documents d ON c.document_id = d.id
+			JOIN embeddings e ON c.chunk_id = e.chunk_id
+			WHERE d.namespace = ?
+			ORDER BY distance
+			LIMIT ?
+		`
+		args = []interface{}{string(embeddingJSON), *namespace, limit}
+	} else {
+		query = `
+			SELECT 
+				c.document_id,
+				c.chunk_text_compressed,
+				c.chunk_index,
+				c.page_number,
+				c.chunk_type,
+				d.original_text_compressed,
+				d.file_path,
+				d.source_path,
+				vec_distance_cosine(e.embedding, ?) as distance
+			FROM chunks c
+			JOIN documents d ON c.document_id = d.id
+			JOIN embeddings e ON c.chunk_id = e.chunk_id
+			ORDER BY distance
+			LIMIT ?
+		`
+		args = []interface{}{string(embeddingJSON), limit}
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute search query: %w", err)
 	}
@@ -429,7 +466,7 @@ func (s *SQLiteStorage) hasMultipleChunks(ctx context.Context, documentID string
 
 func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, original_text_compressed, chunk_count, source_path, doc_type, created_at, updated_at 
+		SELECT id, original_text_compressed, chunk_count, source_path, doc_type, namespace, created_at, updated_at 
 		FROM documents 
 		ORDER BY updated_at DESC
 	`)
@@ -444,10 +481,11 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 		var compressedText []byte
 		var sourcePath sql.NullString
 		var docType sql.NullString
+		var namespace sql.NullString
 		var updatedAtStr string
 		var createdAtStr string
 
-		err := rows.Scan(&doc.ID, &compressedText, &doc.ChunkCount, &sourcePath, &docType, &createdAtStr, &updatedAtStr)
+		err := rows.Scan(&doc.ID, &compressedText, &doc.ChunkCount, &sourcePath, &docType, &namespace, &createdAtStr, &updatedAtStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan document row: %w", err)
 		}
@@ -456,6 +494,9 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 		doc.SourcePath = sourcePath.String
 		doc.DocType = docType.String
 		doc.IsImage = docType.String == "image"
+		if namespace.Valid {
+			doc.Namespace = &namespace.String
+		}
 
 		// Decompress the text
 		doc.Text, err = DecompressText(compressedText)

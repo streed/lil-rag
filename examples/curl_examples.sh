@@ -2,7 +2,7 @@
 
 # LilRag API Examples using curl
 
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:12121"
 
 echo "=== LilRag API Examples ==="
 echo ""

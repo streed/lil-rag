@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 
-# Lil-RAG Installation Script
-# Downloads and installs the latest release from GitHub
+# Lil-RAG Universal Installation Script
+# Platform-aware dispatcher that downloads and runs the appropriate installer
 
 set -e
 
 # Configuration
 REPO="streed/lil-rag"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-GITHUB_API="https://api.github.com"
-GITHUB_REPO="https://github.com"
+SCRIPTS_BASE_URL="https://raw.githubusercontent.com/${REPO}/main/scripts"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
 # Helper functions
@@ -23,278 +22,306 @@ log() { echo -e "${BLUE}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-
-# Detect OS and architecture
-detect_platform() {
-    local os arch
-    
-    case "$(uname -s)" in
-        Darwin*)    os="darwin" ;;
-        Linux*)     os="linux" ;;
-        CYGWIN*|MINGW*|MSYS*) os="windows" ;;
-        *)          error "Unsupported operating system: $(uname -s)"; exit 1 ;;
-    esac
-    
-    case "$(uname -m)" in
-        x86_64|amd64)   arch="amd64" ;;
-        aarch64|arm64)  arch="arm64" ;;
-        *)              error "Unsupported architecture: $(uname -m)"; exit 1 ;;
-    esac
-    
-    echo "${os}-${arch}"
-}
-
-# Get the latest release info from GitHub API
-get_latest_release() {
-    log "Fetching latest release information..."
-    
-    if ! command -v curl &> /dev/null; then
-        error "curl is required but not installed. Please install curl and try again."
-        exit 1
-    fi
-    
-    local release_info
-    release_info=$(curl -s "${GITHUB_API}/repos/${REPO}/releases/latest")
-    
-    if echo "$release_info" | grep -q "Not Found"; then
-        error "Repository not found or no releases available"
-        error "Please check the repository: ${GITHUB_REPO}/${REPO}"
-        exit 1
-    fi
-    
-    echo "$release_info"
-}
-
-# Extract download URL for the current platform
-get_download_url() {
-    local release_info="$1"
-    local platform="$2"
-    local extension=""
-    
-    # Determine file extension
-    if [[ "$platform" == *"windows"* ]]; then
-        extension=".zip"
-    else
-        extension=".tar.gz"
-    fi
-    
-    local filename="lil-rag-${platform}${extension}"
-    local download_url
-    
-    # Extract download URL using basic text processing
-    download_url=$(echo "$release_info" | grep -o "https://github.com/${REPO}/releases/download/[^\"]*${filename}" | head -1)
-    
-    if [ -z "$download_url" ]; then
-        error "Could not find release asset for platform: $platform"
-        error "Available assets:"
-        echo "$release_info" | grep -o "https://github.com/${REPO}/releases/download/[^\"]*" | sed 's/.*\//  - /'
-        exit 1
-    fi
-    
-    echo "$download_url"
-}
-
-# Extract version from release info
-get_version() {
-    local release_info="$1"
-    echo "$release_info" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4
-}
-
-# Download and extract the release
-download_and_extract() {
-    local download_url="$1"
-    local platform="$2"
-    local version="$3"
-    
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    local filename
-    filename=$(basename "$download_url")
-    
-    log "Downloading lil-rag $version for $platform..."
-    
-    if ! curl -L -o "${temp_dir}/${filename}" "$download_url"; then
-        error "Failed to download $download_url"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-    
-    log "Extracting binaries..."
-    
-    cd "$temp_dir"
-    
-    if [[ "$filename" == *.zip ]]; then
-        if ! command -v unzip &> /dev/null; then
-            error "unzip is required but not installed. Please install unzip and try again."
-            rm -rf "$temp_dir"
-            exit 1
-        fi
-        unzip -q "$filename"
-    else
-        tar -xzf "$filename"
-    fi
-    
-    # Find the extracted binaries
-    local binaries=()
-    for binary in lil-rag lil-rag-server lil-rag-mcp; do
-        if [[ "$platform" == *"windows"* ]]; then
-            if [ -f "${binary}-${platform}.exe" ]; then
-                binaries+=("${binary}-${platform}.exe:${binary}.exe")
-            fi
-        else
-            if [ -f "${binary}-${platform}" ]; then
-                binaries+=("${binary}-${platform}:${binary}")
-            fi
-        fi
-    done
-    
-    if [ ${#binaries[@]} -eq 0 ]; then
-        error "No binaries found in the downloaded archive"
-        rm -rf "$temp_dir"
-        exit 1
-    fi
-    
-    # Create install directory if it doesn't exist
-    mkdir -p "$INSTALL_DIR"
-    
-    log "Installing binaries to $INSTALL_DIR..."
-    
-    for binary_pair in "${binaries[@]}"; do
-        local src_name="${binary_pair%:*}"
-        local dst_name="${binary_pair#*:}"
-        
-        cp "$src_name" "${INSTALL_DIR}/${dst_name}"
-        chmod +x "${INSTALL_DIR}/${dst_name}"
-        success "Installed ${dst_name}"
-    done
-    
-    # Cleanup
-    rm -rf "$temp_dir"
-}
-
-# Check if install directory is in PATH
-check_path() {
-    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-        warn "Install directory $INSTALL_DIR is not in your PATH"
-        warn "Add the following line to your shell profile (.bashrc, .zshrc, etc.):"
-        echo ""
-        echo "    export PATH=\"\$PATH:$INSTALL_DIR\""
-        echo ""
-        warn "Or run: echo 'export PATH=\"\$PATH:$INSTALL_DIR\"' >> ~/.bashrc"
-    fi
-}
-
-# Verify installation
-verify_installation() {
-    log "Verifying installation..."
-    
-    local binaries=("lil-rag" "lil-rag-server")
-    if [[ "$platform" == "windows" ]]; then
-        binaries=("lil-rag.exe" "lil-rag-server.exe")
-    fi
-    
-    for binary in "${binaries[@]}"; do
-        if [ -f "${INSTALL_DIR}/${binary}" ]; then
-            local version
-            if version=$("${INSTALL_DIR}/${binary}" --version 2>/dev/null); then
-                success "${binary} installed successfully: $version"
-            else
-                success "${binary} installed (version check failed)"
-            fi
-        else
-            error "Binary not found: ${INSTALL_DIR}/${binary}"
-        fi
-    done
-}
+section() { echo -e "${PURPLE}[SECTION]${NC} $1"; }
 
 # Show usage information
 show_usage() {
-    echo "Lil-RAG Installation Script"
-    echo ""
-    echo "Usage: $0 [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  -d, --dir DIR     Install directory (default: ~/.local/bin)"
-    echo "  -h, --help        Show this help message"
-    echo "  -v, --version     Show version and exit"
-    echo ""
-    echo "Environment Variables:"
-    echo "  INSTALL_DIR       Override default install directory"
-    echo ""
-    echo "Examples:"
-    echo "  $0                          # Install to ~/.local/bin"
-    echo "  $0 -d /usr/local/bin        # Install to /usr/local/bin"
-    echo "  INSTALL_DIR=/opt/bin $0     # Install using environment variable"
+    cat << 'EOF'
+Lil-RAG Universal Installation Script
+
+This script detects your platform and downloads the appropriate installer.
+
+Usage: ./install.sh [OPTIONS]
+
+Options:
+  -d, --dir DIR         Install directory (passed to platform installer)
+  -h, --help           Show this help message
+  -v, --version        Show script version
+  --skip-deps          Skip dependency installation
+  --skip-verify        Skip installation verification
+  --force              Force installation even if already installed
+  --local              Use local platform scripts (for development)
+
+Environment Variables:
+  INSTALL_DIR          Override default install directory
+  NO_COLOR            Disable colored output
+
+Examples:
+  ./install.sh                           # Auto-detect platform and install
+  ./install.sh -d /usr/local/bin        # Install to custom directory
+  ./install.sh --skip-deps              # Skip dependency installation
+
+Platform-specific installers are also available:
+  - Linux:   ./scripts/install-linux.sh
+  - macOS:   ./scripts/install-macos.sh
+  - Windows: ./scripts/install-windows.ps1 (run with PowerShell)
+
+EOF
 }
 
-# Main installation function
+# Detect platform
+detect_platform() {
+    local os=""
+    
+    case "$(uname -s)" in
+        Darwin*)
+            os="macos"
+            ;;
+        Linux*)
+            os="linux"
+            ;;
+        CYGWIN*|MINGW*|MSYS*)
+            os="windows"
+            ;;
+        *)
+            error "Unsupported operating system: $(uname -s)"
+            error "Supported platforms: Linux, macOS, Windows (Git Bash/WSL)"
+            exit 1
+            ;;
+    esac
+    
+    echo "$os"
+}
+
+# Check for required tools
+check_requirements() {
+    local missing_tools=()
+    
+    # Check for curl
+    if ! command -v curl &> /dev/null; then
+        missing_tools+=("curl")
+    fi
+    
+    # Check for basic Unix tools
+    for tool in "bash" "mktemp" "chmod"; do
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+        fi
+    done
+    
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        error "Missing required tools: ${missing_tools[*]}"
+        error "Please install them and try again"
+        exit 1
+    fi
+}
+
+# Download platform-specific installer
+download_installer() {
+    local platform="$1"
+    local use_local="$2"
+    local script_name=""
+    local temp_dir=""
+    
+    case "$platform" in
+        linux)
+            script_name="install-linux.sh"
+            ;;
+        macos)
+            script_name="install-macos.sh"
+            ;;
+        windows)
+            script_name="install-windows.ps1"
+            ;;
+        *)
+            error "Unknown platform: $platform"
+            exit 1
+            ;;
+    esac
+    
+    if [ "$use_local" = true ]; then
+        # Use local script (for development)
+        local local_script="scripts/$script_name"
+        
+        if [ -f "$local_script" ]; then
+            log "Using local platform installer: $local_script"
+            echo "$local_script"
+            return 0
+        else
+            error "Local script not found: $local_script"
+            error "Run from the repository root or use online installer"
+            exit 1
+        fi
+    else
+        # Download from GitHub
+        temp_dir=$(mktemp -d)
+        local temp_script="$temp_dir/$script_name"
+        local download_url="$SCRIPTS_BASE_URL/$script_name"
+        
+        log "Downloading $platform installer from GitHub..."
+        log "URL: $download_url"
+        
+        if ! curl -fsSL "$download_url" -o "$temp_script"; then
+            error "Failed to download platform installer"
+            error "URL: $download_url"
+            rm -rf "$temp_dir"
+            exit 1
+        fi
+        
+        # Make executable
+        chmod +x "$temp_script"
+        
+        echo "$temp_script"
+    fi
+}
+
+# Run platform-specific installer
+run_installer() {
+    local installer_script="$1"
+    local platform="$2"
+    shift 2
+    local args=("$@")
+    
+    log "Running $platform installer..."
+    
+    case "$platform" in
+        linux|macos)
+            exec "$installer_script" "${args[@]}"
+            ;;
+        windows)
+            if command -v powershell &> /dev/null; then
+                # Convert bash arguments to PowerShell format
+                local ps_args=()
+                local i=0
+                while [ $i -lt ${#args[@]} ]; do
+                    case "${args[i]}" in
+                        -d|--dir)
+                            ps_args+=("-InstallDir")
+                            ps_args+=("${args[i+1]}")
+                            i=$((i + 1))
+                            ;;
+                        --skip-deps)
+                            ps_args+=("-SkipDeps")
+                            ;;
+                        --skip-verify)
+                            ps_args+=("-SkipVerify")
+                            ;;
+                        --force)
+                            ps_args+=("-Force")
+                            ;;
+                        -h|--help)
+                            ps_args+=("-Help")
+                            ;;
+                        -v|--version)
+                            ps_args+=("-Version")
+                            ;;
+                        *)
+                            warn "Ignoring unknown argument for Windows: ${args[i]}"
+                            ;;
+                    esac
+                    i=$((i + 1))
+                done
+                
+                exec powershell -ExecutionPolicy Bypass -File "$installer_script" "${ps_args[@]}"
+            else
+                error "PowerShell not found. Windows installation requires PowerShell."
+                error "Please install PowerShell or use WSL with the Linux installer."
+                exit 1
+            fi
+            ;;
+        *)
+            error "Unknown platform: $platform"
+            exit 1
+            ;;
+    esac
+}
+
+# Cleanup function
+cleanup() {
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+        rm -rf "$TEMP_DIR"
+    fi
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Main function
 main() {
-    # Parse command line arguments
+    local use_local=false
+    local platform_args=()
+    
+    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -d|--dir)
-                INSTALL_DIR="$2"
-                shift 2
-                ;;
             -h|--help)
                 show_usage
                 exit 0
                 ;;
             -v|--version)
-                echo "Lil-RAG Installation Script v1.0.0"
+                echo "Lil-RAG Universal Installation Script v2.0.0"
                 exit 0
                 ;;
+            --local)
+                use_local=true
+                shift
+                ;;
             *)
-                error "Unknown option: $1"
-                show_usage
-                exit 1
+                # Pass through all other arguments to platform installer
+                platform_args+=("$1")
+                shift
                 ;;
         esac
     done
     
-    echo "🤖 Lil-RAG Installation Script"
-    echo "=============================="
+    # Disable colors if requested
+    if [ -n "$NO_COLOR" ]; then
+        RED='' GREEN='' BLUE='' YELLOW='' PURPLE='' NC=''
+    fi
+    
+    echo "🚀 Lil-RAG Universal Installation Script"
+    echo "========================================="
     echo ""
+    
+    # Check requirements
+    check_requirements
     
     # Detect platform
+    section "Platform Detection"
     local platform
     platform=$(detect_platform)
-    log "Detected platform: $platform"
     
-    # Get latest release
-    local release_info
-    release_info=$(get_latest_release)
+    case "$platform" in
+        linux)
+            log "Detected: Linux"
+            log "Using: Robust Linux installer with package manager support"
+            ;;
+        macos)
+            log "Detected: macOS"
+            log "Using: macOS installer with Homebrew integration"
+            ;;
+        windows)
+            log "Detected: Windows (Git Bash/WSL/MSYS2)"
+            log "Using: PowerShell installer for Windows"
+            ;;
+    esac
     
-    local version
-    version=$(get_version "$release_info")
-    log "Latest version: $version"
+    # Download appropriate installer
+    section "Downloading Platform Installer"
+    local installer_script
+    installer_script=$(download_installer "$platform" "$use_local")
     
-    # Get download URL
-    local download_url
-    download_url=$(get_download_url "$release_info" "$platform")
-    log "Download URL: $download_url"
+    if [ "$use_local" != true ]; then
+        # Store temp dir for cleanup
+        TEMP_DIR=$(dirname "$installer_script")
+    fi
     
-    # Download and install
-    download_and_extract "$download_url" "$platform" "$version"
+    success "Platform installer ready: $(basename "$installer_script")"
     
-    # Verify installation
-    verify_installation
-    
-    # Check PATH
-    check_path
-    
+    # Run platform-specific installer
     echo ""
-    success "Installation completed successfully!"
-    success "You can now use: lil-rag, lil-rag-server"
+    section "Starting Platform-Specific Installation"
     echo ""
-    log "Quick start:"
-    echo "  1. Initialize configuration: lil-rag config init"
-    echo "  2. Index some content: lil-rag index doc1 'Your text content'"
-    echo "  3. Search: lil-rag search 'query'"
-    echo "  4. Start server: lil-rag-server"
-    echo ""
-    log "For more information, visit: ${GITHUB_REPO}/${REPO}"
+    
+    # Run the installer (this will exec, so no code after this runs)
+    run_installer "$installer_script" "$platform" "${platform_args[@]}"
 }
+
+# Ensure we're not being sourced
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    error "This script should be executed, not sourced"
+    exit 1
+fi
 
 # Run main function
 main "$@"

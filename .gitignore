@@ -50,7 +50,13 @@ Thumbs.db
 *.db-wal
 *.db-shm
 data/
+
+# Legacy config location (pre XDG migration)
 .lilrag/
+
+# XDG Base Directory locations (for development/testing)
+.config/lil-rag/
+.local/share/lil-rag/
 
 # Test files
 test_document.txt

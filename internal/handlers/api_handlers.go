@@ -63,7 +63,7 @@ func (h *Handler) Index() http.HandlerFunc {
 
 		// Record metrics for indexing
 		indexStart := time.Now()
-		err := h.rag.Index(ctx, req.Text, req.ID)
+		err := h.rag.IndexWithNamespace(ctx, req.Text, req.ID, req.Namespace)
 		indexDuration := time.Since(indexStart)
 
 		if err != nil {
@@ -111,8 +111,12 @@ func (h *Handler) handleSearchGET(w http.ResponseWriter, r *http.Request) {
 			limit = l
 		}
 	}
-	log.Printf("Search GET request - query: '%s', limit: %d", query, limit)
-	h.performSearch(w, r, query, limit)
+	var namespace *string
+	if namespaceStr := r.URL.Query().Get("namespace"); namespaceStr != "" {
+		namespace = &namespaceStr
+	}
+	log.Printf("Search GET request - query: '%s', limit: %d, namespace: %v", query, limit, namespace)
+	h.performSearchWithNamespace(w, r, query, limit, namespace)
 }
 
 func (h *Handler) handleSearchPOST(w http.ResponseWriter, r *http.Request) {
@@ -128,17 +132,21 @@ func (h *Handler) handleSearchPOST(w http.ResponseWriter, r *http.Request) {
 	if req.Limit <= 0 {
 		req.Limit = 10
 	}
-	log.Printf("Search POST request - query: '%s', limit: %d", req.Query, req.Limit)
-	h.performSearch(w, r, req.Query, req.Limit)
+	log.Printf("Search POST request - query: '%s', limit: %d, namespace: %v", req.Query, req.Limit, req.Namespace)
+	h.performSearchWithNamespace(w, r, req.Query, req.Limit, req.Namespace)
 }
 
 func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query string, limit int) {
+	h.performSearchWithNamespace(w, r, query, limit, nil)
+}
+
+func (h *Handler) performSearchWithNamespace(w http.ResponseWriter, r *http.Request, query string, limit int, namespace *string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	log.Printf("Performing search - query: '%s', limit: %d", query, limit)
 	searchStart := time.Now()
-	results, err := h.rag.Search(ctx, query, limit)
+	results, err := h.rag.SearchWithNamespace(ctx, query, limit, namespace)
 	searchDuration := time.Since(searchStart)
 
 	if err != nil {

@@ -13,6 +13,7 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 - 💬 **Interactive Chat** - RAG-powered chat with context and source citations
 - 📄 **Multi-Format Support** - Native parsing for PDF, DOCX, XLSX, HTML, CSV, and text files
 - 📚 **Document Management** - Complete CRUD operations for indexed documents
+- 🏷️ **Namespace Organization** - Organize documents with optional namespaces for better filtering
 - 🗜️ **Smart Storage** - Automatic gzip compression and intelligent deduplication
 - 🔄 **Complete Documents** - Returns full document content, not just chunks
 
@@ -34,6 +35,7 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 - **Go 1.21+** with CGO support
 - **Ollama** with an embedding model installed
 - **SQLite** with sqlite-vec extension support
+- **pdftotext** (from poppler-utils) for optimal PDF text extraction
 
 ### Installing Dependencies
 
@@ -49,6 +51,26 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
    ```
 
 3. **SQLite-vec Extension**: The Go bindings handle this automatically via CGO
+
+4. **Install pdftotext**: Required for high-quality PDF text extraction
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install poppler-utils
+   
+   # macOS
+   brew install poppler
+   
+   # CentOS/RHEL/Fedora
+   sudo yum install poppler-utils     # CentOS/RHEL
+   sudo dnf install poppler-utils     # Fedora
+   
+   # Arch Linux
+   sudo pacman -S poppler
+   
+   # Windows
+   # Download from: https://github.com/oschwartz10612/poppler-windows/releases
+   # Or use chocolatey: choco install poppler
+   ```
 
 ## 🚀 Installation
 
@@ -149,6 +171,12 @@ ollama pull nomic-embed-text
 
 # Index from stdin
 echo "Content about artificial intelligence" | ./bin/lil-rag index doc4 -
+
+# Index with namespace for organization
+./bin/lil-rag index doc5 "Machine learning fundamentals" --namespace=ml-basics
+
+# Index file with namespace
+./bin/lil-rag index doc6 research.pdf --namespace=research
 ```
 
 ### 4. Search Content
@@ -162,6 +190,12 @@ echo "Content about artificial intelligence" | ./bin/lil-rag index doc4 -
 
 # Get full document content (limit=1 shows complete documents)
 ./bin/lil-rag search "AI concepts" 1
+
+# Search within specific namespace
+./bin/lil-rag search "machine learning" 5 --namespace=ml-basics
+
+# Search without namespace restriction (searches all documents)
+./bin/lil-rag search "neural networks" 3
 ```
 
 **Example Output:**
@@ -181,8 +215,9 @@ Found 2 results:
 
 ### All Commands
 
-- `index [id] <text|file|->` - Index content (ID optional, auto-generated if not provided)
-- `search <query> [limit]` - Search for similar content  
+- `index [id] <text|file|-> [--namespace=<namespace>]` - Index content with optional namespace
+- `search <query> [limit] [--namespace=<namespace>]` - Search for similar content  
+- `show <document-id> [--chunks]` - View document details with optional chunk information
 - `chat <message> [limit]` - Interactive chat with RAG context
 - `documents` - List all indexed documents
 - `delete <id> [--force]` - Delete a document by ID
@@ -204,8 +239,15 @@ lil-rag index doc1 "Hello world"                   # Direct text with ID
 lil-rag index doc2 document.pdf                    # PDF file with ID
 echo "Hello world" | lil-rag index doc3 -         # From stdin with ID
 
+# Index with namespaces for organization
+lil-rag index doc4 "ML concepts" --namespace=education
+lil-rag index research.pdf --namespace=papers
+lil-rag index doc5 "Project notes" --namespace=work
+
 # List and manage documents
 lil-rag documents                                   # List all documents
+lil-rag show doc1                                   # View document details
+lil-rag show doc1 --chunks                         # View document with chunk info
 lil-rag delete doc1                                 # Delete with confirmation
 lil-rag delete doc2 --force                        # Delete without confirmation
 ```
@@ -216,6 +258,8 @@ lil-rag delete doc2 --force                        # Delete without confirmation
 # Search examples  
 lil-rag search "machine learning" 5                # Search with limit
 lil-rag search "AI concepts"                       # Default limit (10)
+lil-rag search "research" 3 --namespace=papers     # Search within specific namespace
+lil-rag search "concepts" --namespace=education    # Namespace-specific search
 
 # Chat examples
 lil-rag chat "What is machine learning?" 3         # Chat with context limit
@@ -257,7 +301,7 @@ lil-rag reset --force                               # Reset database (skip confi
 ### Start the Server
 
 ```bash
-# Start with default settings (localhost:8080)
+# Start with default settings (localhost:12121)
 ./bin/lil-rag-server
 
 # Start with custom host/port  
@@ -267,7 +311,7 @@ lil-rag reset --force                               # Reset database (skip confi
 ./bin/lil-rag-server --vision-model llava --timeout 60
 ```
 
-Visit http://localhost:8080 for the web interface with API documentation and interactive chat.
+Visit http://localhost:12121 for the web interface with API documentation and interactive chat.
 
 ### 💬 Interactive Chat Interface
 
@@ -285,7 +329,7 @@ The HTTP server includes a modern, responsive chat interface for conversing with
 
 **Access the Chat:**
 1. Start the server: `./bin/lil-rag-server`
-2. Open your browser to: http://localhost:8080/chat
+2. Open your browser to: http://localhost:12121/chat
 3. Browse indexed documents in the sidebar
 4. Ask questions about your documents in the chat
 
@@ -303,18 +347,20 @@ Index content with a unique document ID.
 
 **JSON Request:**
 ```bash
-curl -X POST http://localhost:8080/api/index \
+curl -X POST http://localhost:12121/api/index \
   -H "Content-Type: application/json" \
   -d '{
     "id": "doc1", 
-    "text": "This document discusses machine learning algorithms and their applications in modern AI systems."
+    "text": "This document discusses machine learning algorithms and their applications in modern AI systems.",
+    "namespace": "ml-research"
   }'
 ```
 
 **File Upload:**
 ```bash
-curl -X POST http://localhost:8080/api/index \
+curl -X POST http://localhost:12121/api/index \
   -F "id=doc2" \
+  -F "namespace=research-papers" \
   -F "file=@document.pdf"
 ```
 
@@ -332,14 +378,18 @@ Search using query parameters or JSON body.
 
 ```bash
 # GET request
-curl "http://localhost:8080/api/search?query=machine%20learning&limit=5"
+curl "http://localhost:12121/api/search?query=machine%20learning&limit=5"
+
+# GET request with namespace
+curl "http://localhost:12121/api/search?query=machine%20learning&limit=5&namespace=ml-research"
 
 # POST request (recommended)
-curl -X POST http://localhost:8080/api/search \
+curl -X POST http://localhost:12121/api/search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "artificial intelligence applications", 
-    "limit": 3
+    "limit": 3,
+    "namespace": "ml-research"
   }'
 ```
 
@@ -367,7 +417,7 @@ curl -X POST http://localhost:8080/api/search \
 Interactive chat with RAG context and source citations.
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
+curl -X POST http://localhost:12121/api/chat \
   -H "Content-Type: application/json" \
   -d '{
     "message": "What is machine learning?", 
@@ -394,7 +444,7 @@ curl -X POST http://localhost:8080/api/chat \
 List all indexed documents with metadata.
 
 ```bash
-curl http://localhost:8080/api/documents
+curl http://localhost:12121/api/documents
 ```
 
 **Response:**
@@ -406,8 +456,53 @@ curl http://localhost:8080/api/documents
       "doc_type": "text",
       "chunk_count": 3,
       "source_path": "/path/to/file.txt",
+      "namespace": "ml-research",
       "created_at": "2024-01-15T10:30:00Z",
       "updated_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+#### GET /api/documents/{id}
+Get details about a specific document.
+
+```bash
+curl http://localhost:12121/api/documents/doc1
+```
+
+**Response:**
+```json
+{
+  "id": "doc1",
+  "text": "This document discusses machine learning algorithms...",
+  "doc_type": "text",
+  "chunk_count": 3,
+  "source_path": "/path/to/file.txt",
+  "namespace": "ml-research",
+  "is_image": false,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+
+#### GET /api/documents/{id}/chunks
+Get all chunks for a specific document.
+
+```bash
+curl http://localhost:12121/api/documents/doc1/chunks
+```
+
+**Response:**
+```json
+{
+  "chunks": [
+    {
+      "id": 1,
+      "document_id": "doc1",
+      "chunk_index": 0,
+      "text": "This document discusses machine learning...",
+      "created_at": "2024-01-15T10:30:00Z"
     }
   ]
 }
@@ -417,14 +512,14 @@ curl http://localhost:8080/api/documents
 Delete a specific document and all its chunks.
 
 ```bash
-curl -X DELETE http://localhost:8080/api/documents/doc1
+curl -X DELETE http://localhost:12121/api/documents/doc1
 ```
 
 #### GET /api/health
 Health check endpoint for monitoring.
 
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:12121/api/health
 ```
 
 **Response:**
@@ -440,15 +535,15 @@ curl http://localhost:8080/api/health
 Performance metrics and system information.
 
 ```bash
-curl http://localhost:8080/api/metrics
+curl http://localhost:12121/api/metrics
 ```
 
 ### Web Interface
 
-- **Home**: `http://localhost:8080/` - API overview and quick actions
-- **Chat Interface**: `http://localhost:8080/chat` - Interactive chat with your documents
-- **Document Library**: `http://localhost:8080/documents` - Browse and manage documents
-- **Documentation**: `http://localhost:8080/docs` - Complete API reference and guides
+- **Home**: `http://localhost:12121/` - API overview and quick actions
+- **Chat Interface**: `http://localhost:12121/chat` - Interactive chat with your documents
+- **Document Library**: `http://localhost:12121/documents` - Browse and manage documents
+- **Documentation**: `http://localhost:12121/docs` - Complete API reference and guides
 
 ## 🔌 MCP Server
 
@@ -476,6 +571,7 @@ Index text content into the RAG system.
 **Parameters:**
 - `text` (required): Text content to index
 - `id` (optional): Document ID (auto-generated if not provided)
+- `namespace` (optional): Namespace to organize documents
 
 #### lilrag_index_file  
 Index files (PDF, DOCX, XLSX, HTML, CSV, text).
@@ -483,6 +579,7 @@ Index files (PDF, DOCX, XLSX, HTML, CSV, text).
 **Parameters:**
 - `file_path` (required): Path to file to index
 - `id` (optional): Document ID (defaults to filename)
+- `namespace` (optional): Namespace to organize documents
 
 #### lilrag_search
 Semantic similarity search.
@@ -490,6 +587,7 @@ Semantic similarity search.
 **Parameters:**
 - `query` (required): Search query
 - `limit` (optional): Max results (default: 10, max: 50)
+- `namespace` (optional): Search within specific namespace only
 
 #### lilrag_chat
 Interactive chat with RAG context.
@@ -509,13 +607,25 @@ Delete a document and all its chunks.
 **Parameters:**
 - `document_id` (required): ID of document to delete
 
+#### lilrag_get_document
+Get details about a specific document.
+
+**Parameters:**
+- `document_id` (required): ID of document to retrieve
+
+#### lilrag_get_document_chunks  
+Get all chunks for a specific document.
+
+**Parameters:**
+- `document_id` (required): ID of document to get chunks for
+
 ### Integration Examples
 
 The MCP server can be integrated with various AI tools and assistants that support the Model Context Protocol. The server provides a standard interface for document indexing, searching, and chat functionality.
 
 ## Configuration
 
-LilRag uses a profile-based configuration system that stores settings in a JSON file in your user profile directory (`~/.lilrag/config.json`).
+LilRag uses a profile-based configuration system following the XDG Base Directory specification, similar to modern CLI tools. Configuration is stored at `~/.config/lil-rag/config.json` and data is stored at `~/.local/share/lil-rag/`.
 
 ### Initial Setup
 
@@ -535,7 +645,7 @@ The configuration includes:
 - **Storage**: Database path and data directory for indexed content
 - **Server**: HTTP server host and port
 
-Example profile configuration (`~/.lilrag/config.json`):
+Example profile configuration (`~/.config/lil-rag/config.json`):
 
 ```json
 {
@@ -547,11 +657,11 @@ Example profile configuration (`~/.lilrag/config.json`):
     "timeout_seconds": 30,
     "vector_size": 768
   },
-  "storage_path": "/home/user/.lilrag/data/lilrag.db",
-  "data_dir": "/home/user/.lilrag/data",
+  "storage_path": "/home/user/.local/share/lil-rag/lil-rag.db",
+  "data_dir": "/home/user/.local/share/lil-rag",
   "server": {
     "host": "localhost",
-    "port": 8080
+    "port": 12121
   },
   "chunking": {
     "max_tokens": 256,
@@ -645,7 +755,7 @@ import (
 func main() {
     // Create configuration
     homeDir, _ := os.UserHomeDir()
-    dataDir := filepath.Join(homeDir, ".lilrag", "data")
+    dataDir := filepath.Join(homeDir, ".local", "share", "lil-rag")
     
     config := &lilrag.Config{
         DatabasePath:   filepath.Join(dataDir, "test.db"),
@@ -679,8 +789,20 @@ func main() {
         log.Fatal(err)
     }
 
+    // Index with namespace for organization
+    err = rag.IndexWithNamespace(ctx, "This is about advanced Go concepts", "doc2", "golang-advanced")
+    if err != nil {
+        log.Fatal(err)
+    }
+
     // Search for similar content
     results, err := rag.Search(ctx, "Go programming", 5)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Search within specific namespace
+    namespaceResults, err := rag.SearchWithNamespace(ctx, "Go concepts", 3, "golang-advanced")
     if err != nil {
         log.Fatal(err)
     }
@@ -783,10 +905,12 @@ lil-rag/
 ## Troubleshooting
 
 ### Configuration Issues
-- Profile config location: `~/.lilrag/config.json`
+- Profile config location: `~/.config/lil-rag/config.json`
+- Data storage location: `~/.local/share/lil-rag/`
 - Initialize config if missing: `lil-rag config init`
 - Check config values: `lil-rag config show`
 - Reset to defaults: Delete config file and run `lil-rag config init`
+- Migration from old location (`~/.lilrag/`) is handled automatically
 
 ### sqlite-vec Extension Not Found
 - Ensure sqlite-vec is installed and available in your SQLite
