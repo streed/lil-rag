@@ -5,64 +5,64 @@ import (
 	"testing"
 )
 
-func TestLilRagError_Creation(t *testing.T) {
+func TestError_Creation(t *testing.T) {
 	tests := []struct {
 		name         string
-		errorFunc    func() *LilRagError
+		errorFunc    func() *Error
 		expectedType ErrorType
 		expectedCode string
 	}{
 		{
 			name:         "validation error",
-			errorFunc:    func() *LilRagError { return NewValidationError("test validation error", nil) },
+			errorFunc:    func() *Error { return NewValidationError("test validation error", nil) },
 			expectedType: ErrorTypeValidation,
 			expectedCode: "VALIDATION_ERROR",
 		},
 		{
 			name:         "config error",
-			errorFunc:    func() *LilRagError { return NewConfigError("test config error", nil) },
+			errorFunc:    func() *Error { return NewConfigError("test config error", nil) },
 			expectedType: ErrorTypeConfig,
 			expectedCode: "CONFIG_ERROR",
 		},
 		{
 			name:         "storage error",
-			errorFunc:    func() *LilRagError { return NewStorageError("test storage error", nil) },
+			errorFunc:    func() *Error { return NewStorageError("test storage error", nil) },
 			expectedType: ErrorTypeStorage,
 			expectedCode: "STORAGE_ERROR",
 		},
 		{
 			name:         "embedding error",
-			errorFunc:    func() *LilRagError { return NewEmbeddingError("test embedding error", nil) },
+			errorFunc:    func() *Error { return NewEmbeddingError("test embedding error", nil) },
 			expectedType: ErrorTypeEmbedding,
 			expectedCode: "EMBEDDING_ERROR",
 		},
 		{
 			name:         "parsing error",
-			errorFunc:    func() *LilRagError { return NewParsingError("test parsing error", nil) },
+			errorFunc:    func() *Error { return NewParsingError("test parsing error", nil) },
 			expectedType: ErrorTypeParsing,
 			expectedCode: "PARSING_ERROR",
 		},
 		{
 			name:         "search error",
-			errorFunc:    func() *LilRagError { return NewSearchError("test search error", nil) },
+			errorFunc:    func() *Error { return NewSearchError("test search error", nil) },
 			expectedType: ErrorTypeSearch,
 			expectedCode: "SEARCH_ERROR",
 		},
 		{
 			name:         "chat error",
-			errorFunc:    func() *LilRagError { return NewChatError("test chat error", nil) },
+			errorFunc:    func() *Error { return NewChatError("test chat error", nil) },
 			expectedType: ErrorTypeChat,
 			expectedCode: "CHAT_ERROR",
 		},
 		{
 			name:         "network error",
-			errorFunc:    func() *LilRagError { return NewNetworkError("test network error", nil) },
+			errorFunc:    func() *Error { return NewNetworkError("test network error", nil) },
 			expectedType: ErrorTypeNetwork,
 			expectedCode: "NETWORK_ERROR",
 		},
 		{
 			name:         "internal error",
-			errorFunc:    func() *LilRagError { return NewInternalError("test internal error", nil) },
+			errorFunc:    func() *Error { return NewInternalError("test internal error", nil) },
 			expectedType: ErrorTypeInternal,
 			expectedCode: "INTERNAL_ERROR",
 		},
@@ -87,7 +87,7 @@ func TestLilRagError_Creation(t *testing.T) {
 	}
 }
 
-func TestLilRagError_WithCause(t *testing.T) {
+func TestError_WithCause(t *testing.T) {
 	originalErr := errors.New("original error")
 	lilragErr := NewStorageError("storage failed", originalErr)
 
@@ -107,7 +107,7 @@ func TestLilRagError_WithCause(t *testing.T) {
 	}
 }
 
-func TestLilRagError_WithContext(t *testing.T) {
+func TestError_WithContext(t *testing.T) {
 	err := NewValidationError("validation failed", nil)
 
 	// Add context
@@ -127,7 +127,7 @@ func TestLilRagError_WithContext(t *testing.T) {
 	}
 }
 
-func TestLilRagError_WithOperation(t *testing.T) {
+func TestError_WithOperation(t *testing.T) {
 	err := NewEmbeddingError("embedding failed", nil)
 	err.WithOperation("IndexDocument")
 
@@ -136,7 +136,7 @@ func TestLilRagError_WithOperation(t *testing.T) {
 	}
 }
 
-func TestLilRagError_Unwrap(t *testing.T) {
+func TestError_Unwrap(t *testing.T) {
 	originalErr := errors.New("original error")
 	lilragErr := NewChatError("chat failed", originalErr)
 
@@ -146,10 +146,10 @@ func TestLilRagError_Unwrap(t *testing.T) {
 	}
 }
 
-func TestLilRagError_Is(t *testing.T) {
+func TestError_Is(t *testing.T) {
 	tests := []struct {
 		name        string
-		err         *LilRagError
+		err         *Error
 		target      error
 		shouldMatch bool
 	}{
@@ -207,7 +207,7 @@ func TestLilRagError_Is(t *testing.T) {
 	}
 }
 
-func TestLilRagError_IsWithCause(t *testing.T) {
+func TestError_IsWithCause(t *testing.T) {
 	// Test that Is works with wrapped causes
 	originalErr := errors.New("connection refused")
 	lilragErr := NewNetworkError("network failed", originalErr)
@@ -257,9 +257,9 @@ func TestValidateDocumentID(t *testing.T) {
 
 			if err != nil {
 				// Should be a validation error
-				var lilragErr *LilRagError
+				var lilragErr *Error
 				if !errors.As(err, &lilragErr) {
-					t.Error("Expected LilRagError")
+					t.Error("Expected Error")
 				} else if lilragErr.Type != ErrorTypeValidation {
 					t.Errorf("Expected validation error, got %v", lilragErr.Type)
 				}
@@ -394,7 +394,7 @@ func TestValidateText(t *testing.T) {
 }
 
 func TestToErrorResponse(t *testing.T) {
-	t.Run("LilRagError conversion", func(t *testing.T) {
+	t.Run("Error conversion", func(t *testing.T) {
 		originalErr := NewValidationError("validation failed", nil)
 		originalErr.WithContext("field", "email").WithOperation("CreateUser")
 

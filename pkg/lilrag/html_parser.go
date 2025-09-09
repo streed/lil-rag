@@ -101,7 +101,7 @@ func (hp *HTMLParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 			sectionChunks := hp.chunker.ChunkText(section)
 			for _, chunk := range sectionChunks {
 				chunk.Index = chunkIndex
-				chunk.ChunkType = "html_section"
+				chunk.ChunkType = ChunkTypeHTMLSection
 				chunks = append(chunks, chunk)
 				chunkIndex++
 			}

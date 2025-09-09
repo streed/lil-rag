@@ -31,7 +31,7 @@ func NewOllamaChatClientWithTimeout(baseURL, model string, timeoutSeconds int) *
 		baseURL = DefaultOllamaURL
 	}
 	if model == "" {
-		model = "gemma3:4b"
+		model = DefaultChatModel
 	}
 
 	return &OllamaChatClient{

@@ -118,7 +118,7 @@ func (dh *DocumentHandler) DetectDocumentType(filePath string) DocumentType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch ext {
-	case ".pdf":
+	case ExtPDF:
 		return DocumentTypePDF
 	case ".docx":
 		return DocumentTypeDOCX
@@ -134,7 +134,7 @@ func (dh *DocumentHandler) DetectDocumentType(filePath string) DocumentType {
 		return DocumentTypeTXT
 	case ".odt":
 		return DocumentTypeODT
-	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif":
+	case ExtJPG, ExtJPEG, ExtPNG, ExtGIF, ExtBMP, ExtWEBP, ExtTIFF, ExtTIF:
 		return DocumentTypeImage
 	default:
 		return DocumentTypeUnknown

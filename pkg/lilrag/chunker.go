@@ -15,6 +15,12 @@ const (
 	ContentTypeStructured = "structured"
 )
 
+// Chunk type constants
+const (
+	ChunkTypeText        = "text"
+	ChunkTypeHTMLSection = "html_section"
+)
+
 type TextChunker struct {
 	MaxTokens  int
 	Overlap    int
@@ -109,7 +115,7 @@ func (tc *TextChunker) detectContentType(text string) string {
 		return ContentTypeProse
 	}
 
-	return "text"
+	return ChunkTypeText
 }
 
 // adaptiveChunk applies content-aware chunking strategies with optimal sizing

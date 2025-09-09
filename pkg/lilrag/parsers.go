@@ -39,7 +39,10 @@ func NewParserRegistry() *ParserRegistry {
 }
 
 // NewParserRegistryWithVision creates a parser registry including vision-enabled parsers
-func NewParserRegistryWithVision(ollamaURL, visionModel string, timeoutSeconds, imageMaxSize int) (*ParserRegistry, error) {
+func NewParserRegistryWithVision(
+	ollamaURL, visionModel string,
+	timeoutSeconds, imageMaxSize int,
+) (*ParserRegistry, error) {
 	registry := NewParserRegistry()
 
 	// Add vision parser using existing constructor with default chunker
@@ -60,7 +63,7 @@ func (r *ParserRegistry) GetParser(filePath string) Parser {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	for _, parser := range r.parsers {
 		for _, supportedExt := range parser.SupportedExtensions() {
-			if ext == strings.ToLower(supportedExt) {
+			if strings.EqualFold(ext, supportedExt) {
 				return parser
 			}
 		}
@@ -96,7 +99,7 @@ func DetectDocumentType(filePath string) DocumentType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch ext {
-	case ".pdf":
+	case ExtPDF:
 		return DocumentTypePDF
 	case ".docx":
 		return DocumentTypeDOCX
@@ -106,7 +109,7 @@ func DetectDocumentType(filePath string) DocumentType {
 		return DocumentTypeHTML
 	case ".csv":
 		return DocumentTypeCSV
-	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp":
+	case ExtJPG, ExtJPEG, ExtPNG, ExtGIF, ExtBMP, ExtWEBP:
 		return DocumentTypeImage
 	default:
 		return DocumentTypeTXT
@@ -137,7 +140,11 @@ func NewDocumentParsingService(chunker *TextChunker) *DocumentParsingService {
 }
 
 // NewDocumentParsingServiceWithVision creates a document parsing service with vision support
-func NewDocumentParsingServiceWithVision(chunker *TextChunker, ollamaURL, visionModel string, timeoutSeconds, imageMaxSize int) (*DocumentParsingService, error) {
+func NewDocumentParsingServiceWithVision(
+	chunker *TextChunker,
+	ollamaURL, visionModel string,
+	timeoutSeconds, imageMaxSize int,
+) (*DocumentParsingService, error) {
 	registry, err := NewParserRegistryWithVision(ollamaURL, visionModel, timeoutSeconds, imageMaxSize)
 	if err != nil {
 		return nil, err
@@ -150,7 +157,7 @@ func NewDocumentParsingServiceWithVision(chunker *TextChunker, ollamaURL, vision
 }
 
 // ParseDocument parses a document and returns structured results
-func (s *DocumentParsingService) ParseDocument(ctx context.Context, filePath, documentID string) (*ParseResult, error) {
+func (s *DocumentParsingService) ParseDocument(_ context.Context, filePath, documentID string) (*ParseResult, error) {
 	parser := s.registry.GetParser(filePath)
 	if parser == nil {
 		return nil, fmt.Errorf("unsupported file type: %s", filePath)

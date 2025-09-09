@@ -568,4 +568,3 @@ func BenchmarkHandler_StressTest_LargePayloads(b *testing.B) {
 		}
 	}
 }
-
