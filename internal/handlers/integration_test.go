@@ -37,7 +37,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 			title:   "Animal Document",
 		},
 		{
-			id:      "doc2", 
+			id:      "doc2",
 			content: "Machine learning is a subset of artificial intelligence that focuses on algorithms. Neural networks are important in deep learning.",
 			title:   "ML Document",
 		},
@@ -193,19 +193,19 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 
 	t.Run("chat_with_documents", func(t *testing.T) {
 		chatQueries := []struct {
-			message         string
+			message          string
 			expectedKeywords []string
 		}{
 			{
-				message:         "Tell me about animals",
+				message:          "Tell me about animals",
 				expectedKeywords: []string{"fox", "dog", "animal"},
 			},
 			{
-				message:         "What is machine learning?",
+				message:          "What is machine learning?",
 				expectedKeywords: []string{"machine learning", "algorithm", "neural"},
 			},
 			{
-				message:         "How does Go handle concurrency?",
+				message:          "How does Go handle concurrency?",
 				expectedKeywords: []string{"goroutine", "channel", "concurrency"},
 			},
 		}
@@ -316,7 +316,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 	t.Run("delete_documents", func(t *testing.T) {
 		// Delete one document
 		docToDelete := testDocuments[0]
-		
+
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodDelete, "/api/documents/"+docToDelete.id, http.NoBody)
 		handler.DeleteDocument()(w, req)
@@ -364,7 +364,7 @@ func TestIntegration_FileUploadWorkflow(t *testing.T) {
 			filename: "test.txt",
 		},
 		{
-			name:     "csv_file", 
+			name:     "csv_file",
 			content:  "Name,Age,City\nJohn,30,New York\nJane,25,Los Angeles\nBob,35,Chicago",
 			filename: "data.csv",
 		},
@@ -739,3 +739,4 @@ func BenchmarkIntegration_IndexAndSearch(b *testing.B) {
 		}
 	}
 }
+

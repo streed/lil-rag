@@ -199,15 +199,15 @@ func TestDOCXParser_ChunkByContentType(t *testing.T) {
 	parser.chunker = NewTextChunker(100, 20) // Small chunks for testing
 
 	tests := []struct {
-		name        string
-		content     string
-		contentType string
+		name         string
+		content      string
+		contentType  string
 		expectChunks int
 	}{
 		{
-			name: "prose content",
-			content: strings.Repeat("This is a sentence. ", 20), // Long prose text
-			contentType: "prose",
+			name:         "prose content",
+			content:      strings.Repeat("This is a sentence. ", 20), // Long prose text
+			contentType:  "prose",
 			expectChunks: 2, // Should be split by text chunker
 		},
 		{
@@ -223,7 +223,7 @@ func TestDOCXParser_ChunkByContentType(t *testing.T) {
 			function test3() {
 				return 3;
 			}`,
-			contentType: "code",
+			contentType:  "code",
 			expectChunks: 1, // Should stay together as code
 		},
 		{
@@ -236,7 +236,7 @@ func TestDOCXParser_ChunkByContentType(t *testing.T) {
 
 			# Third Section  
 			Content for third section.`,
-			contentType: "structured",
+			contentType:  "structured",
 			expectChunks: 3, // Should split on headers
 		},
 	}
@@ -244,7 +244,7 @@ func TestDOCXParser_ChunkByContentType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			chunks := parser.chunkByContentType(tt.content, tt.contentType)
-			
+
 			if len(chunks) < 1 {
 				t.Errorf("Expected at least 1 chunk, got %d", len(chunks))
 				return
@@ -332,7 +332,7 @@ func TestDOCXParser_ChunkStructuredContent(t *testing.T) {
 	// Verify chunks split on headers
 	foundIntroduction := false
 	foundMainContent := false
-	
+
 	for _, chunk := range chunks {
 		if strings.Contains(chunk.Text, "Introduction") {
 			foundIntroduction = true
@@ -447,7 +447,7 @@ func TestDOCXParser_Parse_InvalidDOCX(t *testing.T) {
 func TestDOCXParser_ParseWithChunks_DefaultChunker(t *testing.T) {
 	// Test that ParseWithChunks creates a default chunker when none is provided
 	parser := NewDOCXParser()
-	
+
 	// Verify chunker is initially nil
 	if parser.chunker != nil {
 		t.Error("Expected chunker to be nil initially")
@@ -455,23 +455,23 @@ func TestDOCXParser_ParseWithChunks_DefaultChunker(t *testing.T) {
 
 	// Create an invalid DOCX to test the chunker creation (before file processing)
 	// We'll test the chunker creation by mocking successful parsing
-	
+
 	// Test the chunker creation logic by directly testing content processing
 	content := "Test content for chunking"
 	cleanedContent := parser.cleanContent(content)
 	contentType := parser.detectContentType(cleanedContent)
-	
+
 	// Set up chunker as ParseWithChunks would
 	if parser.chunker == nil {
 		parser.chunker = NewTextChunker(320, 48)
 	}
-	
+
 	chunks := parser.chunkByContentType(cleanedContent, contentType)
-	
+
 	if len(chunks) == 0 {
 		t.Error("Expected at least one chunk")
 	}
-	
+
 	// Verify chunk metadata is updated correctly
 	for i, chunk := range chunks {
 		// Note: ChunkType is set by different chunking methods, so we just verify it's not empty
@@ -487,7 +487,7 @@ func TestDOCXParser_ParseWithChunks_DefaultChunker(t *testing.T) {
 func TestDOCXParser_Integration_ContentProcessing(t *testing.T) {
 	// Test the complete content processing pipeline without file I/O
 	parser := NewDOCXParser()
-	
+
 	tests := []struct {
 		name         string
 		content      string

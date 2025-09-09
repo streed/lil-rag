@@ -118,17 +118,17 @@ func (s *SQLiteStorage) createTables() error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Migration: Add namespace column to existing databases
 	_, err = s.db.Exec(`ALTER TABLE documents ADD COLUMN namespace TEXT`)
 	if err != nil {
 		// Ignore error if column already exists (expected for new databases)
-		if !strings.Contains(err.Error(), "duplicate column name") && 
-		   !strings.Contains(err.Error(), "already exists") {
+		if !strings.Contains(err.Error(), "duplicate column name") &&
+			!strings.Contains(err.Error(), "already exists") {
 			return fmt.Errorf("failed to add namespace column: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 

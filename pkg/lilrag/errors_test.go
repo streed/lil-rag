@@ -67,19 +67,19 @@ func TestLilRagError_Creation(t *testing.T) {
 			expectedCode: "INTERNAL_ERROR",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.errorFunc()
-			
+
 			if err.Type != tt.expectedType {
 				t.Errorf("Expected type %v, got %v", tt.expectedType, err.Type)
 			}
-			
+
 			if err.Code != tt.expectedCode {
 				t.Errorf("Expected code %s, got %s", tt.expectedCode, err.Code)
 			}
-			
+
 			if err.Message == "" {
 				t.Error("Expected non-empty message")
 			}
@@ -90,11 +90,11 @@ func TestLilRagError_Creation(t *testing.T) {
 func TestLilRagError_WithCause(t *testing.T) {
 	originalErr := errors.New("original error")
 	lilragErr := NewStorageError("storage failed", originalErr)
-	
+
 	if lilragErr.Cause != originalErr {
 		t.Errorf("Expected cause to be %v, got %v", originalErr, lilragErr.Cause)
 	}
-	
+
 	errorStr := lilragErr.Error()
 	if !contains(errorStr, "STORAGE_ERROR") {
 		t.Error("Error string should contain error code")
@@ -109,19 +109,19 @@ func TestLilRagError_WithCause(t *testing.T) {
 
 func TestLilRagError_WithContext(t *testing.T) {
 	err := NewValidationError("validation failed", nil)
-	
+
 	// Add context
 	err.WithContext("field", "email")
 	err.WithContext("value", "invalid@")
-	
+
 	if err.Context == nil {
 		t.Fatal("Expected context to be initialized")
 	}
-	
+
 	if err.Context["field"] != "email" {
 		t.Errorf("Expected field context to be 'email', got %v", err.Context["field"])
 	}
-	
+
 	if err.Context["value"] != "invalid@" {
 		t.Errorf("Expected value context to be 'invalid@', got %v", err.Context["value"])
 	}
@@ -130,7 +130,7 @@ func TestLilRagError_WithContext(t *testing.T) {
 func TestLilRagError_WithOperation(t *testing.T) {
 	err := NewEmbeddingError("embedding failed", nil)
 	err.WithOperation("IndexDocument")
-	
+
 	if err.Operation != "IndexDocument" {
 		t.Errorf("Expected operation to be 'IndexDocument', got %s", err.Operation)
 	}
@@ -139,7 +139,7 @@ func TestLilRagError_WithOperation(t *testing.T) {
 func TestLilRagError_Unwrap(t *testing.T) {
 	originalErr := errors.New("original error")
 	lilragErr := NewChatError("chat failed", originalErr)
-	
+
 	unwrapped := lilragErr.Unwrap()
 	if unwrapped != originalErr {
 		t.Errorf("Expected unwrapped error to be %v, got %v", originalErr, unwrapped)
@@ -148,10 +148,10 @@ func TestLilRagError_Unwrap(t *testing.T) {
 
 func TestLilRagError_Is(t *testing.T) {
 	tests := []struct {
-		name           string
-		err            *LilRagError
-		target         error
-		shouldMatch    bool
+		name        string
+		err         *LilRagError
+		target      error
+		shouldMatch bool
 	}{
 		{
 			name:        "config error matches ErrInvalidConfig",
@@ -196,7 +196,7 @@ func TestLilRagError_Is(t *testing.T) {
 			shouldMatch: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			matches := errors.Is(tt.err, tt.target)
@@ -211,7 +211,7 @@ func TestLilRagError_IsWithCause(t *testing.T) {
 	// Test that Is works with wrapped causes
 	originalErr := errors.New("connection refused")
 	lilragErr := NewNetworkError("network failed", originalErr)
-	
+
 	// Should match the original error through cause
 	if !errors.Is(lilragErr, originalErr) {
 		t.Error("Expected error to match original cause")
@@ -243,18 +243,18 @@ func TestValidateDocumentID(t *testing.T) {
 			documentID: string(make([]byte, 255)), // 255 characters
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateDocumentID(tt.documentID)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if err != nil {
 				// Should be a validation error
 				var lilragErr *LilRagError
@@ -293,11 +293,11 @@ func TestValidateSearchQuery(t *testing.T) {
 			query: string(make([]byte, 10000)), // 10000 characters
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateSearchQuery(tt.query)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
@@ -338,11 +338,11 @@ func TestValidateSearchLimit(t *testing.T) {
 			expectError: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateSearchLimit(tt.limit)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
@@ -378,11 +378,11 @@ func TestValidateText(t *testing.T) {
 			text: string(make([]byte, 10*1024*1024)), // 10MB
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateText(tt.text)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
@@ -397,9 +397,9 @@ func TestToErrorResponse(t *testing.T) {
 	t.Run("LilRagError conversion", func(t *testing.T) {
 		originalErr := NewValidationError("validation failed", nil)
 		originalErr.WithContext("field", "email").WithOperation("CreateUser")
-		
+
 		response := ToErrorResponse(originalErr)
-		
+
 		if response.Type != string(ErrorTypeValidation) {
 			t.Errorf("Expected type %s, got %s", ErrorTypeValidation, response.Type)
 		}
@@ -413,11 +413,11 @@ func TestToErrorResponse(t *testing.T) {
 			t.Error("Expected context to be preserved")
 		}
 	})
-	
+
 	t.Run("regular error conversion", func(t *testing.T) {
 		regularErr := errors.New("regular error")
 		response := ToErrorResponse(regularErr)
-		
+
 		if response.Type != string(ErrorTypeInternal) {
 			t.Errorf("Expected type %s, got %s", ErrorTypeInternal, response.Type)
 		}
@@ -435,16 +435,16 @@ func TestErrorChaining(t *testing.T) {
 	originalErr := errors.New("database connection failed")
 	storageErr := NewStorageError("failed to store document", originalErr)
 	embeddingErr := NewEmbeddingError("failed to generate embedding", storageErr)
-	
+
 	// Should be able to unwrap through the chain
 	if !errors.Is(embeddingErr, originalErr) {
 		t.Error("Expected to find original error in chain")
 	}
-	
+
 	if !errors.Is(embeddingErr, storageErr) {
 		t.Error("Expected to find storage error in chain")
 	}
-	
+
 	// Check error message contains all levels
 	errorStr := embeddingErr.Error()
 	if !contains(errorStr, "EMBEDDING_ERROR") {

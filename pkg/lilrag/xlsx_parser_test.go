@@ -228,8 +228,8 @@ func TestXLSXParser_ColumnNameGeneration(t *testing.T) {
 
 	// Test comprehensive column name generation
 	tests := []struct {
-		start int
-		count int
+		start     int
+		count     int
 		checkFunc func(index int, name string) bool
 	}{
 		{
@@ -274,7 +274,7 @@ func TestXLSXParser_ChunkingLogic(t *testing.T) {
 		{"Data1", "Data2", "Data3"},
 		{"Data4", "Data5", "Data6"},
 		{"", "Data7", ""}, // Sparse row
-		{"", "", ""},       // Empty row - should be skipped
+		{"", "", ""},      // Empty row - should be skipped
 		{"Data8", "Data9", "Data10"},
 	}
 
@@ -455,8 +455,8 @@ func TestXLSXParser_EdgeCases(t *testing.T) {
 			{0, "A"},
 			{25, "Z"},
 			{26, "AA"},
-			{675, "YZ"}, // Near ZZ
-			{701, "ZZ"}, // Last two-letter combination
+			{675, "YZ"},  // Near ZZ
+			{701, "ZZ"},  // Last two-letter combination
 			{702, "AAA"}, // First three-letter combination
 		}
 

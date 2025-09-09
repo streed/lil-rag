@@ -27,12 +27,12 @@ func TestNewTextParser(t *testing.T) {
 func TestTextParser_SupportedExtensions(t *testing.T) {
 	parser := NewTextParser()
 	extensions := parser.SupportedExtensions()
-	
+
 	expected := []string{".txt", ".md", ".text"}
 	if len(extensions) != len(expected) {
 		t.Errorf("Expected %d extensions, got %d", len(expected), len(extensions))
 	}
-	
+
 	for i, ext := range expected {
 		if extensions[i] != ext {
 			t.Errorf("Expected extension %s, got %s", ext, extensions[i])
@@ -43,7 +43,7 @@ func TestTextParser_SupportedExtensions(t *testing.T) {
 func TestTextParser_GetDocumentType(t *testing.T) {
 	parser := NewTextParser()
 	docType := parser.GetDocumentType()
-	
+
 	if docType != DocumentTypeTXT {
 		t.Errorf("Expected DocumentTypeTXT, got %v", docType)
 	}
@@ -51,7 +51,7 @@ func TestTextParser_GetDocumentType(t *testing.T) {
 
 func TestTextParser_Parse(t *testing.T) {
 	parser := NewTextParser()
-	
+
 	tests := []struct {
 		name        string
 		content     string
@@ -82,7 +82,7 @@ func TestTextParser_Parse(t *testing.T) {
 			content: "Special: !@#$%^&*()[]{}|\\:;\"'<>,.?/~`",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary file
@@ -92,28 +92,28 @@ func TestTextParser_Parse(t *testing.T) {
 			}
 			defer os.Remove(tmpFile.Name())
 			defer tmpFile.Close()
-			
+
 			// Write test content
 			if _, err := tmpFile.WriteString(tt.content); err != nil {
 				t.Fatalf("Failed to write to temp file: %v", err)
 			}
 			tmpFile.Close()
-			
+
 			// Parse the file
 			result, err := parser.Parse(tmpFile.Name())
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if result != tt.content {
 				t.Errorf("Content mismatch.\nExpected: %q\nGot: %q", tt.content, result)
 			}
@@ -123,7 +123,7 @@ func TestTextParser_Parse(t *testing.T) {
 
 func TestTextParser_Parse_FileErrors(t *testing.T) {
 	parser := NewTextParser()
-	
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -141,7 +141,7 @@ func TestTextParser_Parse_FileErrors(t *testing.T) {
 			filePath: os.TempDir(),
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parser.Parse(tt.filePath)
@@ -154,10 +154,10 @@ func TestTextParser_Parse_FileErrors(t *testing.T) {
 
 func TestTextParser_ParseWithChunks(t *testing.T) {
 	parser := NewTextParser()
-	
+
 	tests := []struct {
-		name          string
-		content       string
+		name           string
+		content        string
 		expectedChunks int
 		minChunkSize   int
 	}{
@@ -168,8 +168,8 @@ func TestTextParser_ParseWithChunks(t *testing.T) {
 			minChunkSize:   40,
 		},
 		{
-			name: "long text - multiple chunks",
-			content: strings.Repeat("This is a sentence that will be repeated many times to create a long document. ", 20),
+			name:           "long text - multiple chunks",
+			content:        strings.Repeat("This is a sentence that will be repeated many times to create a long document. ", 20),
 			expectedChunks: 2, // Should be chunked based on default settings
 			minChunkSize:   50,
 		},
@@ -186,7 +186,7 @@ func TestTextParser_ParseWithChunks(t *testing.T) {
 			minChunkSize:   4,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary file
@@ -196,24 +196,24 @@ func TestTextParser_ParseWithChunks(t *testing.T) {
 			}
 			defer os.Remove(tmpFile.Name())
 			defer tmpFile.Close()
-			
+
 			// Write test content
 			if _, err := tmpFile.WriteString(tt.content); err != nil {
 				t.Fatalf("Failed to write to temp file: %v", err)
 			}
 			tmpFile.Close()
-			
+
 			// Parse with chunks
 			chunks, err := parser.ParseWithChunks(tmpFile.Name(), "test-doc")
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if len(chunks) != tt.expectedChunks {
 				t.Errorf("Expected %d chunks, got %d", tt.expectedChunks, len(chunks))
 			}
-			
+
 			// Verify chunk content
 			totalContent := ""
 			for i, chunk := range chunks {
@@ -222,23 +222,23 @@ func TestTextParser_ParseWithChunks(t *testing.T) {
 				} else if len(chunk.Text) < tt.minChunkSize && tt.minChunkSize > 0 && len(chunks) > 1 {
 					t.Errorf("Chunk %d too small: %d characters (expected at least %d)", i, len(chunk.Text), tt.minChunkSize)
 				}
-				
+
 				if chunk.Index != i {
 					t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
 				}
-				
+
 				totalContent += chunk.Text
 			}
-			
+
 			// Verify all content is preserved (allowing for some processing differences)
 			// The chunker may normalize whitespace, so we'll check length similarity
 			if tt.content != "" {
 				originalLen := len(strings.TrimSpace(strings.ReplaceAll(tt.content, " ", "")))
 				reconstructedLen := len(strings.TrimSpace(strings.ReplaceAll(totalContent, " ", "")))
-				
+
 				// Allow for small differences due to text processing
 				if abs(originalLen-reconstructedLen) > originalLen/10 {
-					t.Errorf("Significant content difference in chunks.\nOriginal length: %d\nReconstructed length: %d", 
+					t.Errorf("Significant content difference in chunks.\nOriginal length: %d\nReconstructed length: %d",
 						originalLen, reconstructedLen)
 				}
 			}
@@ -249,7 +249,7 @@ func TestTextParser_ParseWithChunks(t *testing.T) {
 func TestTextParser_ParseWithChunks_CustomChunker(t *testing.T) {
 	// Test that chunker is initialized automatically
 	parser := NewTextParser()
-	
+
 	content := "This is test content for chunking."
 	tmpFile, err := os.CreateTemp("", "test_*.txt")
 	if err != nil {
@@ -257,26 +257,26 @@ func TestTextParser_ParseWithChunks_CustomChunker(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
-	
+
 	if _, err := tmpFile.WriteString(content); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
 	tmpFile.Close()
-	
+
 	// First call should create chunker
 	if parser.chunker != nil {
 		t.Error("Expected chunker to be nil initially")
 	}
-	
+
 	chunks, err := parser.ParseWithChunks(tmpFile.Name(), "test-doc")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	
+
 	if parser.chunker == nil {
 		t.Error("Expected chunker to be created after first call")
 	}
-	
+
 	if len(chunks) == 0 {
 		t.Error("Expected at least one chunk")
 	}
@@ -284,7 +284,7 @@ func TestTextParser_ParseWithChunks_CustomChunker(t *testing.T) {
 
 func TestTextParser_ParseWithChunks_FileErrors(t *testing.T) {
 	parser := NewTextParser()
-	
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -298,7 +298,7 @@ func TestTextParser_ParseWithChunks_FileErrors(t *testing.T) {
 			filePath: os.TempDir(),
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parser.ParseWithChunks(tt.filePath, "test-doc")
@@ -312,7 +312,7 @@ func TestTextParser_ParseWithChunks_FileErrors(t *testing.T) {
 func TestTextParser_Integration(t *testing.T) {
 	// Test a complete workflow with different file types
 	parser := NewTextParser()
-	
+
 	testFiles := []struct {
 		name      string
 		extension string
@@ -334,7 +334,7 @@ func TestTextParser_Integration(t *testing.T) {
 			content:   "This is a .text file which should also be supported.",
 		},
 	}
-	
+
 	for _, tf := range testFiles {
 		t.Run(tf.name, func(t *testing.T) {
 			// Create temporary file with specific extension
@@ -344,13 +344,13 @@ func TestTextParser_Integration(t *testing.T) {
 			}
 			defer os.Remove(tmpFile.Name())
 			defer tmpFile.Close()
-			
+
 			// Write content
 			if _, err := tmpFile.WriteString(tf.content); err != nil {
 				t.Fatalf("Failed to write to temp file: %v", err)
 			}
 			tmpFile.Close()
-			
+
 			// Test Parse
 			content, err := parser.Parse(tmpFile.Name())
 			if err != nil {
@@ -359,7 +359,7 @@ func TestTextParser_Integration(t *testing.T) {
 			if content != tf.content {
 				t.Errorf("Content mismatch for %s", tf.name)
 			}
-			
+
 			// Test ParseWithChunks
 			chunks, err := parser.ParseWithChunks(tmpFile.Name(), "test-doc")
 			if err != nil {
@@ -368,7 +368,7 @@ func TestTextParser_Integration(t *testing.T) {
 			if len(chunks) == 0 {
 				t.Error("Expected at least one chunk")
 			}
-			
+
 			// Verify extension is supported
 			ext := filepath.Ext(tmpFile.Name())
 			supported := false
@@ -387,7 +387,7 @@ func TestTextParser_Integration(t *testing.T) {
 
 func TestTextParser_LargeFile(t *testing.T) {
 	parser := NewTextParser()
-	
+
 	// Create a larger content for testing chunking
 	var content strings.Builder
 	for i := 0; i < 100; i++ {
@@ -398,19 +398,19 @@ func TestTextParser_LargeFile(t *testing.T) {
 			content.WriteString("\n\n")
 		}
 	}
-	
+
 	tmpFile, err := os.CreateTemp("", "large_test_*.txt")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
-	
+
 	if _, err := tmpFile.WriteString(content.String()); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
 	tmpFile.Close()
-	
+
 	// Test parsing
 	result, err := parser.Parse(tmpFile.Name())
 	if err != nil {
@@ -419,17 +419,17 @@ func TestTextParser_LargeFile(t *testing.T) {
 	if result != content.String() {
 		t.Error("Large file content not preserved")
 	}
-	
+
 	// Test chunking
 	chunks, err := parser.ParseWithChunks(tmpFile.Name(), "large-doc")
 	if err != nil {
 		t.Errorf("Failed to chunk large file: %v", err)
 	}
-	
+
 	if len(chunks) < 2 {
 		t.Error("Expected multiple chunks for large file")
 	}
-	
+
 	// Verify all chunks have content
 	for i, chunk := range chunks {
 		if len(chunk.Text) == 0 {

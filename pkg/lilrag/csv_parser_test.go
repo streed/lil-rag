@@ -21,12 +21,12 @@ func TestNewCSVParser(t *testing.T) {
 func TestCSVParser_SupportedExtensions(t *testing.T) {
 	parser := NewCSVParser()
 	extensions := parser.SupportedExtensions()
-	
+
 	expected := []string{".csv"}
 	if len(extensions) != len(expected) {
 		t.Errorf("Expected %d extensions, got %d", len(expected), len(extensions))
 	}
-	
+
 	for i, ext := range expected {
 		if extensions[i] != ext {
 			t.Errorf("Expected extension %s, got %s", ext, extensions[i])
@@ -37,7 +37,7 @@ func TestCSVParser_SupportedExtensions(t *testing.T) {
 func TestCSVParser_GetDocumentType(t *testing.T) {
 	parser := NewCSVParser()
 	docType := parser.GetDocumentType()
-	
+
 	if docType != DocumentTypeCSV {
 		t.Errorf("Expected DocumentTypeCSV, got %v", docType)
 	}
@@ -49,22 +49,22 @@ func createTestCSVFile(t *testing.T, records [][]string) string {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer tmpFile.Close()
-	
+
 	writer := csv.NewWriter(tmpFile)
 	defer writer.Flush()
-	
+
 	for _, record := range records {
 		if err := writer.Write(record); err != nil {
 			t.Fatalf("Failed to write CSV record: %v", err)
 		}
 	}
-	
+
 	return tmpFile.Name()
 }
 
 func TestCSVParser_Parse(t *testing.T) {
 	parser := NewCSVParser()
-	
+
 	tests := []struct {
 		name          string
 		records       [][]string
@@ -111,8 +111,8 @@ func TestCSVParser_Parse(t *testing.T) {
 			},
 		},
 		{
-			name:    "empty CSV",
-			records: [][]string{},
+			name:          "empty CSV",
+			records:       [][]string{},
 			expectContent: []string{},
 		},
 		{
@@ -139,26 +139,26 @@ func TestCSVParser_Parse(t *testing.T) {
 		},
 		// Note: Removing uneven columns test as Go's CSV reader enforces uniform field counts by default
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := createTestCSVFile(t, tt.records)
 			defer os.Remove(filePath)
-			
+
 			result, err := parser.Parse(filePath)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			// Check that all expected content appears
 			for _, expected := range tt.expectContent {
 				if !strings.Contains(result, expected) {
@@ -171,7 +171,7 @@ func TestCSVParser_Parse(t *testing.T) {
 
 func TestCSVParser_Parse_FileErrors(t *testing.T) {
 	parser := NewCSVParser()
-	
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -189,7 +189,7 @@ func TestCSVParser_Parse_FileErrors(t *testing.T) {
 			filePath: os.TempDir(),
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parser.Parse(tt.filePath)
@@ -202,7 +202,7 @@ func TestCSVParser_Parse_FileErrors(t *testing.T) {
 
 func TestCSVParser_Parse_InvalidCSV(t *testing.T) {
 	parser := NewCSVParser()
-	
+
 	// Create a file with invalid CSV content
 	tmpFile, err := os.CreateTemp("", "invalid_*.csv")
 	if err != nil {
@@ -210,13 +210,13 @@ func TestCSVParser_Parse_InvalidCSV(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
-	
+
 	// Write malformed CSV
 	if _, err := tmpFile.WriteString("Name,Age\n\"Unclosed quote,30\n"); err != nil {
 		t.Fatalf("Failed to write invalid CSV: %v", err)
 	}
 	tmpFile.Close()
-	
+
 	_, err = parser.Parse(tmpFile.Name())
 	if err == nil {
 		t.Error("Expected error for invalid CSV format")
@@ -225,7 +225,7 @@ func TestCSVParser_Parse_InvalidCSV(t *testing.T) {
 
 func TestCSVParser_ParseWithChunks(t *testing.T) {
 	parser := NewCSVParser()
-	
+
 	tests := []struct {
 		name           string
 		records        [][]string
@@ -267,10 +267,10 @@ func TestCSVParser_ParseWithChunks(t *testing.T) {
 				for i := 1; i <= 50; i++ {
 					records = append(records, []string{
 						string(rune('0' + i%10)),
-						"Product" + string(rune('0' + i%10)),
-						"This is a long description for product " + string(rune('0' + i%10)) + " with lots of details and information",
-						"Category" + string(rune('0' + i%3)),
-						"$" + string(rune('0' + (i*10)%100)),
+						"Product" + string(rune('0'+i%10)),
+						"This is a long description for product " + string(rune('0'+i%10)) + " with lots of details and information",
+						"Category" + string(rune('0'+i%3)),
+						"$" + string(rune('0'+(i*10)%100)),
 					})
 				}
 				return records
@@ -280,37 +280,37 @@ func TestCSVParser_ParseWithChunks(t *testing.T) {
 			checkRows:      true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := createTestCSVFile(t, tt.records)
 			defer os.Remove(filePath)
-			
+
 			chunks, err := parser.ParseWithChunks(filePath, "test-doc")
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if len(chunks) != tt.expectedChunks {
 				t.Errorf("Expected %d chunks, got %d", tt.expectedChunks, len(chunks))
 			}
-			
+
 			// Verify chunk structure
 			for i, chunk := range chunks {
 				if chunk.Index != i {
 					t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
 				}
-				
+
 				if len(chunk.Text) == 0 {
 					t.Errorf("Chunk %d is empty", i)
 				}
-				
+
 				if chunk.TokenCount <= 0 {
 					t.Errorf("Chunk %d has invalid token count: %d", i, chunk.TokenCount)
 				}
 			}
-			
+
 			// Check header chunk
 			if tt.checkHeader && len(chunks) > 0 {
 				headerChunk := chunks[0]
@@ -321,7 +321,7 @@ func TestCSVParser_ParseWithChunks(t *testing.T) {
 					t.Error("Header chunk doesn't contain expected header text")
 				}
 			}
-			
+
 			// Check row chunks
 			if tt.checkRows && len(chunks) > 1 {
 				for i := 1; i < len(chunks); i++ {
@@ -341,28 +341,28 @@ func TestCSVParser_ParseWithChunks(t *testing.T) {
 func TestCSVParser_ParseWithChunks_CustomChunker(t *testing.T) {
 	// Test that chunker is initialized automatically
 	parser := NewCSVParser()
-	
+
 	records := [][]string{
 		{"Name", "Value"},
 		{"Test", "123"},
 	}
 	filePath := createTestCSVFile(t, records)
 	defer os.Remove(filePath)
-	
+
 	// First call should create chunker
 	if parser.chunker != nil {
 		t.Error("Expected chunker to be nil initially")
 	}
-	
+
 	chunks, err := parser.ParseWithChunks(filePath, "test-doc")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	
+
 	if parser.chunker == nil {
 		t.Error("Expected chunker to be created after first call")
 	}
-	
+
 	if len(chunks) == 0 {
 		t.Error("Expected at least one chunk")
 	}
@@ -370,7 +370,7 @@ func TestCSVParser_ParseWithChunks_CustomChunker(t *testing.T) {
 
 func TestCSVParser_ParseWithChunks_FileErrors(t *testing.T) {
 	parser := NewCSVParser()
-	
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -384,7 +384,7 @@ func TestCSVParser_ParseWithChunks_FileErrors(t *testing.T) {
 			filePath: os.TempDir(),
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parser.ParseWithChunks(tt.filePath, "test-doc")
@@ -398,7 +398,7 @@ func TestCSVParser_ParseWithChunks_FileErrors(t *testing.T) {
 func TestCSVParser_Integration(t *testing.T) {
 	// Test a complete workflow
 	parser := NewCSVParser()
-	
+
 	records := [][]string{
 		{"Product", "Price", "Category", "Description"},
 		{"Laptop", "$999", "Electronics", "High-performance laptop for work and gaming"},
@@ -406,16 +406,16 @@ func TestCSVParser_Integration(t *testing.T) {
 		{"Book", "$15", "Media", "Bestselling novel about adventure and mystery"},
 		{"Phone", "$699", "Electronics", "Latest smartphone with advanced camera"},
 	}
-	
+
 	filePath := createTestCSVFile(t, records)
 	defer os.Remove(filePath)
-	
+
 	// Test Parse
 	content, err := parser.Parse(filePath)
 	if err != nil {
 		t.Errorf("Parse failed: %v", err)
 	}
-	
+
 	// Verify content contains expected elements
 	expectedElements := []string{
 		"CSV Headers: Product | Price | Category | Description",
@@ -424,23 +424,23 @@ func TestCSVParser_Integration(t *testing.T) {
 		"Product: Coffee",
 		"Category: Food",
 	}
-	
+
 	for _, element := range expectedElements {
 		if !strings.Contains(content, element) {
 			t.Errorf("Expected element not found: %q", element)
 		}
 	}
-	
+
 	// Test ParseWithChunks
 	chunks, err := parser.ParseWithChunks(filePath, "test-doc")
 	if err != nil {
 		t.Errorf("ParseWithChunks failed: %v", err)
 	}
-	
+
 	if len(chunks) < 1 {
 		t.Error("Expected at least one chunk")
 	}
-	
+
 	// Verify extension is supported
 	ext := filepath.Ext(filePath)
 	supported := false
@@ -457,22 +457,22 @@ func TestCSVParser_Integration(t *testing.T) {
 
 func TestCSVParser_LargeCSV(t *testing.T) {
 	parser := NewCSVParser()
-	
+
 	// Create a large CSV with many rows
 	records := [][]string{{"ID", "Name", "Email", "Department", "Salary"}}
 	for i := 1; i <= 1000; i++ {
 		records = append(records, []string{
 			string(rune('0' + i%10)),
-			"Employee" + string(rune('0' + i%10)),
-			"emp" + string(rune('0' + i%10)) + "@company.com",
-			"Dept" + string(rune('0' + i%5)),
-			"$" + string(rune('0' + (i*50)%1000)),
+			"Employee" + string(rune('0'+i%10)),
+			"emp" + string(rune('0'+i%10)) + "@company.com",
+			"Dept" + string(rune('0'+i%5)),
+			"$" + string(rune('0'+(i*50)%1000)),
 		})
 	}
-	
+
 	filePath := createTestCSVFile(t, records)
 	defer os.Remove(filePath)
-	
+
 	// Test parsing
 	result, err := parser.Parse(filePath)
 	if err != nil {
@@ -481,17 +481,17 @@ func TestCSVParser_LargeCSV(t *testing.T) {
 	if len(result) == 0 {
 		t.Error("Large CSV produced no content")
 	}
-	
+
 	// Test chunking
 	chunks, err := parser.ParseWithChunks(filePath, "large-csv")
 	if err != nil {
 		t.Errorf("Failed to chunk large CSV: %v", err)
 	}
-	
+
 	if len(chunks) < 5 {
 		t.Error("Expected multiple chunks for large CSV")
 	}
-	
+
 	// Verify all chunks have content and proper structure
 	headerFound := false
 	for i, chunk := range chunks {
@@ -505,7 +505,7 @@ func TestCSVParser_LargeCSV(t *testing.T) {
 			headerFound = true
 		}
 	}
-	
+
 	if !headerFound {
 		t.Error("No header chunk found in large CSV")
 	}

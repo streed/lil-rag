@@ -20,12 +20,12 @@ func TestNewHTMLParser(t *testing.T) {
 func TestHTMLParser_SupportedExtensions(t *testing.T) {
 	parser := NewHTMLParser()
 	extensions := parser.SupportedExtensions()
-	
+
 	expected := []string{".html", ".htm"}
 	if len(extensions) != len(expected) {
 		t.Errorf("Expected %d extensions, got %d", len(expected), len(extensions))
 	}
-	
+
 	for i, ext := range expected {
 		if extensions[i] != ext {
 			t.Errorf("Expected extension %s, got %s", ext, extensions[i])
@@ -36,7 +36,7 @@ func TestHTMLParser_SupportedExtensions(t *testing.T) {
 func TestHTMLParser_GetDocumentType(t *testing.T) {
 	parser := NewHTMLParser()
 	docType := parser.GetDocumentType()
-	
+
 	if docType != DocumentTypeHTML {
 		t.Errorf("Expected DocumentTypeHTML, got %v", docType)
 	}
@@ -48,17 +48,17 @@ func createTestHTMLFile(t *testing.T, content string) string {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer tmpFile.Close()
-	
+
 	if _, err := tmpFile.WriteString(content); err != nil {
 		t.Fatalf("Failed to write HTML content: %v", err)
 	}
-	
+
 	return tmpFile.Name()
 }
 
 func TestHTMLParser_Parse(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name           string
 		htmlContent    string
@@ -132,17 +132,17 @@ func TestHTMLParser_Parse(t *testing.T) {
 			},
 		},
 		{
-			name: "empty HTML",
-			htmlContent: `<html><body></body></html>`,
+			name:           "empty HTML",
+			htmlContent:    `<html><body></body></html>`,
 			expectContains: []string{},
 		},
 		{
-			name: "HTML with only whitespace",
-			htmlContent: `<html><body>   \n   </body></html>`,
+			name:           "HTML with only whitespace",
+			htmlContent:    `<html><body>   \n   </body></html>`,
 			expectContains: []string{},
 		},
 		{
-			name: "malformed HTML",
+			name:        "malformed HTML",
 			htmlContent: `<html><body><p>Unclosed paragraph<div>Content</div></body></html>`,
 			expectContains: []string{
 				"Unclosed paragraph",
@@ -150,33 +150,33 @@ func TestHTMLParser_Parse(t *testing.T) {
 			},
 		},
 		{
-			name: "HTML with special characters",
+			name:        "HTML with special characters",
 			htmlContent: `<html><body><p>Special chars: &lt; &gt; &amp; &quot;</p></body></html>`,
 			expectContains: []string{
 				"Special chars",
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := createTestHTMLFile(t, tt.htmlContent)
 			defer os.Remove(filePath)
-			
+
 			result, err := parser.Parse(filePath)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			// Check that all expected content appears
 			for _, expected := range tt.expectContains {
 				if !strings.Contains(result, expected) {
@@ -189,7 +189,7 @@ func TestHTMLParser_Parse(t *testing.T) {
 
 func TestHTMLParser_Parse_FileErrors(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -207,7 +207,7 @@ func TestHTMLParser_Parse_FileErrors(t *testing.T) {
 			filePath: os.TempDir(),
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parser.Parse(tt.filePath)
@@ -220,7 +220,7 @@ func TestHTMLParser_Parse_FileErrors(t *testing.T) {
 
 func TestHTMLParser_ParseWithChunks(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name           string
 		htmlContent    string
@@ -284,37 +284,37 @@ func TestHTMLParser_ParseWithChunks(t *testing.T) {
 			expectedChunks: 1, // Fallback to content chunking
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := createTestHTMLFile(t, tt.htmlContent)
 			defer os.Remove(filePath)
-			
+
 			chunks, err := parser.ParseWithChunks(filePath, "test-doc")
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if len(chunks) != tt.expectedChunks {
 				t.Errorf("Expected %d chunks, got %d", tt.expectedChunks, len(chunks))
 			}
-			
+
 			// Verify chunk structure
 			for i, chunk := range chunks {
 				if chunk.Index != i {
 					t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
 				}
-				
+
 				if len(chunk.Text) == 0 {
 					t.Errorf("Chunk %d is empty", i)
 				}
-				
+
 				if chunk.TokenCount <= 0 {
 					t.Errorf("Chunk %d has invalid token count: %d", i, chunk.TokenCount)
 				}
 			}
-			
+
 			// Check title chunk
 			if tt.checkTitle && len(chunks) > 0 {
 				titleChunk := chunks[0]
@@ -325,7 +325,7 @@ func TestHTMLParser_ParseWithChunks(t *testing.T) {
 					t.Error("Title chunk doesn't contain expected title text")
 				}
 			}
-			
+
 			// Check section chunks
 			if tt.checkSections && len(chunks) > 0 {
 				foundSection := false
@@ -346,25 +346,25 @@ func TestHTMLParser_ParseWithChunks(t *testing.T) {
 func TestHTMLParser_ParseWithChunks_CustomChunker(t *testing.T) {
 	// Test that chunker is initialized automatically
 	parser := NewHTMLParser()
-	
+
 	htmlContent := `<html><body><p>Test content for chunking.</p></body></html>`
 	filePath := createTestHTMLFile(t, htmlContent)
 	defer os.Remove(filePath)
-	
+
 	// First call should create chunker
 	if parser.chunker != nil {
 		t.Error("Expected chunker to be nil initially")
 	}
-	
+
 	chunks, err := parser.ParseWithChunks(filePath, "test-doc")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	
+
 	if parser.chunker == nil {
 		t.Error("Expected chunker to be created after first call")
 	}
-	
+
 	if len(chunks) == 0 {
 		t.Error("Expected at least one chunk")
 	}
@@ -372,7 +372,7 @@ func TestHTMLParser_ParseWithChunks_CustomChunker(t *testing.T) {
 
 func TestHTMLParser_ParseWithChunks_FileErrors(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -386,7 +386,7 @@ func TestHTMLParser_ParseWithChunks_FileErrors(t *testing.T) {
 			filePath: os.TempDir(),
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parser.ParseWithChunks(tt.filePath, "test-doc")
@@ -399,7 +399,7 @@ func TestHTMLParser_ParseWithChunks_FileErrors(t *testing.T) {
 
 func TestHTMLParser_ExtractTitle(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name          string
 		htmlContent   string
@@ -426,18 +426,18 @@ func TestHTMLParser_ExtractTitle(t *testing.T) {
 			expectedTitle: "Spaced Title", // cleanWhitespace trims whitespace
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := createTestHTMLFile(t, tt.htmlContent)
 			defer os.Remove(filePath)
-			
+
 			result, err := parser.Parse(filePath)
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if tt.expectedTitle == "" {
 				if strings.Contains(result, "Title:") {
 					t.Error("Expected no title, but found title in result")
@@ -454,7 +454,7 @@ func TestHTMLParser_ExtractTitle(t *testing.T) {
 
 func TestHTMLParser_CleanWhitespace(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -491,7 +491,7 @@ func TestHTMLParser_CleanWhitespace(t *testing.T) {
 			expected: "",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parser.cleanWhitespace(tt.input)
@@ -504,7 +504,7 @@ func TestHTMLParser_CleanWhitespace(t *testing.T) {
 
 func TestHTMLParser_ExtractListText(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	htmlContent := `<html>
 <body>
 <ul>
@@ -518,25 +518,25 @@ func TestHTMLParser_ExtractListText(t *testing.T) {
 </ol>
 </body>
 </html>`
-	
+
 	filePath := createTestHTMLFile(t, htmlContent)
 	defer os.Remove(filePath)
-	
+
 	result, err := parser.Parse(filePath)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	
+
 	// Should contain bullet points for list items
 	expectedItems := []string{
 		"First item",
-		"Second item", 
+		"Second item",
 		"Third item",
 		"Ordered first",
 		"Ordered second",
 	}
-	
+
 	for _, item := range expectedItems {
 		if !strings.Contains(result, item) {
 			t.Errorf("Expected list item %q not found in result", item)
@@ -547,7 +547,7 @@ func TestHTMLParser_ExtractListText(t *testing.T) {
 func TestHTMLParser_Integration(t *testing.T) {
 	// Test a complete workflow with realistic HTML content
 	parser := NewHTMLParser()
-	
+
 	htmlContent := `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -590,50 +590,50 @@ func TestHTMLParser_Integration(t *testing.T) {
     </script>
 </body>
 </html>`
-	
+
 	filePath := createTestHTMLFile(t, htmlContent)
 	defer os.Remove(filePath)
-	
+
 	// Test Parse method
 	content, err := parser.Parse(filePath)
 	if err != nil {
 		t.Errorf("Parse failed: %v", err)
 		return
 	}
-	
+
 	// Verify expected content is present
 	expectedElements := []string{
 		"Title: Sample Document",
-		"Main Article", 
+		"Main Article",
 		"Introduction",
 		"emphasized text",
 		"Features",
 		"Feature A",
 		"Conclusion",
 	}
-	
+
 	for _, element := range expectedElements {
 		if !strings.Contains(content, element) {
 			t.Errorf("Expected element not found: %q", element)
 		}
 	}
-	
+
 	// Script content should not be present
 	if strings.Contains(content, "console.log") {
 		t.Error("Script content should not be included in parsed text")
 	}
-	
+
 	// Test ParseWithChunks method
 	chunks, err := parser.ParseWithChunks(filePath, "integration-test")
 	if err != nil {
 		t.Errorf("ParseWithChunks failed: %v", err)
 		return
 	}
-	
+
 	if len(chunks) < 2 {
 		t.Error("Expected multiple chunks for structured HTML")
 	}
-	
+
 	// Should have title chunk
 	titleFound := false
 	sectionFound := false
@@ -645,15 +645,15 @@ func TestHTMLParser_Integration(t *testing.T) {
 			sectionFound = true
 		}
 	}
-	
+
 	if !titleFound {
 		t.Error("Expected to find html_title chunk")
 	}
-	
+
 	if !sectionFound {
 		t.Error("Expected to find html_section chunk")
 	}
-	
+
 	// Verify extension is supported
 	ext := filepath.Ext(filePath)
 	supported := false
@@ -670,7 +670,7 @@ func TestHTMLParser_Integration(t *testing.T) {
 
 func TestHTMLParser_EdgeCases(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	tests := []struct {
 		name        string
 		htmlContent string
@@ -702,18 +702,18 @@ func TestHTMLParser_EdgeCases(t *testing.T) {
 			shouldWork:  true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := createTestHTMLFile(t, tt.htmlContent)
 			defer os.Remove(filePath)
-			
+
 			_, err := parser.Parse(filePath)
-			
+
 			if tt.shouldWork && err != nil {
 				t.Errorf("Expected parsing to work, but got error: %v", err)
 			}
-			
+
 			if !tt.shouldWork && err == nil {
 				t.Error("Expected parsing to fail, but it succeeded")
 			}
@@ -723,11 +723,11 @@ func TestHTMLParser_EdgeCases(t *testing.T) {
 
 func TestHTMLParser_LargeDocument(t *testing.T) {
 	parser := NewHTMLParser()
-	
+
 	// Create a large HTML document
 	var htmlBuilder strings.Builder
 	htmlBuilder.WriteString(`<!DOCTYPE html><html><head><title>Large Document</title></head><body>`)
-	
+
 	// Add many sections
 	for i := 1; i <= 50; i++ {
 		htmlBuilder.WriteString(`<h2>Section `)
@@ -736,34 +736,34 @@ func TestHTMLParser_LargeDocument(t *testing.T) {
 		htmlBuilder.WriteString(string(rune('0' + i%10)))
 		htmlBuilder.WriteString(`. It contains important information about this topic.</p>`)
 	}
-	
+
 	htmlBuilder.WriteString(`</body></html>`)
-	
+
 	filePath := createTestHTMLFile(t, htmlBuilder.String())
 	defer os.Remove(filePath)
-	
+
 	// Test parsing
 	content, err := parser.Parse(filePath)
 	if err != nil {
 		t.Errorf("Failed to parse large HTML: %v", err)
 		return
 	}
-	
+
 	if len(content) == 0 {
 		t.Error("Large HTML produced no content")
 	}
-	
+
 	// Test chunking
 	chunks, err := parser.ParseWithChunks(filePath, "large-html")
 	if err != nil {
 		t.Errorf("Failed to chunk large HTML: %v", err)
 		return
 	}
-	
+
 	if len(chunks) < 10 {
 		t.Error("Expected multiple chunks for large HTML document")
 	}
-	
+
 	// Verify all chunks have content and proper structure
 	for i, chunk := range chunks {
 		if len(chunk.Text) == 0 {

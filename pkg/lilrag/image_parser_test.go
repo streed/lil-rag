@@ -16,37 +16,37 @@ import (
 
 func TestNewImageParserWithTimeout(t *testing.T) {
 	tests := []struct {
-		name             string
-		ollamaURL        string
-		model            string
-		timeoutSeconds   int
-		imageMaxSize     int
-		expectedURL      string
-		expectedModel    string
-		expectedMaxSize  int
-		expectedTimeout  time.Duration
+		name            string
+		ollamaURL       string
+		model           string
+		timeoutSeconds  int
+		imageMaxSize    int
+		expectedURL     string
+		expectedModel   string
+		expectedMaxSize int
+		expectedTimeout time.Duration
 	}{
 		{
-			name:             "default values",
-			ollamaURL:        "",
-			model:            "",
-			timeoutSeconds:   30,
-			imageMaxSize:     0,
-			expectedURL:      DefaultOllamaURL,
-			expectedModel:    "llama3.2-vision",
-			expectedMaxSize:  1120,
-			expectedTimeout:  30 * time.Second,
+			name:            "default values",
+			ollamaURL:       "",
+			model:           "",
+			timeoutSeconds:  30,
+			imageMaxSize:    0,
+			expectedURL:     DefaultOllamaURL,
+			expectedModel:   "llama3.2-vision",
+			expectedMaxSize: 1120,
+			expectedTimeout: 30 * time.Second,
 		},
 		{
-			name:             "custom values",
-			ollamaURL:        "http://localhost:11434",
-			model:            "llava",
-			timeoutSeconds:   60,
-			imageMaxSize:     800,
-			expectedURL:      "http://localhost:11434",
-			expectedModel:    "llava",
-			expectedMaxSize:  800,
-			expectedTimeout:  60 * time.Second,
+			name:            "custom values",
+			ollamaURL:       "http://localhost:11434",
+			model:           "llava",
+			timeoutSeconds:  60,
+			imageMaxSize:    800,
+			expectedURL:     "http://localhost:11434",
+			expectedModel:   "llava",
+			expectedMaxSize: 800,
+			expectedTimeout: 60 * time.Second,
 		},
 	}
 
@@ -106,12 +106,12 @@ func TestImageParser_GetDocumentType(t *testing.T) {
 
 func TestCalculateResizeDimensions(t *testing.T) {
 	tests := []struct {
-		name             string
-		origWidth        int
-		origHeight       int
-		maxSize          int
-		expectedWidth    int
-		expectedHeight   int
+		name           string
+		origWidth      int
+		origHeight     int
+		maxSize        int
+		expectedWidth  int
+		expectedHeight int
 	}{
 		{
 			name:           "no resize needed",
@@ -718,9 +718,9 @@ func TestImageParser_LargeImageHandling(t *testing.T) {
 
 	t.Run("resize calculation accuracy", func(t *testing.T) {
 		tests := []struct {
-			name        string
-			origW, origH int
-			maxSize     int
+			name             string
+			origW, origH     int
+			maxSize          int
 			expectW, expectH int
 		}{
 			{"large landscape", 2000, 1500, 1000, 1000, 750},
@@ -748,7 +748,7 @@ func BenchmarkImageParser_CalculateResize(b *testing.B) {
 
 func BenchmarkImageParser_IsImageFile(b *testing.B) {
 	testPaths := []string{"test.jpg", "test.png", "test.gif", "test.txt", "test.pdf"}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, path := range testPaths {

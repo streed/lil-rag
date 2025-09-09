@@ -1518,9 +1518,9 @@ func TestHandler_Search_EdgeCases(t *testing.T) {
 			expectSkip:  true, // Will fail without indexed documents
 		},
 		{
-			name:   "POST with unicode query",
-			body:   &SearchRequest{Query: "🔍 search émojis and àccents", Limit: 5},
-			method: http.MethodPost,
+			name:       "POST with unicode query",
+			body:       &SearchRequest{Query: "🔍 search émojis and àccents", Limit: 5},
+			method:     http.MethodPost,
 			expectSkip: true, // Will fail without indexed documents
 		},
 		{

@@ -581,9 +581,9 @@ func GenerateDocumentID() string {
 	adjective := adjectives[r.Intn(len(adjectives))]
 	noun := nouns[r.Intn(len(nouns))]
 
-	// Create timestamp suffix for uniqueness (YYMMDD-HHMMSS format with microseconds)
-	timestamp := now.Format("060102-150405")
-	microseconds := now.Nanosecond() / 1000 % 1000
+	// Create timestamp suffix for uniqueness (YYMMDD-HHMM format with milliseconds)
+	timestamp := now.Format("060102-1504")
+	milliseconds := now.Nanosecond() / 1000000 % 1000
 
-	return fmt.Sprintf("%s-%s-%s%03d", adjective, noun, timestamp, microseconds)
+	return fmt.Sprintf("%s-%s-%s%03d", adjective, noun, timestamp, milliseconds)
 }
