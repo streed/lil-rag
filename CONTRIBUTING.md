@@ -209,26 +209,30 @@ Mini-RAG follows [Semantic Versioning](https://semver.org/):
 
 ### Creating Releases
 
-The project uses an automated build system for releases:
+The project uses a unified automated build system that handles both development and release builds:
 
-#### Automatic Builds (Main Branch)
-When code is merged to the `main` branch, the CI/CD system automatically:
+#### Unified Build and Release Workflow
+The `build-and-release.yml` workflow automatically handles both scenarios:
+
+**Development Builds (Main Branch)**
+When code is merged to the `main` branch, the system automatically:
 1. **Increments the patch version** in the `VERSION` file
 2. **Builds cross-platform binaries** using native platform runners
    - Linux: Ubuntu runners (AMD64, ARM64)
    - macOS: macOS runners (AMD64, ARM64) 
    - Windows: Windows runners (AMD64)
 3. **Creates versioned archives** with checksums
-4. **Uploads build artifacts** to GitHub Actions
+4. **Creates prerelease** on GitHub with 30-day artifact retention
 
-This approach uses pre-compiled Go binaries on each platform to avoid CGO cross-compilation issues.
-
-#### Manual Releases (Tags)
+**Official Releases (Tags)**
 For official releases, create a Git tag:
 1. **Update CHANGELOG.md** with release notes
 2. **Create git tag** with version number (e.g., `v1.0.0`)
 3. **Push the tag** to trigger the release workflow
-4. **Create GitHub release** with binaries from the tag workflow
+4. **System validates** tag matches VERSION file content
+5. **Creates official GitHub release** with 90-day artifact retention
+
+This unified approach ensures consistency between development and release builds while reducing maintenance overhead.
 
 #### Version Management
 - Version is stored in the `VERSION` file at the repository root

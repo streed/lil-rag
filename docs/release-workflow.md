@@ -1,20 +1,31 @@
 # Release Workflow Testing Guide
 
 ## Overview
-The new tag-based release workflow ensures that releases use the exact version from the VERSION file.
+The unified build and release workflow handles both development builds and official releases from a single GitHub Actions workflow file.
 
 ## How It Works
 
+The `build-and-release.yml` workflow automatically detects the build type and adjusts its behavior accordingly:
+
 ### 1. Automatic Builds (Main Branch)
-- Triggered on pushes to `main` branch
-- Auto-increments patch version in VERSION file  
-- Creates development releases with new version
+- **Trigger**: Pushes to `main` branch
+- **Version Management**: Auto-increments patch version in VERSION file  
+- **Release Type**: Creates prerelease with auto-generated version
+- **Artifact Retention**: 30 days
 
 ### 2. Official Releases (Tags)
-- Triggered on tag creation (v*.*.* pattern)
-- Uses exact version from VERSION file
-- Validates tag matches VERSION file content
-- Creates official GitHub releases
+- **Trigger**: Tag creation (v*.*.* pattern)
+- **Version Management**: Uses exact version from VERSION file
+- **Validation**: Ensures tag matches VERSION file content
+- **Release Type**: Creates official GitHub releases
+- **Artifact Retention**: 90 days
+
+### 3. Unified Build Process
+Both build types use the same:
+- Cross-platform build matrix (Linux, macOS, Windows)
+- Native platform compilation with CGO support
+- Binary versioning and archiving
+- Checksum generation
 
 ## Testing the Release Workflow
 
@@ -66,7 +77,27 @@ The workflow includes several validation checks:
 
 ## Benefits
 
+- **Unified Workflow**: Single GitHub Actions workflow handles both dev and release builds
 - **Single Source of Truth**: VERSION file controls all release versions
+- **Consistent Builds**: Same build matrix and process for all platforms
 - **Prevents Version Drift**: Tag must match VERSION file or build fails
 - **Automated Quality**: Comprehensive build and validation pipeline
+- **Efficient Resource Usage**: No duplication of build logic
 - **Documentation Integration**: Can read release notes from CHANGELOG.md
+
+## Workflow Features
+
+### Conditional Logic
+- **Main Branch**: Auto-increments version, creates prerelease
+- **Tag**: Validates version match, creates official release
+
+### Build Matrix
+- **Linux**: AMD64, ARM64 (built on Ubuntu runners)
+- **macOS**: AMD64 (Intel), ARM64 (Apple Silicon) (built on macOS runners)  
+- **Windows**: AMD64 (built on Windows runners with MinGW)
+
+### Quality Assurance
+- **Tests**: Run on Linux AMD64 builds
+- **Version Verification**: All binaries include embedded version information
+- **Cross-compilation**: Native builds avoid CGO issues
+- **Checksums**: SHA256 checksums for all release archives
