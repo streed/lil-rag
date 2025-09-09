@@ -95,11 +95,12 @@ get_download_url() {
         extension=".tar.gz"
     fi
     
-    local filename="lil-rag-${platform}${extension}"
+    # Pattern matches lil-rag-VERSION-PLATFORM.EXTENSION (e.g., lil-rag-1.0.24-darwin-arm64.tar.gz)
+    local pattern="lil-rag-[^-]*-${platform}${extension}"
     local download_url
     
     # Extract download URL using basic text processing
-    download_url=$(echo "$release_info" | grep -o "https://github.com/${REPO}/releases/download/[^\"]*${filename}" | head -1)
+    download_url=$(echo "$release_info" | grep -o "https://github.com/${REPO}/releases/download/[^\"]*${pattern}" | head -1)
     
     if [ -z "$download_url" ]; then
         error "Could not find release asset for platform: $platform"
@@ -212,10 +213,11 @@ check_path() {
 
 # Verify installation
 verify_installation() {
+    local platform="$1"
     log "Verifying installation..."
     
     local binaries=("lil-rag" "lil-rag-server")
-    if [[ "$platform" == "windows" ]]; then
+    if [[ "$platform" == *"windows"* ]]; then
         binaries=("lil-rag.exe" "lil-rag-server.exe")
     fi
     
@@ -288,40 +290,15 @@ main() {
     log "Detected platform: $platform"
     
     # Get latest release
-    log "Fetching latest release information..."
-    
     local release_info
-    release_info=$(curl -s "${GITHUB_API}/repos/${REPO}/releases/latest")
-    
-    # Check for common error responses
-    if echo "$release_info" | grep -q "Not Found"; then
-        error "Repository not found or no releases available"
-        error "Please check the repository: ${GITHUB_REPO}/${REPO}"
-        exit 1
-    fi
-    
-    # Check for blocked/failed API calls
-    if echo "$release_info" | grep -qE "(Blocked by|proxy|error|Access denied)"; then
-        error "GitHub API access is blocked or unavailable"
-        error "Response: $release_info"
-        error "Please check your network connection or try again later"
-        exit 1
-    fi
-    
-    # Verify we got valid JSON by checking for expected fields
-    if ! echo "$release_info" | grep -q '"tag_name"'; then
-        error "Invalid response from GitHub API"
-        error "Expected JSON with release information, got: ${release_info:0:100}..."
-        error "Please check your network connection or try again later"
+    release_info=$(get_latest_release)
+    if [ $? -ne 0 ]; then
         exit 1
     fi
     
     local version
-    version=$(echo "$release_info" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
-    
-    if [ -z "$version" ]; then
-        error "Could not extract version from release information"
-        error "Release info: ${release_info:0:200}..."
+    version=$(get_version "$release_info")
+    if [ $? -ne 0 ]; then
         exit 1
     fi
     
@@ -336,7 +313,7 @@ main() {
     download_and_extract "$download_url" "$platform" "$version"
     
     # Verify installation
-    verify_installation
+    verify_installation "$platform"
     
     # Check PATH
     check_path
