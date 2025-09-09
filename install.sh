@@ -3,7 +3,7 @@
 # Lil-RAG Installation Script
 # Downloads and installs the latest release from GitHub
 
-set -e
+# Note: Removed 'set -e' to allow explicit error handling
 
 # Configuration
 REPO="streed/lil-rag"
@@ -50,16 +50,33 @@ get_latest_release() {
     
     if ! command -v curl &> /dev/null; then
         error "curl is required but not installed. Please install curl and try again."
-        exit 1
+        return 1
     fi
     
     local release_info
     release_info=$(curl -s "${GITHUB_API}/repos/${REPO}/releases/latest")
     
+    # Check for common error responses
     if echo "$release_info" | grep -q "Not Found"; then
         error "Repository not found or no releases available"
         error "Please check the repository: ${GITHUB_REPO}/${REPO}"
-        exit 1
+        return 1
+    fi
+    
+    # Check for blocked/failed API calls
+    if echo "$release_info" | grep -qE "(Blocked by|proxy|error|Access denied)"; then
+        error "GitHub API access is blocked or unavailable"
+        error "Response: $release_info"
+        error "Please check your network connection or try again later"
+        return 1
+    fi
+    
+    # Verify we got valid JSON by checking for expected fields
+    if ! echo "$release_info" | grep -q '"tag_name"'; then
+        error "Invalid response from GitHub API"
+        error "Expected JSON with release information, got: ${release_info:0:100}..."
+        error "Please check your network connection or try again later"
+        return 1
     fi
     
     echo "$release_info"
@@ -97,7 +114,16 @@ get_download_url() {
 # Extract version from release info
 get_version() {
     local release_info="$1"
-    echo "$release_info" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4
+    local version
+    version=$(echo "$release_info" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4)
+    
+    if [ -z "$version" ]; then
+        error "Could not extract version from release information"
+        error "Release info: ${release_info:0:200}..."
+        return 1
+    fi
+    
+    echo "$version"
 }
 
 # Download and extract the release
@@ -262,11 +288,43 @@ main() {
     log "Detected platform: $platform"
     
     # Get latest release
+    log "Fetching latest release information..."
+    
     local release_info
-    release_info=$(get_latest_release)
+    release_info=$(curl -s "${GITHUB_API}/repos/${REPO}/releases/latest")
+    
+    # Check for common error responses
+    if echo "$release_info" | grep -q "Not Found"; then
+        error "Repository not found or no releases available"
+        error "Please check the repository: ${GITHUB_REPO}/${REPO}"
+        exit 1
+    fi
+    
+    # Check for blocked/failed API calls
+    if echo "$release_info" | grep -qE "(Blocked by|proxy|error|Access denied)"; then
+        error "GitHub API access is blocked or unavailable"
+        error "Response: $release_info"
+        error "Please check your network connection or try again later"
+        exit 1
+    fi
+    
+    # Verify we got valid JSON by checking for expected fields
+    if ! echo "$release_info" | grep -q '"tag_name"'; then
+        error "Invalid response from GitHub API"
+        error "Expected JSON with release information, got: ${release_info:0:100}..."
+        error "Please check your network connection or try again later"
+        exit 1
+    fi
     
     local version
-    version=$(get_version "$release_info")
+    version=$(echo "$release_info" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4)
+    
+    if [ -z "$version" ]; then
+        error "Could not extract version from release information"
+        error "Release info: ${release_info:0:200}..."
+        exit 1
+    fi
+    
     log "Latest version: $version"
     
     # Get download URL
