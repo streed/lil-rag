@@ -63,6 +63,31 @@ func (m *MockStorage) IndexChunksWithMetadata(_ context.Context, documentID, tex
 	return m.IndexChunks(context.Background(), documentID, text, chunks, embeddings)
 }
 
+func (m *MockStorage) IndexWithNamespace(_ context.Context, id, text string, embedding []float32, namespace string) error {
+	if !m.initialized {
+		return fmt.Errorf("storage not initialized")
+	}
+	m.documents[id] = text
+	m.embeddings[id] = embedding
+	return nil
+}
+
+func (m *MockStorage) IndexChunksWithNamespace(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType, namespace string) error {
+	if !m.initialized {
+		return fmt.Errorf("storage not initialized")
+	}
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunks and embeddings count mismatch")
+	}
+	m.documents[documentID] = text
+	m.chunks[documentID] = chunks
+	// Store first embedding for search compatibility
+	if len(embeddings) > 0 {
+		m.embeddings[documentID] = embeddings[0]
+	}
+	return nil
+}
+
 func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]SearchResult, error) {
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
