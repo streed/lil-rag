@@ -11,9 +11,9 @@ import (
 
 // Default configuration constants
 const (
-	DefaultDataDir         = "data"
-	DefaultDatabaseName    = "lilrag.db"
-	DefaultChatModel       = "gemma3:4b"
+	DefaultDataDir      = "data"
+	DefaultDatabaseName = "lilrag.db"
+	DefaultChatModel    = "gemma3:4b"
 )
 
 // LilRagBuilder provides a fluent interface for building LilRag instances

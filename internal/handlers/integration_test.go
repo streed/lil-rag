@@ -758,4 +758,3 @@ func BenchmarkIntegration_IndexAndSearch(b *testing.B) {
 		}
 	}
 }
-
