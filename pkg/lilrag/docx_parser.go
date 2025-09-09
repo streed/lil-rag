@@ -99,7 +99,7 @@ func (dp *DOCXParser) detectContentType(content string) string {
 	if structuredScore > 3 {
 		return "structured"
 	}
-	return "prose"
+	return ContentTypeProse
 }
 
 // chunkByContentType applies content-type specific chunking

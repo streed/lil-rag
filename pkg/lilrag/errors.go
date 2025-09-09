@@ -57,8 +57,8 @@ const (
 	ErrorTypeInternal   ErrorType = "internal"
 )
 
-// LilRagError provides structured error information with context
-type LilRagError struct {
+// Error provides structured error information with context
+type Error struct {
 	Type      ErrorType
 	Code      string
 	Message   string
@@ -68,7 +68,7 @@ type LilRagError struct {
 }
 
 // Error implements the error interface
-func (e *LilRagError) Error() string {
+func (e *Error) Error() string {
 	if e.Cause != nil {
 		return fmt.Sprintf("%s: %s (caused by: %v)", e.Code, e.Message, e.Cause)
 	}
@@ -76,12 +76,12 @@ func (e *LilRagError) Error() string {
 }
 
 // Unwrap returns the underlying cause
-func (e *LilRagError) Unwrap() error {
+func (e *Error) Unwrap() error {
 	return e.Cause
 }
 
 // Is checks if the error matches a target error
-func (e *LilRagError) Is(target error) bool {
+func (e *Error) Is(target error) bool {
 	if e.Cause != nil && errors.Is(e.Cause, target) {
 		return true
 	}
@@ -106,7 +106,7 @@ func (e *LilRagError) Is(target error) bool {
 }
 
 // WithContext adds context to the error
-func (e *LilRagError) WithContext(key string, value interface{}) *LilRagError {
+func (e *Error) WithContext(key string, value interface{}) *Error {
 	if e.Context == nil {
 		e.Context = make(map[string]interface{})
 	}
@@ -115,7 +115,7 @@ func (e *LilRagError) WithContext(key string, value interface{}) *LilRagError {
 }
 
 // WithOperation sets the operation context
-func (e *LilRagError) WithOperation(operation string) *LilRagError {
+func (e *Error) WithOperation(operation string) *Error {
 	e.Operation = operation
 	return e
 }
@@ -123,8 +123,8 @@ func (e *LilRagError) WithOperation(operation string) *LilRagError {
 // Error creation helper functions
 
 // NewValidationError creates a validation error
-func NewValidationError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewValidationError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeValidation,
 		Code:    "VALIDATION_ERROR",
 		Message: message,
@@ -133,8 +133,8 @@ func NewValidationError(message string, cause error) *LilRagError {
 }
 
 // NewConfigError creates a configuration error
-func NewConfigError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewConfigError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeConfig,
 		Code:    "CONFIG_ERROR",
 		Message: message,
@@ -143,8 +143,8 @@ func NewConfigError(message string, cause error) *LilRagError {
 }
 
 // NewStorageError creates a storage error
-func NewStorageError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewStorageError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeStorage,
 		Code:    "STORAGE_ERROR",
 		Message: message,
@@ -153,8 +153,8 @@ func NewStorageError(message string, cause error) *LilRagError {
 }
 
 // NewEmbeddingError creates an embedding error
-func NewEmbeddingError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewEmbeddingError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeEmbedding,
 		Code:    "EMBEDDING_ERROR",
 		Message: message,
@@ -163,8 +163,8 @@ func NewEmbeddingError(message string, cause error) *LilRagError {
 }
 
 // NewParsingError creates a parsing error
-func NewParsingError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewParsingError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeParsing,
 		Code:    "PARSING_ERROR",
 		Message: message,
@@ -173,8 +173,8 @@ func NewParsingError(message string, cause error) *LilRagError {
 }
 
 // NewSearchError creates a search error
-func NewSearchError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewSearchError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeSearch,
 		Code:    "SEARCH_ERROR",
 		Message: message,
@@ -183,8 +183,8 @@ func NewSearchError(message string, cause error) *LilRagError {
 }
 
 // NewChatError creates a chat error
-func NewChatError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewChatError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeChat,
 		Code:    "CHAT_ERROR",
 		Message: message,
@@ -193,8 +193,8 @@ func NewChatError(message string, cause error) *LilRagError {
 }
 
 // NewNetworkError creates a network error
-func NewNetworkError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewNetworkError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeNetwork,
 		Code:    "NETWORK_ERROR",
 		Message: message,
@@ -203,8 +203,8 @@ func NewNetworkError(message string, cause error) *LilRagError {
 }
 
 // NewInternalError creates an internal error
-func NewInternalError(message string, cause error) *LilRagError {
-	return &LilRagError{
+func NewInternalError(message string, cause error) *Error {
+	return &Error{
 		Type:    ErrorTypeInternal,
 		Code:    "INTERNAL_ERROR",
 		Message: message,
@@ -267,9 +267,9 @@ type ErrorResponse struct {
 	Context map[string]interface{} `json:"context,omitempty"`
 }
 
-// ToErrorResponse converts a LilRagError to an API error response
+// ToErrorResponse converts a Error to an API error response
 func ToErrorResponse(err error) ErrorResponse {
-	var lilragErr *LilRagError
+	var lilragErr *Error
 	if errors.As(err, &lilragErr) {
 		return ErrorResponse{
 			Error:   lilragErr.Error(),

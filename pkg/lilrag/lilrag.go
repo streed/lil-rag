@@ -27,7 +27,7 @@ type LilRag struct {
 	config          *Config
 
 	// New service-oriented architecture
-	services *LilRagServices
+	services *Services
 }
 
 type Config struct {
@@ -138,7 +138,7 @@ func New(config *Config) (*LilRag, error) {
 
 func (m *LilRag) Initialize() error {
 	if m.config.DataDir == "" {
-		m.config.DataDir = "data"
+		m.config.DataDir = DefaultDataDir
 	}
 
 	storage, err := NewSQLiteStorage(m.config.DatabasePath, m.config.VectorSize, m.config.DataDir)
@@ -652,7 +652,7 @@ func (m *LilRag) GetStorage() Storage {
 }
 
 // Services returns the modern service interfaces
-func (m *LilRag) Services() *LilRagServices {
+func (m *LilRag) Services() *Services {
 	return m.services
 }
 

@@ -133,7 +133,12 @@ func (s *SQLiteStorage) createTables() error {
 }
 
 // IndexWithNamespace indexes a single document with namespace
-func (s *SQLiteStorage) IndexWithNamespace(ctx context.Context, id, text string, embedding []float32, namespace string) error {
+func (s *SQLiteStorage) IndexWithNamespace(
+	ctx context.Context,
+	id, text string,
+	embedding []float32,
+	namespace string,
+) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
 	}
@@ -160,7 +165,8 @@ func (s *SQLiteStorage) IndexWithNamespace(ctx context.Context, id, text string,
 
 	// Insert the document with namespace
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents (id, original_text_compressed, content_hash, file_path, doc_type, namespace, chunk_count, created_at, updated_at) 
+		INSERT OR REPLACE INTO documents 
+		(id, original_text_compressed, content_hash, file_path, doc_type, namespace, chunk_count, created_at, updated_at) 
 		VALUES (?, ?, ?, ?, 'text', ?, 1, datetime('now'), datetime('now'))
 	`, id, []byte{}, contentHash, filePath, namespace)
 	if err != nil {
@@ -172,7 +178,8 @@ func (s *SQLiteStorage) IndexWithNamespace(ctx context.Context, id, text string,
 
 	// Insert the chunk
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO chunks (chunk_id, document_id, chunk_index, chunk_text_compressed, start_pos, end_pos, token_count, chunk_type, created_at) 
+		INSERT OR REPLACE INTO chunks 
+		(chunk_id, document_id, chunk_index, chunk_text_compressed, start_pos, end_pos, token_count, chunk_type, created_at) 
 		VALUES (?, ?, 0, ?, 0, ?, ?, 'text', datetime('now'))
 	`, chunkID, id, []byte{}, len(text), len(text))
 	if err != nil {
@@ -198,7 +205,13 @@ func (s *SQLiteStorage) IndexWithNamespace(ctx context.Context, id, text string,
 }
 
 // IndexChunksWithNamespace indexes a document with chunks and namespace
-func (s *SQLiteStorage) IndexChunksWithNamespace(ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType, namespace string) error {
+func (s *SQLiteStorage) IndexChunksWithNamespace(
+	ctx context.Context,
+	documentID, text string,
+	chunks []Chunk,
+	embeddings [][]float32,
+	originalFilePath, docType, namespace string,
+) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
 	}
@@ -228,7 +241,9 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(ctx context.Context, documentID
 	}()
 
 	// Delete existing chunks first
-	_, err = tx.ExecContext(ctx, "DELETE FROM embeddings WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE document_id = ?)", documentID)
+	_, err = tx.ExecContext(ctx,
+		"DELETE FROM embeddings WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE document_id = ?)",
+		documentID)
 	if err != nil {
 		return fmt.Errorf("failed to delete existing embeddings: %w", err)
 	}
@@ -239,7 +254,9 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(ctx context.Context, documentID
 
 	// Insert or update the document with namespace
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents (id, original_text_compressed, content_hash, file_path, source_path, doc_type, namespace, chunk_count, created_at, updated_at) 
+		INSERT OR REPLACE INTO documents 
+		(id, original_text_compressed, content_hash, file_path, source_path, 
+		 doc_type, namespace, chunk_count, created_at, updated_at) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
 	`, documentID, []byte{}, contentHash, filePath, originalFilePath, docType, namespace, len(chunks))
 	if err != nil {
@@ -252,9 +269,13 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(ctx context.Context, documentID
 
 		// Insert chunk
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO chunks (chunk_id, document_id, chunk_index, chunk_text_compressed, start_pos, end_pos, token_count, page_number, chunk_type, created_at) 
+			INSERT INTO chunks 
+			(chunk_id, document_id, chunk_index, chunk_text_compressed, 
+			 start_pos, end_pos, token_count, page_number, chunk_type, created_at) 
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-		`, chunkID, documentID, chunk.Index, []byte{}, chunk.StartPos, chunk.EndPos, chunk.TokenCount, chunk.PageNumber, chunk.ChunkType)
+		`, chunkID, documentID, chunk.Index, []byte{},
+			chunk.StartPos, chunk.EndPos, chunk.TokenCount,
+			chunk.PageNumber, chunk.ChunkType)
 		if err != nil {
 			return fmt.Errorf("failed to insert chunk %d: %w", i, err)
 		}
@@ -361,7 +382,7 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 
 		chunkType := chunk.ChunkType
 		if chunkType == "" {
-			chunkType = "text"
+			chunkType = ChunkTypeText
 		}
 
 		// Compress chunk text for storage
@@ -410,7 +431,7 @@ func (s *SQLiteStorage) Index(ctx context.Context, id, text string, embedding []
 		StartPos:   0,
 		EndPos:     len(text),
 		TokenCount: len(strings.Fields(text)), // Simple token estimation
-		ChunkType:  "text",
+		ChunkType:  ChunkTypeText,
 		PageNumber: nil,
 	}
 
@@ -609,7 +630,11 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 		var updatedAtStr string
 		var createdAtStr string
 
-		err := rows.Scan(&doc.ID, &compressedText, &doc.ChunkCount, &sourcePath, &docType, &namespace, &createdAtStr, &updatedAtStr)
+		err := rows.Scan(
+			&doc.ID, &compressedText, &doc.ChunkCount,
+			&sourcePath, &docType, &namespace,
+			&createdAtStr, &updatedAtStr,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan document row: %w", err)
 		}

@@ -12,6 +12,11 @@ import (
 	"github.com/dslipak/pdf"
 )
 
+// PDF file extension constant
+const (
+	ExtPDF = ".pdf"
+)
+
 type PDFPage struct {
 	PageNumber int
 	Text       string
@@ -435,7 +440,7 @@ func (p *PDFParser) ParseWithChunks(filePath, documentID string) ([]Chunk, error
 
 // SupportedExtensions returns the file extensions this parser supports
 func (p *PDFParser) SupportedExtensions() []string {
-	return []string{".pdf"}
+	return []string{ExtPDF}
 }
 
 // GetDocumentType returns the type of documents this parser handles
@@ -446,5 +451,5 @@ func (p *PDFParser) GetDocumentType() DocumentType {
 // IsPDFFile checks if a file is a PDF based on its extension
 func IsPDFFile(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	return ext == ".pdf"
+	return ext == ExtPDF
 }

@@ -118,7 +118,7 @@ func (dh *DocumentHandler) DetectDocumentType(filePath string) DocumentType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch ext {
-	case ".pdf":
+	case ExtPDF:
 		return DocumentTypePDF
 	case ".docx":
 		return DocumentTypeDOCX

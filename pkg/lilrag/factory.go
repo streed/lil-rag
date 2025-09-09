@@ -16,8 +16,8 @@ const (
 	DefaultChatModel    = "gemma3:4b"
 )
 
-// LilRagBuilder provides a fluent interface for building LilRag instances
-type LilRagBuilder struct {
+// Builder provides a fluent interface for building LilRag instances
+type Builder struct {
 	config        *ServiceConfig
 	withVision    bool
 	withMetrics   bool
@@ -25,8 +25,8 @@ type LilRagBuilder struct {
 }
 
 // NewBuilder creates a new LilRag builder
-func NewBuilder() *LilRagBuilder {
-	return &LilRagBuilder{
+func NewBuilder() *Builder {
+	return &Builder{
 		config:      &ServiceConfig{},
 		withVision:  false,
 		withMetrics: true,
@@ -34,13 +34,13 @@ func NewBuilder() *LilRagBuilder {
 }
 
 // WithConfig sets the service configuration
-func (b *LilRagBuilder) WithConfig(cfg *ServiceConfig) *LilRagBuilder {
+func (b *Builder) WithConfig(cfg *ServiceConfig) *Builder {
 	b.config = cfg
 	return b
 }
 
 // WithProfileConfig loads configuration from a profile config
-func (b *LilRagBuilder) WithProfileConfig(profileConfig *config.Config, dataDir string) *LilRagBuilder {
+func (b *Builder) WithProfileConfig(profileConfig *config.Config, dataDir string) *Builder {
 	b.config = &ServiceConfig{
 		DatabasePath:   profileConfig.Database.Path,
 		DataDir:        dataDir,
@@ -58,20 +58,20 @@ func (b *LilRagBuilder) WithProfileConfig(profileConfig *config.Config, dataDir 
 }
 
 // WithDatabase configures database settings
-func (b *LilRagBuilder) WithDatabase(path string, vectorSize int) *LilRagBuilder {
+func (b *Builder) WithDatabase(path string, vectorSize int) *Builder {
 	b.config.DatabasePath = path
 	b.config.VectorSize = vectorSize
 	return b
 }
 
 // WithDataDir sets the data directory
-func (b *LilRagBuilder) WithDataDir(dataDir string) *LilRagBuilder {
+func (b *Builder) WithDataDir(dataDir string) *Builder {
 	b.config.DataDir = dataDir
 	return b
 }
 
 // WithOllama configures Ollama settings
-func (b *LilRagBuilder) WithOllama(url, model string, timeoutSeconds int) *LilRagBuilder {
+func (b *Builder) WithOllama(url, model string, timeoutSeconds int) *Builder {
 	b.config.OllamaURL = url
 	b.config.Model = model
 	b.config.TimeoutSeconds = timeoutSeconds
@@ -79,13 +79,13 @@ func (b *LilRagBuilder) WithOllama(url, model string, timeoutSeconds int) *LilRa
 }
 
 // WithChatModel sets the chat model
-func (b *LilRagBuilder) WithChatModel(chatModel string) *LilRagBuilder {
+func (b *Builder) WithChatModel(chatModel string) *Builder {
 	b.config.ChatModel = chatModel
 	return b
 }
 
 // WithVision enables vision model support
-func (b *LilRagBuilder) WithVision(visionModel string, imageMaxSize int) *LilRagBuilder {
+func (b *Builder) WithVision(visionModel string, imageMaxSize int) *Builder {
 	b.config.VisionModel = visionModel
 	b.config.ImageMaxSize = imageMaxSize
 	b.withVision = true
@@ -93,26 +93,26 @@ func (b *LilRagBuilder) WithVision(visionModel string, imageMaxSize int) *LilRag
 }
 
 // WithChunking configures text chunking parameters
-func (b *LilRagBuilder) WithChunking(maxTokens, overlap int) *LilRagBuilder {
+func (b *Builder) WithChunking(maxTokens, overlap int) *Builder {
 	b.config.MaxTokens = maxTokens
 	b.config.Overlap = overlap
 	return b
 }
 
 // WithCustomParser adds a custom parser
-func (b *LilRagBuilder) WithCustomParser(parser Parser) *LilRagBuilder {
+func (b *Builder) WithCustomParser(parser Parser) *Builder {
 	b.customParsers = append(b.customParsers, parser)
 	return b
 }
 
 // WithMetrics enables/disables metrics collection
-func (b *LilRagBuilder) WithMetrics(enabled bool) *LilRagBuilder {
+func (b *Builder) WithMetrics(enabled bool) *Builder {
 	b.withMetrics = enabled
 	return b
 }
 
 // applyDefaults applies default values for unset configuration
-func (b *LilRagBuilder) applyDefaults() {
+func (b *Builder) applyDefaults() {
 	if b.config.DatabasePath == "" {
 		b.config.DatabasePath = DefaultDatabaseName
 	}
@@ -149,7 +149,7 @@ func (b *LilRagBuilder) applyDefaults() {
 }
 
 // Build creates and initializes a new LilRag instance
-func (b *LilRagBuilder) Build(ctx context.Context) (*LilRag, error) {
+func (b *Builder) Build(ctx context.Context) (*LilRag, error) {
 	// Apply defaults
 	b.applyDefaults()
 
@@ -198,7 +198,7 @@ func (b *LilRagBuilder) Build(ctx context.Context) (*LilRag, error) {
 }
 
 // BuildServices creates only the services without legacy wrapper
-func (b *LilRagBuilder) BuildServices(ctx context.Context) (*LilRagServices, error) {
+func (b *Builder) BuildServices(ctx context.Context) (*Services, error) {
 	// Apply defaults
 	b.applyDefaults()
 
@@ -213,7 +213,7 @@ func (b *LilRagBuilder) BuildServices(ctx context.Context) (*LilRagServices, err
 }
 
 // validateConfig validates the builder configuration
-func (b *LilRagBuilder) validateConfig() error {
+func (b *Builder) validateConfig() error {
 	if b.config.DatabasePath == "" {
 		return fmt.Errorf("database path is required")
 	}
@@ -242,28 +242,28 @@ func (b *LilRagBuilder) validateConfig() error {
 type ConfigurationTemplate struct{}
 
 // FastSearch creates a builder optimized for fast search with smaller chunks
-func (ConfigurationTemplate) FastSearch() *LilRagBuilder {
+func (ConfigurationTemplate) FastSearch() *Builder {
 	return NewBuilder().
 		WithChunking(128, 19).
 		WithOllama("http://localhost:11434", "nomic-embed-text", 15)
 }
 
 // ContextualSearch creates a builder optimized for preserving context with larger chunks
-func (ConfigurationTemplate) ContextualSearch() *LilRagBuilder {
+func (ConfigurationTemplate) ContextualSearch() *Builder {
 	return NewBuilder().
 		WithChunking(512, 76).
 		WithOllama("http://localhost:11434", "nomic-embed-text", 45)
 }
 
 // LegacyCompatible creates a builder with legacy chunking settings
-func (ConfigurationTemplate) LegacyCompatible() *LilRagBuilder {
+func (ConfigurationTemplate) LegacyCompatible() *Builder {
 	return NewBuilder().
 		WithChunking(1800, 200).
 		WithOllama("http://localhost:11434", "nomic-embed-text", 30)
 }
 
 // ProductionReady creates a builder with production-optimized settings
-func (ConfigurationTemplate) ProductionReady(dataDir string) *LilRagBuilder {
+func (ConfigurationTemplate) ProductionReady(dataDir string) *Builder {
 	return NewBuilder().
 		WithDataDir(dataDir).
 		WithDatabase(filepath.Join(dataDir, "lilrag.db"), 768).
@@ -274,7 +274,7 @@ func (ConfigurationTemplate) ProductionReady(dataDir string) *LilRagBuilder {
 }
 
 // Development creates a builder for development with relaxed timeouts
-func (ConfigurationTemplate) Development() *LilRagBuilder {
+func (ConfigurationTemplate) Development() *Builder {
 	return NewBuilder().
 		WithDatabase("dev.db", 768).
 		WithChunking(256, 38).

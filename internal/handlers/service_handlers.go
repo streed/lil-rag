@@ -12,13 +12,13 @@ import (
 
 // ServiceHandler provides service-oriented HTTP handlers using the new abstraction layer
 type ServiceHandler struct {
-	services *lilrag.LilRagServices
+	services *lilrag.Services
 	version  string
 	dataDir  string
 }
 
 // NewServiceHandler creates a new service-based handler
-func NewServiceHandler(services *lilrag.LilRagServices, version, dataDir string) *ServiceHandler {
+func NewServiceHandler(services *lilrag.Services, version, dataDir string) *ServiceHandler {
 	return &ServiceHandler{
 		services: services,
 		version:  version,
@@ -350,7 +350,7 @@ func (h *ServiceHandler) writeServiceError(w http.ResponseWriter, err error) {
 
 	// Convert service error to appropriate HTTP status
 	status := http.StatusInternalServerError
-	if lilragErr, ok := err.(*lilrag.LilRagError); ok {
+	if lilragErr, ok := err.(*lilrag.Error); ok {
 		switch lilragErr.Type {
 		case lilrag.ErrorTypeValidation:
 			status = http.StatusBadRequest

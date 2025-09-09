@@ -39,7 +39,10 @@ func NewParserRegistry() *ParserRegistry {
 }
 
 // NewParserRegistryWithVision creates a parser registry including vision-enabled parsers
-func NewParserRegistryWithVision(ollamaURL, visionModel string, timeoutSeconds, imageMaxSize int) (*ParserRegistry, error) {
+func NewParserRegistryWithVision(
+	ollamaURL, visionModel string,
+	timeoutSeconds, imageMaxSize int,
+) (*ParserRegistry, error) {
 	registry := NewParserRegistry()
 
 	// Add vision parser using existing constructor with default chunker
@@ -96,7 +99,7 @@ func DetectDocumentType(filePath string) DocumentType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch ext {
-	case ".pdf":
+	case ExtPDF:
 		return DocumentTypePDF
 	case ".docx":
 		return DocumentTypeDOCX
@@ -137,7 +140,11 @@ func NewDocumentParsingService(chunker *TextChunker) *DocumentParsingService {
 }
 
 // NewDocumentParsingServiceWithVision creates a document parsing service with vision support
-func NewDocumentParsingServiceWithVision(chunker *TextChunker, ollamaURL, visionModel string, timeoutSeconds, imageMaxSize int) (*DocumentParsingService, error) {
+func NewDocumentParsingServiceWithVision(
+	chunker *TextChunker,
+	ollamaURL, visionModel string,
+	timeoutSeconds, imageMaxSize int,
+) (*DocumentParsingService, error) {
 	registry, err := NewParserRegistryWithVision(ollamaURL, visionModel, timeoutSeconds, imageMaxSize)
 	if err != nil {
 		return nil, err

@@ -54,8 +54,8 @@ type HealthService interface {
 	GetMetrics(ctx context.Context) (map[string]interface{}, error)
 }
 
-// LilRagServices aggregates all service interfaces
-type LilRagServices struct {
+// Services aggregates all service interfaces
+type Services struct {
 	Indexing IndexingService
 	Search   SearchService
 	Chat     ChatService
@@ -207,7 +207,12 @@ func (s *DefaultSearchService) Search(ctx context.Context, query string, limit i
 }
 
 // SearchWithContext performs search with additional filters
-func (s *DefaultSearchService) SearchWithContext(ctx context.Context, query string, limit int, _ map[string]interface{}) ([]SearchResult, error) {
+func (s *DefaultSearchService) SearchWithContext(
+	ctx context.Context,
+	query string,
+	limit int,
+	_ map[string]interface{},
+) ([]SearchResult, error) {
 	// For now, delegate to basic search
 	// Future implementation could use filters for refined searching
 	return s.Search(ctx, query, limit)
@@ -385,7 +390,7 @@ func NewServiceFactory(config *ServiceConfig) *ServiceFactory {
 }
 
 // CreateServices creates and configures all services
-func (f *ServiceFactory) CreateServices(_ context.Context) (*LilRagServices, error) {
+func (f *ServiceFactory) CreateServices(_ context.Context) (*Services, error) {
 	// Initialize storage
 	storage, err := NewSQLiteStorage(f.config.DatabasePath, f.config.VectorSize, f.config.DataDir)
 	if err != nil {
@@ -422,7 +427,7 @@ func (f *ServiceFactory) CreateServices(_ context.Context) (*LilRagServices, err
 	documentService := NewDocumentService(storage)
 	healthService := NewHealthService(storage, embedder)
 
-	return &LilRagServices{
+	return &Services{
 		Indexing: indexingService,
 		Search:   searchService,
 		Chat:     chatService,
