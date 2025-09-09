@@ -6,6 +6,20 @@ on:
     branches: [main]
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version_strategy:
+        description: 'Version strategy for manual builds'
+        required: false
+        default: 'auto-increment'
+        type: choice
+        options:
+          - auto-increment
+          - use-version-file
+      custom_version:
+        description: 'Custom version (only used with use-version-file strategy)'
+        required: false
+        type: string
 
 env:
   GO_VERSION: '1.23'
@@ -54,6 +68,45 @@ jobs:
             
             VERSION=$FILE_VERSION
             echo "Version validation successful: $VERSION"
+          elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            # Manual trigger - check user's strategy choice
+            STRATEGY="${{ github.event.inputs.version_strategy }}"
+            echo "Manual workflow dispatch detected"
+            echo "Version strategy: $STRATEGY"
+            
+            if [[ "$STRATEGY" == "use-version-file" ]]; then
+              IS_TAG=true
+              # Use version from file (treat as tag build for release purposes)
+              CURRENT_VERSION=$(cat VERSION | tr -d '[:space:]')
+              
+              # Check if user provided custom version
+              CUSTOM_VERSION="${{ github.event.inputs.custom_version }}"
+              if [[ -n "$CUSTOM_VERSION" ]]; then
+                echo "Using custom version: $CUSTOM_VERSION"
+                echo "$CUSTOM_VERSION" > VERSION
+                VERSION="$CUSTOM_VERSION"
+              else
+                echo "Using version from file: $CURRENT_VERSION"
+                VERSION="$CURRENT_VERSION"
+              fi
+            else
+              IS_TAG=false
+              # Auto-increment patch version (treat as main branch build)
+              CURRENT_VERSION=$(cat VERSION | tr -d '[:space:]')
+              echo "Current version: $CURRENT_VERSION"
+
+              # Increment patch version
+              IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+              MAJOR=${VERSION_PARTS[0]}
+              MINOR=${VERSION_PARTS[1]}
+              PATCH=${VERSION_PARTS[2]}
+
+              NEW_PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+              echo "$VERSION" > VERSION
+              echo "Version incremented to: $VERSION"
+            fi
           else
             IS_TAG=false
             # Main branch build - increment patch version
@@ -77,7 +130,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
 
-      - name: Commit version update (main branch only)
+      - name: Commit version update (auto-increment builds only)
         if: steps.version.outputs.is_tag == 'false'
         run: |
           git config --local user.email "action@github.com"
@@ -86,8 +139,14 @@ jobs:
           if git diff --staged --quiet; then
             echo "No version changes to commit"
           else
-            git commit -m "Bump version to ${{ steps.version.outputs.version }} [skip ci]"
-            git push
+            TRIGGER_TYPE="${{ github.event_name == 'workflow_dispatch' && '[manual]' || '[skip ci]' }}"
+            git commit -m "Bump version to ${{ steps.version.outputs.version }} $TRIGGER_TYPE"
+            # Only push if this is not a manual workflow dispatch or if it's auto-increment
+            if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ github.event.inputs.version_strategy }}" == "auto-increment" ]]; then
+              git push
+            else
+              echo "Manual workflow dispatch with custom version - skipping push"
+            fi
           fi
 
   build-cross-platform:
@@ -301,7 +360,7 @@ jobs:
           body: |
             ## 🚀 Release v${{ needs.version.outputs.version }}
 
-            ${{ needs.version.outputs.is_tag == 'true' && 'Official release built from VERSION file content.' || 'Auto-generated release from main branch build using native platform compilation.' }}
+            ${{ needs.version.outputs.is_tag == 'true' && (github.event_name == 'workflow_dispatch' && 'Manual release built using VERSION file content.' || 'Official release built from VERSION file content.') || (github.event_name == 'workflow_dispatch' && 'Manual build from workflow dispatch.' || 'Auto-generated release from main branch build using native platform compilation.') }}
 
             ### 📦 Downloads
             - **Linux AMD64**: `lil-rag-${{ needs.version.outputs.version }}-linux-amd64.tar.gz`
@@ -328,8 +387,9 @@ jobs:
             ${{ needs.version.outputs.is_tag == 'false' && '### ✨ What''s New' || '' }}
             ${{ needs.version.outputs.is_tag == 'false' && 'This release includes all changes merged to main since the previous release.' || '' }}
 
-            **Version Source**: ${{ needs.version.outputs.is_tag == 'true' && 'VERSION file (official release)' || 'Auto-incremented from main branch' }}
+            **Version Source**: ${{ needs.version.outputs.is_tag == 'true' && (github.event_name == 'workflow_dispatch' && 'Manual build using VERSION file' || 'VERSION file (official release)') || (github.event_name == 'workflow_dispatch' && 'Manual workflow dispatch' || 'Auto-incremented from main branch') }}
             **Build Method**: Native platform compilation with CGO support
+            ${{ github.event_name == 'workflow_dispatch' && format('**Trigger**: Manual workflow dispatch (strategy: {0})', github.event.inputs.version_strategy) || '' }}
           files: |
             dist/*.tar.gz
             dist/*.zip
@@ -343,10 +403,20 @@ jobs:
       - name: Display build summary
         run: |
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "**Build Type:** ${{ needs.version.outputs.is_tag == 'true' && 'Official Release (Tag)' || 'Development Build (Main)' }}" >> $GITHUB_STEP_SUMMARY
+          BUILD_TYPE="${{ needs.version.outputs.is_tag == 'true' && 'Official Release' || 'Development Build' }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BUILD_TYPE="Manual $BUILD_TYPE"
+          fi
+          echo "**Build Type:** $BUILD_TYPE" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name == 'workflow_dispatch' && 'Manual workflow dispatch' || github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          ${{ github.event_name == 'workflow_dispatch' && 'echo "**Strategy:** ${{ github.event.inputs.version_strategy }}" >> $GITHUB_STEP_SUMMARY' || '' }}
           echo "**Version:** ${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Release Tag:** v${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Version Source:** ${{ needs.version.outputs.is_tag == 'true' && 'VERSION file' || 'Auto-incremented' }}" >> $GITHUB_STEP_SUMMARY
+          VERSION_SOURCE="${{ needs.version.outputs.is_tag == 'true' && 'VERSION file' || 'Auto-incremented' }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION_SOURCE="$VERSION_SOURCE (manual)"
+          fi
+          echo "**Version Source:** $VERSION_SOURCE" >> $GITHUB_STEP_SUMMARY
           echo "**Platforms:** Linux (AMD64, ARM64), Windows (AMD64), macOS (AMD64, ARM64)" >> $GITHUB_STEP_SUMMARY
           echo "**Build Method:** Native platform compilation" >> $GITHUB_STEP_SUMMARY
           echo "**Prerelease:** ${{ needs.version.outputs.is_tag == 'false' && 'Yes' || 'No' }}" >> $GITHUB_STEP_SUMMARY
