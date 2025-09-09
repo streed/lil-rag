@@ -95,7 +95,12 @@ get_download_url() {
         extension=".tar.gz"
     fi
     
-    local filename="lil-rag-${platform}${extension}"
+    # Extract version and remove 'v' prefix if present
+    local version
+    version=$(echo "$release_info" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+    version=${version#v}  # Remove 'v' prefix if present
+    
+    local filename="lil-rag-${version}-${platform}${extension}"
     local download_url
     
     # Extract download URL using basic text processing
