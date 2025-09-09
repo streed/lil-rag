@@ -119,7 +119,7 @@ func New(config *Config) (*LilRag, error) {
 		config.Model = DefaultModel
 	}
 	if config.ChatModel == "" {
-		config.ChatModel = "gemma3:4b"
+		config.ChatModel = DefaultChatModel
 	}
 	if config.VectorSize == 0 {
 		config.VectorSize = 768

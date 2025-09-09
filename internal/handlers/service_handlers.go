@@ -83,7 +83,8 @@ func (h *ServiceHandler) Search() http.HandlerFunc {
 		var req SearchRequest
 		var err error
 
-		if r.Method == http.MethodGet {
+		switch r.Method {
+		case http.MethodGet:
 			// Handle GET request
 			req.Query = r.URL.Query().Get("query")
 			if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
@@ -93,13 +94,13 @@ func (h *ServiceHandler) Search() http.HandlerFunc {
 				}
 				req.Limit = limit
 			}
-		} else if r.Method == http.MethodPost {
+		case http.MethodPost:
 			// Handle POST request
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				h.writeError(w, http.StatusBadRequest, "invalid request body", err.Error())
+			if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
+				h.writeError(w, http.StatusBadRequest, "invalid request body", decodeErr.Error())
 				return
 			}
-		} else {
+		default:
 			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
 			return
 		}
@@ -283,7 +284,9 @@ func (h *ServiceHandler) Health() http.HandlerFunc {
 				"error":     err.Error(),
 				"version":   h.version,
 			}
-			json.NewEncoder(w).Encode(response)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			}
 			return
 		}
 
@@ -369,6 +372,8 @@ func (h *ServiceHandler) writeServiceError(w http.ResponseWriter, err error) {
 			status = http.StatusServiceUnavailable
 		case lilrag.ErrorTypeNetwork:
 			status = http.StatusServiceUnavailable
+		case lilrag.ErrorTypeInternal:
+			status = http.StatusInternalServerError
 		}
 	}
 

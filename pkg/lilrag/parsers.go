@@ -60,7 +60,7 @@ func (r *ParserRegistry) GetParser(filePath string) Parser {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	for _, parser := range r.parsers {
 		for _, supportedExt := range parser.SupportedExtensions() {
-			if ext == strings.ToLower(supportedExt) {
+			if strings.EqualFold(ext, supportedExt) {
 				return parser
 			}
 		}
@@ -106,7 +106,7 @@ func DetectDocumentType(filePath string) DocumentType {
 		return DocumentTypeHTML
 	case ".csv":
 		return DocumentTypeCSV
-	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp":
+	case ExtJPG, ExtJPEG, ExtPNG, ExtGIF, ExtBMP, ExtWEBP:
 		return DocumentTypeImage
 	default:
 		return DocumentTypeTXT
@@ -150,7 +150,7 @@ func NewDocumentParsingServiceWithVision(chunker *TextChunker, ollamaURL, vision
 }
 
 // ParseDocument parses a document and returns structured results
-func (s *DocumentParsingService) ParseDocument(ctx context.Context, filePath, documentID string) (*ParseResult, error) {
+func (s *DocumentParsingService) ParseDocument(_ context.Context, filePath, documentID string) (*ParseResult, error) {
 	parser := s.registry.GetParser(filePath)
 	if parser == nil {
 		return nil, fmt.Errorf("unsupported file type: %s", filePath)

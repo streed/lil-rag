@@ -9,6 +9,13 @@ import (
 	"lil-rag/pkg/config"
 )
 
+// Default configuration constants
+const (
+	DefaultDataDir         = "data"
+	DefaultDatabaseName    = "lilrag.db"
+	DefaultChatModel       = "gemma3:4b"
+)
+
 // LilRagBuilder provides a fluent interface for building LilRag instances
 type LilRagBuilder struct {
 	config        *ServiceConfig
@@ -39,7 +46,7 @@ func (b *LilRagBuilder) WithProfileConfig(profileConfig *config.Config, dataDir 
 		DataDir:        dataDir,
 		OllamaURL:      profileConfig.Ollama.URL,
 		Model:          profileConfig.Ollama.Model,
-		ChatModel:      "gemma3:4b", // Default chat model
+		ChatModel:      DefaultChatModel, // Default chat model
 		VisionModel:    profileConfig.Ollama.VisionModel,
 		TimeoutSeconds: profileConfig.Ollama.TimeoutSeconds,
 		VectorSize:     profileConfig.Database.VectorSize,
@@ -107,19 +114,19 @@ func (b *LilRagBuilder) WithMetrics(enabled bool) *LilRagBuilder {
 // applyDefaults applies default values for unset configuration
 func (b *LilRagBuilder) applyDefaults() {
 	if b.config.DatabasePath == "" {
-		b.config.DatabasePath = "lilrag.db"
+		b.config.DatabasePath = DefaultDatabaseName
 	}
 	if b.config.DataDir == "" {
-		b.config.DataDir = "data"
+		b.config.DataDir = DefaultDataDir
 	}
 	if b.config.OllamaURL == "" {
 		b.config.OllamaURL = DefaultOllamaURL
 	}
 	if b.config.Model == "" {
-		b.config.Model = DefaultModel
+		b.config.Model = DefaultChatModel
 	}
 	if b.config.ChatModel == "" {
-		b.config.ChatModel = "gemma3:4b"
+		b.config.ChatModel = DefaultChatModel
 	}
 	if b.config.VisionModel == "" {
 		b.config.VisionModel = "llama3.2-vision"
@@ -152,7 +159,7 @@ func (b *LilRagBuilder) Build(ctx context.Context) (*LilRag, error) {
 	}
 
 	// Create data directory if it doesn't exist
-	if err := os.MkdirAll(b.config.DataDir, 0755); err != nil {
+	if err := os.MkdirAll(b.config.DataDir, 0o755); err != nil {
 		return nil, NewConfigError("failed to create data directory", err)
 	}
 
@@ -211,7 +218,7 @@ func (b *LilRagBuilder) validateConfig() error {
 		return fmt.Errorf("database path is required")
 	}
 	if b.config.OllamaURL == "" {
-		return fmt.Errorf("Ollama URL is required")
+		return fmt.Errorf("ollama URL is required")
 	}
 	if b.config.Model == "" {
 		return fmt.Errorf("embedding model is required")
@@ -280,7 +287,7 @@ type ConfigFactory struct{}
 
 // FromProfile creates a service config from a profile configuration
 func (ConfigFactory) FromProfile(profileConfig *config.Config, dataDir string) *ServiceConfig {
-	chatModel := "gemma3:4b"
+	chatModel := DefaultChatModel
 	if profileConfig.Ollama.Model != "" {
 		// Use embedding model as chat model if no separate chat model is specified
 		chatModel = profileConfig.Ollama.Model
@@ -304,11 +311,11 @@ func (ConfigFactory) FromProfile(profileConfig *config.Config, dataDir string) *
 // FromEnvironment creates a service config from environment variables
 func (ConfigFactory) FromEnvironment() *ServiceConfig {
 	return &ServiceConfig{
-		DatabasePath:   getEnvOrDefault("LILRAG_DB_PATH", "lilrag.db"),
-		DataDir:        getEnvOrDefault("LILRAG_DATA_DIR", "data"),
+		DatabasePath:   getEnvOrDefault("LILRAG_DB_PATH", DefaultDatabaseName),
+		DataDir:        getEnvOrDefault("LILRAG_DATA_DIR", DefaultDataDir),
 		OllamaURL:      getEnvOrDefault("LILRAG_OLLAMA_URL", DefaultOllamaURL),
-		Model:          getEnvOrDefault("LILRAG_MODEL", DefaultModel),
-		ChatModel:      getEnvOrDefault("LILRAG_CHAT_MODEL", "gemma3:4b"),
+		Model:          getEnvOrDefault("LILRAG_MODEL", DefaultChatModel),
+		ChatModel:      getEnvOrDefault("LILRAG_CHAT_MODEL", DefaultChatModel),
 		VisionModel:    getEnvOrDefault("LILRAG_VISION_MODEL", "llama3.2-vision"),
 		TimeoutSeconds: getEnvIntOrDefault("LILRAG_TIMEOUT", 30),
 		VectorSize:     getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),

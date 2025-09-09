@@ -24,6 +24,23 @@ import (
 	"lil-rag/pkg/metrics"
 )
 
+// Image file extension constants
+const (
+	ExtJPG  = ".jpg"
+	ExtJPEG = ".jpeg"
+	ExtPNG  = ".png"
+	ExtGIF  = ".gif"
+	ExtBMP  = ".bmp"
+	ExtWEBP = ".webp"
+	ExtTIFF = ".tiff"
+	ExtTIF  = ".tif"
+)
+
+// Chunk type constants
+const (
+	ChunkTypeImageOCR = "image_ocr"
+)
+
 // ImageParser handles OCR extraction from image documents using Ollama vision models
 type ImageParser struct {
 	ollamaURL    string
@@ -102,15 +119,15 @@ func (p *ImageParser) ResizeImage(imagePath string, maxSize int) ([]byte, error)
 	ext := strings.ToLower(filepath.Ext(imagePath))
 	var img image.Image
 	switch ext {
-	case ".jpg", ".jpeg":
+	case ExtJPG, ExtJPEG:
 		img, err = jpeg.Decode(file)
-	case ".png":
+	case ExtPNG:
 		img, err = png.Decode(file)
-	case ".gif":
+	case ExtGIF:
 		img, err = gif.Decode(file)
-	case ".webp":
+	case ExtWEBP:
 		img, err = webp.Decode(file)
-	case ".tiff", ".tif":
+	case ExtTIFF, ExtTIF:
 		img, err = tiff.Decode(file)
 	default:
 		return nil, fmt.Errorf("unsupported image format: %s", ext)
@@ -295,7 +312,7 @@ func (p *ImageParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 				StartPos:   0,
 				EndPos:     len(text),
 				TokenCount: len(strings.Fields(text)), // Simple token estimation
-				ChunkType:  "image_ocr",
+				ChunkType:  ChunkTypeImageOCR,
 				PageNumber: nil, // Images don't have page numbers
 			},
 		}, nil
@@ -306,7 +323,7 @@ func (p *ImageParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 
 	// Update chunk metadata to indicate these are from image OCR
 	for i := range chunks {
-		chunks[i].ChunkType = "image_ocr"
+		chunks[i].ChunkType = ChunkTypeImageOCR
 	}
 
 	return chunks, nil
@@ -314,7 +331,7 @@ func (p *ImageParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 
 // SupportedExtensions returns the image file extensions this parser supports
 func (p *ImageParser) SupportedExtensions() []string {
-	return []string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
+	return []string{ExtJPG, ExtJPEG, ExtPNG, ExtGIF, ExtBMP, ExtWEBP, ExtTIFF, ExtTIF}
 }
 
 // GetDocumentType returns the document type this parser handles
@@ -377,7 +394,7 @@ func (p *ImageParser) TestVisionModel(ctx context.Context) error {
 // IsImageFile checks if a file is a supported image format
 func IsImageFile(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	supportedExts := []string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
+	supportedExts := []string{ExtJPG, ExtJPEG, ExtPNG, ExtGIF, ExtBMP, ExtWEBP, ExtTIFF, ExtTIF}
 
 	for _, supportedExt := range supportedExts {
 		if ext == supportedExt {
