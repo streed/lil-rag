@@ -402,7 +402,7 @@ func (f *ServiceFactory) CreateServices(_ context.Context) (*Services, error) {
 	}
 
 	// Initialize embedder
-	embedder, err := NewOllamaEmbedderWithTimeout(f.config.OllamaURL, f.config.Model, f.config.TimeoutSeconds)
+	embedder, err := NewOllamaEmbedderWithTimeout(f.config.OllamaURL, f.config.Model, f.config.TimeoutSeconds*4)
 	if err != nil {
 		return nil, NewEmbeddingError("failed to create embedder", err)
 	}
@@ -412,7 +412,7 @@ func (f *ServiceFactory) CreateServices(_ context.Context) (*Services, error) {
 
 	// Initialize parsing service
 	parsingService, err := NewDocumentParsingServiceWithVision(chunker, f.config.OllamaURL,
-		f.config.VisionModel, f.config.TimeoutSeconds, f.config.ImageMaxSize)
+		f.config.VisionModel, f.config.TimeoutSeconds*4, f.config.ImageMaxSize)
 	if err != nil {
 		return nil, NewParsingError("failed to create parsing service", err)
 	}

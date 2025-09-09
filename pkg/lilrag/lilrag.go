@@ -147,7 +147,7 @@ func (m *LilRag) Initialize() error {
 	}
 	m.storage = storage
 
-	embedder, err := NewOllamaEmbedderWithTimeout(m.config.OllamaURL, m.config.Model, m.config.TimeoutSeconds)
+	embedder, err := NewOllamaEmbedderWithTimeout(m.config.OllamaURL, m.config.Model, m.config.TimeoutSeconds*4)
 	if err != nil {
 		return fmt.Errorf("failed to initialize embedder: %w", err)
 	}
@@ -164,7 +164,7 @@ func (m *LilRag) Initialize() error {
 		m.chunker,
 		m.config.OllamaURL,
 		m.config.VisionModel,
-		m.config.TimeoutSeconds,
+		m.config.TimeoutSeconds*4,
 		m.config.ImageMaxSize,
 	)
 
@@ -668,7 +668,7 @@ func (m *LilRag) initializeLegacyComponents() error {
 	}
 	m.storage = storage
 
-	embedder, err := NewOllamaEmbedderWithTimeout(m.config.OllamaURL, m.config.Model, m.config.TimeoutSeconds)
+	embedder, err := NewOllamaEmbedderWithTimeout(m.config.OllamaURL, m.config.Model, m.config.TimeoutSeconds*4)
 	if err != nil {
 		return fmt.Errorf("failed to initialize embedder: %w", err)
 	}
@@ -685,7 +685,7 @@ func (m *LilRag) initializeLegacyComponents() error {
 		m.chunker,
 		m.config.OllamaURL,
 		m.config.VisionModel,
-		m.config.TimeoutSeconds,
+		m.config.TimeoutSeconds*4,
 		m.config.ImageMaxSize,
 	)
 
