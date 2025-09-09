@@ -115,7 +115,7 @@ get_download_url() {
 get_version() {
     local release_info="$1"
     local version
-    version=$(echo "$release_info" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4)
+    version=$(echo "$release_info" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
     
     if [ -z "$version" ]; then
         error "Could not extract version from release information"
@@ -317,7 +317,7 @@ main() {
     fi
     
     local version
-    version=$(echo "$release_info" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4)
+    version=$(echo "$release_info" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
     
     if [ -z "$version" ]; then
         error "Could not extract version from release information"
