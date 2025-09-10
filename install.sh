@@ -86,6 +86,7 @@ get_latest_release() {
 get_download_url() {
     local release_info="$1"
     local platform="$2"
+    local version="$3"
     local extension=""
     
     # Determine file extension
@@ -95,7 +96,7 @@ get_download_url() {
         extension=".tar.gz"
     fi
     
-    local filename="lil-rag-${platform}${extension}"
+    local filename="lil-rag-${version#v}-${platform}${extension}"
     local download_url
     
     # Extract download URL using basic text processing
@@ -329,7 +330,7 @@ main() {
     
     # Get download URL
     local download_url
-    download_url=$(get_download_url "$release_info" "$platform")
+    download_url=$(get_download_url "$release_info" "$platform" "$version")
     log "Download URL: $download_url"
     
     # Download and install
