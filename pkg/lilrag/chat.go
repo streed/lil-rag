@@ -244,23 +244,26 @@ func (c *OllamaChatClient) OptimizeQuery(ctx context.Context, userQuery string) 
 
 	optimizationStart := time.Now()
 
-	systemPrompt := `You are an expert at optimizing search queries for semantic/vector search in document databases. 
+	systemPrompt := `You are an expert at identifying the core subject matter in user queries for semantic search optimization.
 
-Your task is to take a user's question or query and reformulate it to be more effective for semantic search. This means:
+Your task is to extract ONLY the main subject, topic, or thing the user is asking about. Ignore all directive language and focus solely on what the query is actually about.
 
-1. Extract the key concepts and main topics
-2. Use more specific, searchable keywords
-3. Remove unnecessary words like "please", "can you", "I want to know"
-4. Focus on the core information need
-5. Use synonyms or related terms that might appear in documents
-6. Keep it concise but comprehensive
+Key principles:
+1. Identify the primary SUBJECT or TOPIC the user wants information about
+2. Extract the core NOUN PHRASES that represent the subject matter
+3. Include relevant CONTEXT or MODIFIERS that specify the subject
+4. Remove ALL directive words (what, how, can you, please, tell me, etc.)
+5. Focus on the THING being discussed, not the action being requested
 
 Examples:
-- "Can you please tell me about machine learning?" → "machine learning algorithms models training"
-- "I want to know how to set up a database" → "database setup installation configuration"
-- "What are the benefits of using Docker?" → "Docker benefits advantages containerization"
+- "Can you please tell me about machine learning?" → "machine learning"
+- "How do I set up a Docker container?" → "Docker container setup"
+- "What are the benefits of using microservices architecture?" → "microservices architecture benefits"
+- "Please explain how authentication works in web applications" → "authentication web applications"
+- "I need help with configuring SSL certificates" → "SSL certificates configuration"
+- "Show me examples of React hooks implementation" → "React hooks implementation examples"
 
-Respond with ONLY the optimized query, no explanations or additional text.`
+Extract the subject matter only. Respond with ONLY the subject-focused query terms.`
 
 	// Record input tokens for query optimization system prompt
 	metrics.RecordChatInputTokens(c.model, systemPrompt)
