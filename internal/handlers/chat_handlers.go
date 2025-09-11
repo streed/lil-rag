@@ -1009,7 +1009,9 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 						log.Printf("Failed to compact chat history: %v", err)
 					} else {
 						// Refresh context after compaction
-						chatContext, _ = h.chatHistory.GetChatContext(ctx, sessionID)
+						if refreshedContext, err := h.chatHistory.GetChatContext(ctx, sessionID); err == nil {
+							chatContext = refreshedContext
+						}
 						hasCompacted = true
 					}
 				}
@@ -1127,7 +1129,7 @@ func (h *Handler) compactChatHistory(ctx context.Context, sessionID string, chat
 }
 
 // generateSessionTitle asynchronously generates a title for a new chat session
-func (h *Handler) generateSessionTitle(sessionID, firstMessage string) {
+func (h *Handler) generateSessionTitle(sessionID, _ string) {
 	if h.summarizer == nil {
 		return
 	}

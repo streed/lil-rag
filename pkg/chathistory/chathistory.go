@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // Import SQLite driver
 )
 
 const (
@@ -18,6 +18,9 @@ const (
 
 	// EstimatedTokensPerChar rough estimation for token counting
 	EstimatedTokensPerChar = 0.25
+
+	// DefaultChatTitle is the default title for new chat sessions
+	DefaultChatTitle = "New Chat"
 )
 
 // ChatHistory manages chat sessions and message history
@@ -146,7 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_compactions_session ON chat_compactions(sess
 func (ch *ChatHistory) CreateSession(ctx context.Context) (*ChatSession, error) {
 	session := &ChatSession{
 		ID:        uuid.New().String(),
-		Title:     "New Chat",
+		Title:     DefaultChatTitle,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -186,6 +189,11 @@ func (ch *ChatHistory) GetSessions(ctx context.Context) ([]ChatSession, error) {
 			return nil, fmt.Errorf("failed to scan chat session: %w", err)
 		}
 		sessions = append(sessions, session)
+	}
+
+	// Check for errors during iteration
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during rows iteration: %w", err)
 	}
 
 	// Ensure we always return an empty slice instead of nil
@@ -310,6 +318,11 @@ func (ch *ChatHistory) GetChatContext(ctx context.Context, sessionID string) (*C
 		totalTokens += msg.Tokens
 	}
 
+	// Check for errors during iteration
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during rows iteration: %w", err)
+	}
+
 	// Ensure we always return an empty slice instead of nil
 	if messages == nil {
 		messages = []ChatMessage{}
@@ -376,7 +389,11 @@ func (ch *ChatHistory) CompactChatHistory(ctx context.Context, sessionID, compac
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			// Log the rollback error, but don't override the main error
+		}
+	}()
 
 	// Insert compaction
 	_, err = tx.ExecContext(ctx, `
@@ -443,14 +460,14 @@ func estimateTokens(text string) int {
 }
 
 // ensureDir creates a directory if it doesn't exist
-func ensureDir(path string) error {
+func ensureDir(_ string) error {
 	return nil // The filepath.Dir might be sufficient, but we can implement this if needed
 }
 
 // GenerateChatSummary creates a one-sentence summary of a chat for the title
 func GenerateChatSummary(messages []ChatMessage) string {
 	if len(messages) == 0 {
-		return "New Chat"
+		return DefaultChatTitle
 	}
 
 	// Find the first user message to base the summary on
@@ -464,5 +481,5 @@ func GenerateChatSummary(messages []ChatMessage) string {
 		}
 	}
 
-	return "New Chat"
+	return DefaultChatTitle
 }

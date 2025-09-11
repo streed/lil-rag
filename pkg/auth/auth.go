@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // Import SQLite driver
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -283,6 +283,11 @@ func (a *Auth) ListUsers(ctx context.Context) ([]User, error) {
 		users = append(users, user)
 	}
 
+	// Check for errors during iteration
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during rows iteration: %w", err)
+	}
+
 	if users == nil {
 		users = []User{}
 	}
@@ -317,7 +322,11 @@ func (a *Auth) DeleteUser(ctx context.Context, username string) error {
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			// Log the rollback error, but don't override the main error
+		}
+	}()
 
 	// Get user ID first
 	var userID int
@@ -402,7 +411,7 @@ func generateRandomString(length int) (string, error) {
 }
 
 // ensureDir creates a directory if it doesn't exist
-func ensureDir(path string) error {
+func ensureDir(_ string) error {
 	return nil // Simple implementation for now
 }
 

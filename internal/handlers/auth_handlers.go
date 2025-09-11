@@ -3,8 +3,22 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
+)
+
+const (
+	// ContentTypeJSON is the JSON content type
+	ContentTypeJSON = "application/json"
+)
+
+// contextKey is a type for context keys to avoid collision
+type contextKey string
+
+const (
+	// userContextKey is the key for user data in context
+	userContextKey contextKey = "user"
 )
 
 // LoginRequest represents the login request payload
@@ -73,13 +87,13 @@ func (h *Handler) Login() http.HandlerFunc {
 		}
 		http.SetCookie(w, cookie)
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", ContentTypeJSON)
 		response := LoginResponse{
 			Success:  true,
 			Message:  "Login successful",
 			Username: user.Username,
 		}
-		json.NewEncoder(w).Encode(response)
+		writeJSON(w, response)
 	}
 }
 
@@ -100,8 +114,8 @@ func (h *Handler) Logout() http.HandlerFunc {
 		cookie, err := r.Cookie("session_token")
 		if err != nil {
 			// No cookie, already logged out
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			w.Header().Set("Content-Type", ContentTypeJSON)
+			writeJSON(w, map[string]interface{}{
 				"success": true,
 				"message": "Logged out successfully",
 			})
@@ -112,7 +126,9 @@ func (h *Handler) Logout() http.HandlerFunc {
 		defer cancel()
 
 		// Delete session from database
-		h.auth.DeleteSession(ctx, cookie.Value)
+		if err := h.auth.DeleteSession(ctx, cookie.Value); err != nil {
+			log.Printf("Error deleting session: %v", err)
+		}
 
 		// Clear cookie
 		clearCookie := &http.Cookie{
@@ -124,8 +140,8 @@ func (h *Handler) Logout() http.HandlerFunc {
 		}
 		http.SetCookie(w, clearCookie)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		w.Header().Set("Content-Type", ContentTypeJSON)
+		writeJSON(w, map[string]interface{}{
 			"success": true,
 			"message": "Logged out successfully",
 		})
@@ -142,8 +158,8 @@ func (h *Handler) AuthStatus() http.HandlerFunc {
 
 		// If security is disabled, return no auth required
 		if !h.secure {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			w.Header().Set("Content-Type", ContentTypeJSON)
+			writeJSON(w, map[string]interface{}{
 				"authenticated": true,
 				"auth_required": false,
 			})
@@ -151,8 +167,8 @@ func (h *Handler) AuthStatus() http.HandlerFunc {
 		}
 
 		if h.auth == nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			w.Header().Set("Content-Type", ContentTypeJSON)
+			writeJSON(w, map[string]interface{}{
 				"authenticated": false,
 				"auth_required": false,
 			})
@@ -171,8 +187,8 @@ func (h *Handler) AuthStatus() http.HandlerFunc {
 
 		if !hasUsers {
 			// No users exist, no authentication required
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			w.Header().Set("Content-Type", ContentTypeJSON)
+			writeJSON(w, map[string]interface{}{
 				"authenticated": true,
 				"auth_required": false,
 			})
@@ -182,8 +198,8 @@ func (h *Handler) AuthStatus() http.HandlerFunc {
 		// Get session token from cookie
 		cookie, err := r.Cookie("session_token")
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			w.Header().Set("Content-Type", ContentTypeJSON)
+			writeJSON(w, map[string]interface{}{
 				"authenticated": false,
 				"auth_required": true,
 			})
@@ -193,16 +209,16 @@ func (h *Handler) AuthStatus() http.HandlerFunc {
 		// Validate session
 		session, err := h.auth.ValidateSession(ctx, cookie.Value)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			w.Header().Set("Content-Type", ContentTypeJSON)
+			writeJSON(w, map[string]interface{}{
 				"authenticated": false,
 				"auth_required": true,
 			})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		w.Header().Set("Content-Type", ContentTypeJSON)
+		writeJSON(w, map[string]interface{}{
 			"authenticated": true,
 			"auth_required": true,
 			"username":      session.Username,
@@ -394,7 +410,9 @@ func (h *Handler) LoginPage() http.HandlerFunc {
 </html>`
 
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(loginHTML))
+		if _, err := w.Write([]byte(loginHTML)); err != nil {
+			log.Printf("Error writing login HTML: %v", err)
+		}
 	}
 }
 
@@ -433,7 +451,7 @@ func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 		cookie, err := r.Cookie("session_token")
 		if err != nil {
 			// No session cookie, redirect to login
-			if r.Header.Get("Accept") == "application/json" || r.Header.Get("Content-Type") == "application/json" {
+			if r.Header.Get("Accept") == ContentTypeJSON || r.Header.Get("Content-Type") == ContentTypeJSON {
 				h.writeError(w, http.StatusUnauthorized, "authentication required", "")
 			} else {
 				http.Redirect(w, r, "/login", http.StatusFound)
@@ -445,7 +463,7 @@ func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 		session, err := h.auth.ValidateSession(ctx, cookie.Value)
 		if err != nil {
 			// Invalid session, redirect to login
-			if r.Header.Get("Accept") == "application/json" || r.Header.Get("Content-Type") == "application/json" {
+			if r.Header.Get("Accept") == ContentTypeJSON || r.Header.Get("Content-Type") == ContentTypeJSON {
 				h.writeError(w, http.StatusUnauthorized, "invalid session", "")
 			} else {
 				http.Redirect(w, r, "/login", http.StatusFound)
@@ -454,9 +472,17 @@ func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user info to request context
-		ctx = context.WithValue(r.Context(), "user", session)
+		ctx = context.WithValue(r.Context(), userContextKey, session)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeJSON encodes data as JSON and writes it to the response writer
+func writeJSON(w http.ResponseWriter, data interface{}) {
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Error encoding JSON response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
