@@ -32,8 +32,8 @@ func TestDefault(t *testing.T) {
 	if config.Server.Host != "localhost" {
 		t.Errorf("Expected server host 'localhost', got %q", config.Server.Host)
 	}
-	if config.Server.Port != 8080 {
-		t.Errorf("Expected server port 8080, got %d", config.Server.Port)
+	if config.Server.Port != 12121 {
+		t.Errorf("Expected server port 12121, got %d", config.Server.Port)
 	}
 	if config.Chunking.MaxTokens != 1800 {
 		t.Errorf("Expected max tokens 1800, got %d", config.Chunking.MaxTokens)

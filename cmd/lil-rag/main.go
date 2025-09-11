@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"lil-rag/pkg/auth"
 	"lil-rag/pkg/config"
 	"lil-rag/pkg/lilrag"
 )
@@ -123,6 +124,8 @@ func run() error {
 		return handleHealth(rag)
 	case "config":
 		return handleConfig(profileConfig, args[1:])
+	case "auth":
+		return handleAuth(profileConfig, args[1:])
 	case "reset":
 		return handleReset(profileConfig, args[1:])
 	default:
@@ -329,6 +332,12 @@ func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
 		fmt.Printf("Chunk Overlap: %d\n", profileConfig.Chunking.Overlap)
 		fmt.Printf("Server Host: %s\n", profileConfig.Server.Host)
 		fmt.Printf("Server Port: %d\n", profileConfig.Server.Port)
+		fmt.Printf("Server Secure: %t\n", profileConfig.Server.Secure)
+		fmt.Printf("Server Read Timeout: %d seconds\n", profileConfig.Server.ReadTimeout)
+		fmt.Printf("Server Write Timeout: %d seconds\n", profileConfig.Server.WriteTimeout)
+		fmt.Printf("Server Idle Timeout: %d seconds\n", profileConfig.Server.IdleTimeout)
+		fmt.Printf("Server Max Header Bytes: %d\n", profileConfig.Server.MaxHeaderBytes)
+		fmt.Printf("Server Enable CORS: %t\n", profileConfig.Server.EnableCORS)
 		return nil
 
 	case "set":
@@ -371,6 +380,42 @@ func handleConfigSet(profileConfig *config.ProfileConfig, args []string) error {
 			return fmt.Errorf("invalid port: %s", value)
 		}
 		profileConfig.Server.Port = port
+	case "server.secure":
+		var secure bool
+		if _, err := fmt.Sscanf(value, "%t", &secure); err != nil {
+			return fmt.Errorf("invalid secure value (use true/false): %s", value)
+		}
+		profileConfig.Server.Secure = secure
+	case "server.read-timeout":
+		var timeout int
+		if _, err := fmt.Sscanf(value, "%d", &timeout); err != nil {
+			return fmt.Errorf("invalid read timeout: %s", value)
+		}
+		profileConfig.Server.ReadTimeout = timeout
+	case "server.write-timeout":
+		var timeout int
+		if _, err := fmt.Sscanf(value, "%d", &timeout); err != nil {
+			return fmt.Errorf("invalid write timeout: %s", value)
+		}
+		profileConfig.Server.WriteTimeout = timeout
+	case "server.idle-timeout":
+		var timeout int
+		if _, err := fmt.Sscanf(value, "%d", &timeout); err != nil {
+			return fmt.Errorf("invalid idle timeout: %s", value)
+		}
+		profileConfig.Server.IdleTimeout = timeout
+	case "server.max-header-bytes":
+		var maxBytes int
+		if _, err := fmt.Sscanf(value, "%d", &maxBytes); err != nil {
+			return fmt.Errorf("invalid max header bytes: %s", value)
+		}
+		profileConfig.Server.MaxHeaderBytes = maxBytes
+	case "server.enable-cors":
+		var enableCors bool
+		if _, err := fmt.Sscanf(value, "%t", &enableCors); err != nil {
+			return fmt.Errorf("invalid enable-cors value (use true/false): %s", value)
+		}
+		profileConfig.Server.EnableCORS = enableCors
 	case "chunking.max-tokens":
 		var maxTokens int
 		if _, err := fmt.Sscanf(value, "%d", &maxTokens); err != nil {
@@ -718,6 +763,12 @@ func printUsage() {
 	fmt.Println("  data.dir                        Data directory path")
 	fmt.Println("  server.host                     HTTP server host")
 	fmt.Println("  server.port                     HTTP server port")
+	fmt.Println("  server.secure                   Enable/disable authentication (true/false)")
+	fmt.Println("  server.read-timeout             HTTP read timeout in seconds")
+	fmt.Println("  server.write-timeout            HTTP write timeout in seconds")
+	fmt.Println("  server.idle-timeout             HTTP idle timeout in seconds")
+	fmt.Println("  server.max-header-bytes         Maximum header size in bytes")
+	fmt.Println("  server.enable-cors              Enable CORS headers (true/false)")
 	fmt.Println("  chunking.max-tokens             Maximum tokens per chunk")
 	fmt.Println("  chunking.overlap                Token overlap between chunks")
 	fmt.Println("")
@@ -737,6 +788,134 @@ func printUsage() {
 	fmt.Println("  lil-rag documents               # List all documents")
 	fmt.Println("  lil-rag delete doc1 --force     # Delete document")
 	fmt.Println("  lil-rag health                  # Check system health")
+	fmt.Println("  lil-rag auth add alice password123  # Add user with username and password")
+	fmt.Println("  lil-rag auth list               # List all users")
 	fmt.Println("  lil-rag reset                   # Reset database (with confirmation)")
 	fmt.Println("  lil-rag reset --force           # Reset database (skip confirmation)")
+}
+
+// handleAuth handles authentication commands
+func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
+	if len(args) == 0 {
+		fmt.Println("Auth commands:")
+		fmt.Println("  add <username> <password>     # Add a new user")
+		fmt.Println("  list                          # List all users")
+		fmt.Println("  delete <username>             # Delete a user")
+		fmt.Println("  reset-password <username> <new-password>  # Reset user's password")
+		fmt.Println("")
+		fmt.Println("Examples:")
+		fmt.Println("  lil-rag auth add alice password123")
+		fmt.Println("  lil-rag auth list")
+		fmt.Println("  lil-rag auth delete alice")
+		fmt.Println("  lil-rag auth reset-password alice newpassword456")
+		return nil
+	}
+
+	// Initialize auth system
+	authPath := profileConfig.DataDir + "/auth.db"
+	authSystem, err := auth.New(authPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize auth system: %w", err)
+	}
+	defer authSystem.Close()
+
+	command := args[0]
+	ctx := context.Background()
+
+	switch command {
+	case "add":
+		if len(args) != 3 {
+			return fmt.Errorf("auth add requires username and password: lil-rag auth add <username> <password>")
+		}
+		username := args[1]
+		password := args[2]
+
+		// Check if user already exists
+		exists, err := authSystem.UserExists(ctx, username)
+		if err != nil {
+			return fmt.Errorf("failed to check if user exists: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("user '%s' already exists", username)
+		}
+
+		// Create user
+		user, err := authSystem.CreateUser(ctx, username, password)
+		if err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
+
+		fmt.Printf("User '%s' created successfully (ID: %d)\n", user.Username, user.ID)
+		return nil
+
+	case "list":
+		users, err := authSystem.ListUsers(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list users: %w", err)
+		}
+
+		if len(users) == 0 {
+			fmt.Println("No users found.")
+			return nil
+		}
+
+		fmt.Printf("%-5s %-20s %-20s\n", "ID", "Username", "Created")
+		fmt.Println(strings.Repeat("-", 50))
+		for _, user := range users {
+			fmt.Printf("%-5d %-20s %-20s\n", user.ID, user.Username, user.CreatedAt.Format("2006-01-02 15:04:05"))
+		}
+		return nil
+
+	case "delete":
+		if len(args) != 2 {
+			return fmt.Errorf("auth delete requires username: lil-rag auth delete <username>")
+		}
+		username := args[1]
+
+		// Check if user exists
+		exists, err := authSystem.UserExists(ctx, username)
+		if err != nil {
+			return fmt.Errorf("failed to check if user exists: %w", err)
+		}
+		if !exists {
+			return fmt.Errorf("user '%s' does not exist", username)
+		}
+
+		// Delete user
+		err = authSystem.DeleteUser(ctx, username)
+		if err != nil {
+			return fmt.Errorf("failed to delete user: %w", err)
+		}
+
+		fmt.Printf("User '%s' deleted successfully\n", username)
+		return nil
+
+	case "reset-password":
+		if len(args) != 3 {
+			return fmt.Errorf("auth reset-password requires username and new password: lil-rag auth reset-password <username> <new-password>")
+		}
+		username := args[1]
+		newPassword := args[2]
+
+		// Check if user exists
+		exists, err := authSystem.UserExists(ctx, username)
+		if err != nil {
+			return fmt.Errorf("failed to check if user exists: %w", err)
+		}
+		if !exists {
+			return fmt.Errorf("user '%s' does not exist", username)
+		}
+
+		// Update password
+		err = authSystem.UpdatePassword(ctx, username, newPassword)
+		if err != nil {
+			return fmt.Errorf("failed to reset password: %w", err)
+		}
+
+		fmt.Printf("Password for user '%s' reset successfully\n", username)
+		return nil
+
+	default:
+		return fmt.Errorf("unknown auth command: %s", command)
+	}
 }

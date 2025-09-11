@@ -17,6 +17,130 @@
         display: flex;
         flex: 1;
         overflow: hidden;
+        gap: 20px;
+    }
+
+    .sidebar {
+        width: 280px;
+        border-right: 1px solid var(--gray-200);
+        display: flex;
+        flex-direction: column;
+        background: var(--gray-50);
+        border-radius: 8px;
+        padding: 15px;
+    }
+
+    .sidebar-header {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .sidebar-header h3 {
+        font-size: 1rem;
+        margin: 0;
+        color: var(--gray-800);
+    }
+
+    .new-chat-btn {
+        background: var(--primary-color);
+        color: var(--white);
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-top: 8px;
+        transition: background-color 0.2s ease;
+    }
+
+    .new-chat-btn:hover {
+        background: color-mix(in srgb, var(--primary-color) 85%, black);
+    }
+
+    .chat-sessions {
+        flex: 1;
+        overflow-y: auto;
+        margin-top: 10px;
+    }
+
+    .chat-session {
+        padding: 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-bottom: 5px;
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .chat-session-content {
+        flex: 1;
+    }
+
+    .chat-session-actions {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: flex;
+        gap: 4px;
+        opacity: 0.3;
+        transition: opacity 0.2s ease;
+    }
+
+    .chat-session:hover .chat-session-actions {
+        opacity: 1;
+    }
+
+    .delete-session-btn {
+        background: var(--danger);
+        color: var(--white);
+        border: none;
+        border-radius: 4px;
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+    }
+
+    .delete-session-btn:hover {
+        opacity: 1;
+    }
+
+    .chat-session.active .delete-session-btn {
+        background: rgba(255, 255, 255, 0.2);
+        color: var(--white);
+    }
+
+    .chat-session:hover {
+        background: var(--gray-100);
+        border-color: var(--gray-300);
+    }
+
+    .chat-session.active {
+        background: var(--primary-color);
+        color: var(--white);
+    }
+
+    .chat-session-title {
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .chat-session-time {
+        font-size: 0.75rem;
+        opacity: 0.7;
     }
 
     .chat-panel {
@@ -286,6 +410,23 @@
         background: var(--gray-50);
     }
 
+    .token-counter {
+        font-size: 0.8rem;
+        color: var(--gray-600);
+        text-align: right;
+        margin-bottom: 8px;
+        opacity: 0.8;
+    }
+
+    .token-counter.warning {
+        color: #ff6b35;
+    }
+
+    .token-counter.danger {
+        color: var(--danger);
+        font-weight: 500;
+    }
+
     .input-container {
         display: flex;
         gap: 10px;
@@ -396,6 +537,18 @@
     </div>
     
     <div class="chat-main">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3>Chat History</h3>
+                <button class="new-chat-btn" onclick="startNewChat()">
+                    ➕ New Chat
+                </button>
+            </div>
+            <div class="chat-sessions" id="chatSessions">
+                <!-- Chat sessions will be loaded here -->
+            </div>
+        </div>
+        
         <div class="chat-panel">
             <div class="chat-messages" id="messages">
             </div>
@@ -409,6 +562,9 @@
             </div>
             
             <div class="chat-input">
+                <div class="token-counter" id="tokenCounter">
+                    Tokens remaining: <span id="remainingTokens">1000</span>
+                </div>
                 <div class="input-container">
                     <textarea 
                         class="message-input" 
@@ -430,15 +586,29 @@
 
 {{define "chat-scripts"}}
 <script>
+    // Chat application state
+    let currentSession = null;
+    let sessions = [];
+    let titlePollingTimer = null;
+    
+    // DOM elements
     const messagesContainer = document.getElementById('messages');
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendButton');
     const typingIndicator = document.getElementById('typing');
+    const chatSessions = document.getElementById('chatSessions');
+    const remainingTokens = document.getElementById('remainingTokens');
+    const tokenCounter = document.getElementById('tokenCounter');
 
-    // Auto-resize textarea
+    // Auto-resize textarea and create session if needed
     messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        
+        // Auto-create session when user starts typing if no session is active
+        if (!currentSession && this.value.trim().length > 0) {
+            createSessionForTyping();
+        }
     });
 
     // Send message on Enter (but allow Shift+Enter for new lines)
@@ -449,12 +619,195 @@
         }
     });
 
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', function() {
+        loadChatSessions();
+    });
+
+    // Load all chat sessions from the server
+    async function loadChatSessions() {
+        try {
+            const response = await fetch('/api/chat/sessions');
+            if (!response.ok) throw new Error('Failed to load chat sessions');
+            
+            const data = await response.json();
+            sessions = data.sessions || [];
+            renderChatSessions();
+            
+            // If no current session and there are sessions, load the most recent one
+            if (!currentSession && sessions.length > 0) {
+                loadChatSession(sessions[0].id);
+            }
+        } catch (error) {
+            console.error('Error loading chat sessions:', error);
+            sessions = [];
+            renderChatSessions();
+        }
+    }
+
+    // Render the chat sessions in the sidebar
+    function renderChatSessions() {
+        chatSessions.innerHTML = '';
+        
+        if (sessions.length === 0) {
+            chatSessions.innerHTML = '<div style="text-align: center; color: var(--gray-600); font-style: italic; padding: 20px;">No chat history yet</div>';
+            return;
+        }
+
+        sessions.forEach(session => {
+            const sessionDiv = document.createElement('div');
+            sessionDiv.className = 'chat-session' + (currentSession === session.id ? ' active' : '');
+            sessionDiv.onclick = () => loadChatSession(session.id);
+            
+            const updatedAt = new Date(session.updated_at);
+            const timeStr = updatedAt.toLocaleDateString() + ' ' + updatedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            sessionDiv.innerHTML = `
+                <div class="chat-session-content">
+                    <div class="chat-session-title">${escapeHtml(session.title)}</div>
+                    <div class="chat-session-time">${timeStr}</div>
+                </div>
+                <div class="chat-session-actions">
+                    <button class="delete-session-btn" onclick="deleteChatSession(event, '${session.id}')" title="Delete chat">
+                        ×
+                    </button>
+                </div>
+            `;
+            
+            chatSessions.appendChild(sessionDiv);
+        });
+    }
+
+    // Load a specific chat session
+    async function loadChatSession(sessionId) {
+        // Clear any existing title polling
+        if (titlePollingTimer) {
+            clearTimeout(titlePollingTimer);
+            titlePollingTimer = null;
+        }
+        
+        try {
+            const response = await fetch(`/api/chat/history/${sessionId}`);
+            if (!response.ok) throw new Error('Failed to load chat history');
+            
+            const data = await response.json();
+            currentSession = sessionId;
+            
+            // Clear messages and render history
+            messagesContainer.innerHTML = '';
+            
+            // Handle both null and empty array cases
+            const messages = data.messages || [];
+            messages.forEach(message => {
+                addMessage(message.content, message.role === 'user' ? 'user' : 'assistant', null, true);
+            });
+            
+            // Update active session in sidebar
+            renderChatSessions();
+            
+            // Scroll to bottom
+            scrollToBottom();
+            
+        } catch (error) {
+            console.error('Error loading chat session:', error);
+            alert('Failed to load chat session');
+        }
+    }
+
+    // Start a new chat session
+    async function startNewChat() {
+        // Clear any existing title polling
+        if (titlePollingTimer) {
+            clearTimeout(titlePollingTimer);
+            titlePollingTimer = null;
+        }
+        
+        try {
+            const response = await fetch('/api/chat/sessions/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (!response.ok) throw new Error('Failed to create new chat session');
+            
+            const data = await response.json();
+            currentSession = data.session.id;
+            
+            // Clear messages
+            messagesContainer.innerHTML = '';
+            
+            // Reload sessions to include the new one
+            await loadChatSessions();
+            
+            // Focus on input
+            messageInput.focus();
+            
+        } catch (error) {
+            console.error('Error creating new chat:', error);
+            alert('Failed to create new chat session');
+        }
+    }
+
+    // Create a session when user starts typing (silent, no UI changes except session creation)
+    async function createSessionForTyping() {
+        // Prevent multiple simultaneous creation attempts
+        if (window.creatingSession) {
+            return;
+        }
+        window.creatingSession = true;
+        
+        try {
+            const response = await fetch('/api/chat/sessions/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (!response.ok) throw new Error('Failed to create new chat session');
+            
+            const data = await response.json();
+            currentSession = data.session.id;
+            
+            // Silently reload sessions to include the new one (no UI disruption)
+            await loadChatSessions();
+            
+        } catch (error) {
+            console.error('Error creating session for typing:', error);
+            // Don't show alert for silent session creation
+        } finally {
+            window.creatingSession = false;
+        }
+    }
+
+    // Update the token counter display
+    function updateTokenCounter(remaining, hasCompacted) {
+        remainingTokens.textContent = remaining;
+        
+        // Update styling based on remaining tokens
+        tokenCounter.className = 'token-counter';
+        if (remaining < 200) {
+            tokenCounter.className += ' danger';
+        } else if (remaining < 400) {
+            tokenCounter.className += ' warning';
+        }
+        
+        // Show compaction notice if applicable
+        if (hasCompacted) {
+            const notice = document.createElement('div');
+            notice.style.cssText = 'font-size: 0.75rem; color: var(--primary-color); margin-bottom: 5px; text-align: right;';
+            notice.textContent = '📝 Chat history compacted to save context';
+            tokenCounter.parentNode.insertBefore(notice, tokenCounter);
+            
+            // Remove notice after 5 seconds
+            setTimeout(() => notice.remove(), 5000);
+        }
+    }
+
     function addMessage(content, type, sources = null, skipSave = false) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message ' + type;
         
         // Render markdown for assistant messages, keep plain text for user messages
-        let html = (type === 'assistant' && typeof marked !== 'undefined') ? marked.parse(content) : content;
+        let html = (type === 'assistant' && typeof marked !== 'undefined') ? marked.parse(content) : escapeHtml(content);
         
         // Style document references in square brackets for assistant messages
         if (type === 'assistant') {
@@ -506,22 +859,110 @@
         
         messageDiv.innerHTML = html;
         messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
-        // Save to localStorage for persistence
-        if (!skipSave) {
-            saveChatHistory();
+        scrollToBottom();
+    }
+
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message || sendButton.disabled) return;
+
+        // Disable input while processing
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+
+        // Add user message to UI
+        addMessage(message, 'user');
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+
+        // Show typing indicator
+        showTyping();
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    session_id: currentSession,
+                    limit: 5
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // Update session ID if this was a new chat
+            if (data.session_id && data.session_id !== currentSession) {
+                currentSession = data.session_id;
+                await loadChatSessions(); // Reload to show new session
+            }
+            
+            // Update token counter
+            updateTokenCounter(data.remaining_tokens, data.has_compacted);
+
+            // Add assistant response
+            addMessage(data.response, 'assistant', data.sources);
+            
+            // Start polling for title updates after sending a message
+            startTitlePolling();
+
+        } catch (error) {
+            console.error('Error sending message:', error);
+            addMessage('Sorry, I encountered an error processing your request. Please try again.', 'assistant');
+        } finally {
+            hideTyping();
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            messageInput.focus();
         }
+    }
+    
+    // Poll for title updates to reflect async title generation
+    function startTitlePolling() {
+        // Clear any existing timer
+        if (titlePollingTimer) {
+            clearTimeout(titlePollingTimer);
+        }
+        
+        // Start polling every 2 seconds for up to 30 seconds
+        let pollAttempts = 0;
+        const maxPollAttempts = 15; // 30 seconds / 2 seconds
+        
+        function pollForTitleUpdate() {
+            if (pollAttempts >= maxPollAttempts) {
+                return; // Stop polling after max attempts
+            }
+            
+            pollAttempts++;
+            loadChatSessions().then(() => {
+                if (pollAttempts < maxPollAttempts) {
+                    titlePollingTimer = setTimeout(pollForTitleUpdate, 2000);
+                }
+            }).catch(error => {
+                console.error('Error polling for title updates:', error);
+            });
+        }
+        
+        // Start first poll after 3 seconds to give title generation time
+        titlePollingTimer = setTimeout(pollForTitleUpdate, 3000);
     }
 
     function showTyping() {
         typingIndicator.style.display = 'block';
         messagesContainer.appendChild(typingIndicator);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        scrollToBottom();
     }
 
     function hideTyping() {
         typingIndicator.style.display = 'none';
+    }
+
+    function scrollToBottom() {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
     function toggleSource(sourceId) {
@@ -537,101 +978,60 @@
         errorDiv.className = 'error-message';
         errorDiv.textContent = message;
         messagesContainer.appendChild(errorDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        scrollToBottom();
     }
 
-    async function sendMessage() {
-        const message = messageInput.value.trim();
-        if (!message || sendButton.disabled) return;
+    // Clear current chat (for the existing clear button)
+    function clearChatHistory() {
+        if (!confirm('Are you sure you want to clear this chat? This will start a new conversation.')) {
+            return;
+        }
+        startNewChat();
+    }
 
-        // Add user message
-        addMessage(message, 'user');
-        
-        // Clear input and disable send button
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-        sendButton.disabled = true;
-        
-        // Show typing indicator
-        showTyping();
+    // Utility function to escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
+    // Delete a chat session
+    async function deleteChatSession(event, sessionId) {
+        event.stopPropagation(); // Prevent session from being loaded
+        
+        if (!confirm('Are you sure you want to delete this chat session? This cannot be undone.')) {
+            return;
+        }
+        
         try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: message,
-                    limit: 5
-                })
+            const response = await fetch(`/api/chat/sessions/${sessionId}`, {
+                method: 'DELETE'
             });
-
-            hideTyping();
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Request failed');
+            
+            if (!response.ok) throw new Error('Failed to delete chat session');
+            
+            // If we deleted the current session, clear the chat
+            if (currentSession === sessionId) {
+                currentSession = null;
+                messagesContainer.innerHTML = '';
             }
-
-            const data = await response.json();
-            addMessage(data.response, 'assistant', data.sources);
+            
+            // Reload sessions
+            await loadChatSessions();
+            
+            // If current session was deleted, clear the current session
+            if (!currentSession) {
+                // Clear the chat messages since no session is selected
+                messagesContainer.innerHTML = '';
+            }
             
         } catch (error) {
-            hideTyping();
-            console.error('Error:', error);
-            showError('Failed to get response: ' + error.message);
-        } finally {
-            sendButton.disabled = false;
-            messageInput.focus();
+            console.error('Error deleting chat session:', error);
+            alert('Failed to delete chat session');
         }
     }
 
-    // Chat history persistence functions
-    function saveChatHistory() {
-        const messages = [];
-        const messageElements = messagesContainer.querySelectorAll('.message');
-        messageElements.forEach(element => {
-            if (element.classList.contains('message')) {
-                const type = element.classList.contains('user') ? 'user' : 'assistant';
-                const content = element.textContent || element.innerText;
-                // Store the full HTML for assistant messages to preserve formatting and links
-                const html = type === 'assistant' ? element.innerHTML : content;
-                messages.push({ type, content, html });
-            }
-        });
-        localStorage.setItem('lilrag-chat-history', JSON.stringify(messages));
-    }
-    
-    function loadChatHistory() {
-        try {
-            const saved = localStorage.getItem('lilrag-chat-history');
-            if (saved) {
-                const messages = JSON.parse(saved);
-                messages.forEach(msg => {
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = 'message ' + msg.type;
-                    // Use saved HTML for assistant messages, plain content for user messages
-                    messageDiv.innerHTML = msg.type === 'assistant' ? msg.html : msg.content;
-                    messagesContainer.appendChild(messageDiv);
-                });
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-        } catch (error) {
-            console.error('Error loading chat history:', error);
-            // Clear corrupted data
-            localStorage.removeItem('lilrag-chat-history');
-        }
-    }
-    
-    function clearChatHistory() {
-        localStorage.removeItem('lilrag-chat-history');
-        messagesContainer.innerHTML = '';
-    }
-    
-    // Load chat history on page load
-    loadChatHistory();
-    
     // Focus input on load
     messageInput.focus();
 </script>

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,15 +28,23 @@ func main() {
 
 func run() error {
 	var (
-		dbPath      = flag.String("db", "", "Database path (overrides profile config)")
-		dataDir     = flag.String("data-dir", "", "Data directory (overrides profile config)")
-		ollamaURL   = flag.String("ollama", "", "Ollama URL (overrides profile config)")
-		model       = flag.String("model", "", "Embedding model (overrides profile config)")
-		chatModel   = flag.String("chat-model", "", "Chat model (overrides profile config)")
-		vectorSize  = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
-		host        = flag.String("host", "", "Server host (overrides profile config)")
-		port        = flag.Int("port", 0, "Server port (overrides profile config)")
-		showVersion = flag.Bool("version", false, "Show version")
+		dbPath         = flag.String("db", "", "Database path (overrides profile config)")
+		dataDir        = flag.String("data-dir", "", "Data directory (overrides profile config)")
+		ollamaURL      = flag.String("ollama", "", "Ollama URL (overrides profile config)")
+		model          = flag.String("model", "", "Embedding model (overrides profile config)")
+		chatModel      = flag.String("chat-model", "", "Chat model (overrides profile config)")
+		vectorSize     = flag.Int("vector-size", 0, "Vector size (overrides profile config)")
+		host           = flag.String("host", "", "Server host (overrides profile config)")
+		port           = flag.Int("port", 0, "Server port (overrides profile config)")
+		secureFlag     = flag.Bool("secure", false, "Enable authentication (overrides profile config)")
+		noSecureFlag   = flag.Bool("no-secure", false, "Disable authentication (overrides profile config)")
+		readTimeout    = flag.Int("read-timeout", 0, "HTTP read timeout in seconds (overrides profile config)")
+		writeTimeout   = flag.Int("write-timeout", 0, "HTTP write timeout in seconds (overrides profile config)")
+		idleTimeout    = flag.Int("idle-timeout", 0, "HTTP idle timeout in seconds (overrides profile config)")
+		maxHeaderBytes = flag.Int("max-header-bytes", 0, "Maximum header size in bytes (overrides profile config)")
+		corsFlag       = flag.Bool("enable-cors", false, "Enable CORS headers (overrides profile config)")
+		noCorsFlag     = flag.Bool("no-cors", false, "Disable CORS headers (overrides profile config)")
+		showVersion    = flag.Bool("version", false, "Show version")
 	)
 	flag.Parse()
 
@@ -74,6 +83,30 @@ func run() error {
 	if *port > 0 {
 		profileConfig.Server.Port = *port
 	}
+	if *secureFlag {
+		profileConfig.Server.Secure = true
+	}
+	if *noSecureFlag {
+		profileConfig.Server.Secure = false
+	}
+	if *readTimeout > 0 {
+		profileConfig.Server.ReadTimeout = *readTimeout
+	}
+	if *writeTimeout > 0 {
+		profileConfig.Server.WriteTimeout = *writeTimeout
+	}
+	if *idleTimeout > 0 {
+		profileConfig.Server.IdleTimeout = *idleTimeout
+	}
+	if *maxHeaderBytes > 0 {
+		profileConfig.Server.MaxHeaderBytes = *maxHeaderBytes
+	}
+	if *corsFlag {
+		profileConfig.Server.EnableCORS = true
+	}
+	if *noCorsFlag {
+		profileConfig.Server.EnableCORS = false
+	}
 
 	lilragConfig := &lilrag.Config{
 		DatabasePath:   profileConfig.StoragePath,
@@ -99,12 +132,22 @@ func run() error {
 	}
 	defer rag.Close()
 
-	handler := handlers.NewWithVersion(rag, version, profileConfig.DataDir)
+	handler := handlers.NewWithVersion(rag, version, profileConfig.DataDir, profileConfig.Server.Secure)
 	mux := http.NewServeMux()
 
 	mux.Handle("/api/index", handler.Index())
 	mux.Handle("/api/search", handler.Search())
 	mux.Handle("/api/chat", handler.Chat())
+	mux.Handle("/api/chat/sessions", handler.ChatSessions())
+	mux.Handle("/api/chat/sessions/new", handler.CreateChatSession())
+	mux.HandleFunc("/api/chat/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/title") {
+			handler.UpdateChatSessionTitle()(w, r)
+		} else {
+			handler.DeleteChatSession()(w, r)
+		}
+	})
+	mux.Handle("/api/chat/history/", handler.ChatHistory())
 	mux.Handle("/api/documents", handler.Documents())
 	mux.Handle("/api/documents/", handler.DocumentRouter())
 	mux.HandleFunc("/api/chunks/", func(w http.ResponseWriter, r *http.Request) {
@@ -116,23 +159,32 @@ func run() error {
 	})
 	mux.Handle("/api/health", handler.Health())
 	mux.Handle("/api/metrics", handler.Metrics())
-	mux.Handle("/chat", handler.Chat())
-	mux.Handle("/documents", handler.DocumentsList())
-	mux.Handle("/docs", handler.Documentation())
-	mux.Handle("/view/", handler.ViewDocument())
-	mux.Handle("/file/", handler.ServeFile())
-	mux.Handle("/", handler.Static())
+
+	// Authentication routes (not protected)
+	mux.Handle("/api/auth/login", handler.Login())
+	mux.Handle("/api/auth/logout", handler.Logout())
+	mux.Handle("/api/auth/status", handler.AuthStatus())
+	mux.Handle("/login", handler.LoginPage())
+
+	// Protected UI routes (wrapped with auth middleware)
+	mux.Handle("/chat", handler.AuthMiddleware(handler.Chat()))
+	mux.Handle("/documents", handler.AuthMiddleware(handler.DocumentsList()))
+	mux.Handle("/docs", handler.AuthMiddleware(handler.Documentation()))
+	mux.Handle("/view/", handler.AuthMiddleware(handler.ViewDocument()))
+	mux.Handle("/file/", handler.AuthMiddleware(handler.ServeFile()))
+	mux.Handle("/", handler.AuthMiddleware(handler.Static()))
 
 	// Wrap the mux with logging middleware
 	loggedHandler := handlers.LoggingMiddleware(mux)
 
 	addr := fmt.Sprintf("%s:%d", profileConfig.Server.Host, profileConfig.Server.Port)
 	server := &http.Server{
-		Addr:         addr,
-		Handler:      loggedHandler,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:           addr,
+		Handler:        loggedHandler,
+		ReadTimeout:    time.Duration(profileConfig.Server.ReadTimeout) * time.Second,
+		WriteTimeout:   time.Duration(profileConfig.Server.WriteTimeout) * time.Second,
+		IdleTimeout:    time.Duration(profileConfig.Server.IdleTimeout) * time.Second,
+		MaxHeaderBytes: profileConfig.Server.MaxHeaderBytes,
 	}
 
 	quit := make(chan os.Signal, 1)

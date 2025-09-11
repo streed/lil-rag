@@ -26,8 +26,15 @@ type OllamaConfig struct {
 }
 
 type ServerConfig struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	Host           string   `json:"host"`
+	Port           int      `json:"port"`
+	Secure         bool     `json:"secure"`           // Enable/disable authentication
+	ReadTimeout    int      `json:"read_timeout"`     // Read timeout in seconds
+	WriteTimeout   int      `json:"write_timeout"`    // Write timeout in seconds
+	IdleTimeout    int      `json:"idle_timeout"`     // Idle timeout in seconds
+	MaxHeaderBytes int      `json:"max_header_bytes"` // Maximum header size in bytes
+	EnableCORS     bool     `json:"enable_cors"`      // Enable CORS headers
+	TrustedProxies []string `json:"trusted_proxies"`  // List of trusted proxy IPs
 }
 
 type ChunkConfig struct {
@@ -56,8 +63,15 @@ func DefaultProfile() *ProfileConfig {
 		StoragePath: filepath.Join(dataDir, "lilrag.db"),
 		DataDir:     dataDir,
 		Server: ServerConfig{
-			Host: "localhost",
-			Port: 8080,
+			Host:           "localhost",
+			Port:           12121,
+			Secure:         true,       // Enable authentication by default
+			ReadTimeout:    30,         // 30 seconds
+			WriteTimeout:   30,         // 30 seconds
+			IdleTimeout:    120,        // 2 minutes
+			MaxHeaderBytes: 1048576,    // 1MB
+			EnableCORS:     false,      // Disabled by default for security
+			TrustedProxies: []string{}, // Empty by default
 		},
 		Chunking: ChunkConfig{
 			MaxTokens: 256, // Optimized for 2025 RAG best practices (128-512 range)

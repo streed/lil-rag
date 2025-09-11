@@ -1,7 +1,7 @@
 # Lil-RAG
 
 [![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://golang.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/streed/lil-rag)
 
 A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides CLI, HTTP API, and MCP server interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
@@ -18,7 +18,7 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ### Multiple Interfaces
 - 💻 **CLI Application** - Full-featured command-line interface with all operations
-- 🌐 **HTTP API Server** - RESTful API with interactive web interface
+- 🌐 **HTTP API Server** - RESTful API with interactive web interface and authentication
 - 🔌 **MCP Server** - Model Context Protocol for AI assistant integration
 - 📖 **Built-in Documentation** - Comprehensive docs accessible via `/docs` route
 
@@ -28,6 +28,7 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 - 🎛️ **Profile Configuration** - User-friendly configuration management
 - 💾 **Persistent Storage** - Reliable SQLite database with WAL mode
 - 🔧 **Health Monitoring** - Built-in health checks and metrics endpoints
+- 🔐 **Authentication System** - Optional password protection with secure session management
 
 ## 📋 Prerequisites
 
@@ -129,39 +130,39 @@ ollama pull nomic-embed-text
 
 ```bash
 # Initialize user profile configuration
-./bin/lil-rag config init
+lil-rag config init
 
 # View current settings
-./bin/lil-rag config show
+lil-rag config show
 ```
 
 ### 3. Index Documents
 
 ```bash
 # Index direct text
-./bin/lil-rag index doc1 "This is about machine learning and neural networks."
+lil-rag index doc1 "This is about machine learning and neural networks."
 
 # Index from a file  
-./bin/lil-rag index doc2 document.txt
+lil-rag index doc2 document.txt
 
 # Index a PDF file
-./bin/lil-rag index doc3 research_paper.pdf
+lil-rag index doc3 research_paper.pdf
 
 # Index from stdin
-echo "Content about artificial intelligence" | ./bin/lil-rag index doc4 -
+echo "Content about artificial intelligence" | lil-rag index doc4 -
 ```
 
 ### 4. Search Content
 
 ```bash
 # Search with default limit (10)
-./bin/lil-rag search "machine learning"
+lil-rag search "machine learning"
 
 # Search with custom limit
-./bin/lil-rag search "neural networks" 3
+lil-rag search "neural networks" 3
 
 # Get full document content (limit=1 shows complete documents)
-./bin/lil-rag search "AI concepts" 1
+lil-rag search "AI concepts" 1
 ```
 
 **Example Output:**
@@ -257,17 +258,33 @@ lil-rag reset --force                               # Reset database (skip confi
 ### Start the Server
 
 ```bash
-# Start with default settings (localhost:8080)
-./bin/lil-rag-server
+# Start with default settings (localhost:12121)
+lil-rag-server
 
 # Start with custom host/port  
-./bin/lil-rag-server --host 0.0.0.0 --port 9000
+lil-rag-server --host 0.0.0.0 --port 9000
 
-# Start with custom vision model and timeout
-./bin/lil-rag-server --vision-model llava --timeout 60
+# Start with authentication disabled for development
+lil-rag-server --no-secure
+
+# Start with custom HTTP timeouts
+lil-rag-server --read-timeout 120 --write-timeout 120 --idle-timeout 300
 ```
 
-Visit http://localhost:8080 for the web interface with API documentation and interactive chat.
+Visit http://localhost:12121 for the web interface with API documentation and interactive chat.
+
+### 🔐 Authentication Setup
+
+```bash
+# Create first user (enables authentication)
+lil-rag auth add admin mySecurePassword123
+
+# List users
+lil-rag auth list
+
+# Disable authentication for development
+lil-rag config set server.secure false
+```
 
 ### 💬 Interactive Chat Interface
 
@@ -284,8 +301,8 @@ The HTTP server includes a modern, responsive chat interface for conversing with
 - 📱 Mobile-friendly responsive layout
 
 **Access the Chat:**
-1. Start the server: `./bin/lil-rag-server`
-2. Open your browser to: http://localhost:8080/chat
+1. Start the server: `lil-rag-server`
+2. Open your browser to: http://localhost:12121/chat
 3. Browse indexed documents in the sidebar
 4. Ask questions about your documents in the chat
 
@@ -458,14 +475,14 @@ The Model Context Protocol (MCP) server allows AI assistants and tools to intera
 
 ```bash
 # Start with default settings
-./bin/lil-rag-mcp
+lil-rag-mcp
 
 # The server uses the same profile configuration as CLI/HTTP server
 # Or falls back to environment variables:
 LILRAG_DB_PATH=/path/to/database.db \
 LILRAG_OLLAMA_URL=http://localhost:11434 \
 LILRAG_MODEL=nomic-embed-text \
-./bin/lil-rag-mcp
+lil-rag-mcp
 ```
 
 ### Available Tools
@@ -521,10 +538,10 @@ LilRag uses a profile-based configuration system that stores settings in a JSON 
 
 ```bash
 # Initialize profile configuration with defaults
-./bin/lil-rag config init
+lil-rag config init
 
 # View current configuration
-./bin/lil-rag config show
+lil-rag config show
 ```
 
 ### Configuration Options
@@ -587,44 +604,44 @@ Optimize text chunking for your use case:
 
 ```bash
 # Optimize for speed (smaller chunks)
-./bin/lil-rag config set chunking.max-tokens 128
-./bin/lil-rag config set chunking.overlap 19
+lil-rag config set chunking.max-tokens 128
+lil-rag config set chunking.overlap 19
 
 # Optimize for context (larger chunks)  
-./bin/lil-rag config set chunking.max-tokens 512
-./bin/lil-rag config set chunking.overlap 76
+lil-rag config set chunking.max-tokens 512
+lil-rag config set chunking.overlap 76
 
 # Use legacy chunking settings
-./bin/lil-rag config set chunking.max-tokens 1800
-./bin/lil-rag config set chunking.overlap 200
+lil-rag config set chunking.max-tokens 1800
+lil-rag config set chunking.overlap 200
 ```
 
 ### Updating Configuration
 
 ```bash
 # Set Ollama endpoint
-./bin/lil-rag config set ollama.endpoint http://192.168.1.100:11434
+lil-rag config set ollama.endpoint http://192.168.1.100:11434
 
 # Change embedding model
-./bin/lil-rag config set ollama.model all-MiniLM-L6-v2
+lil-rag config set ollama.model all-MiniLM-L6-v2
 
 # Change chat model
-./bin/lil-rag config set ollama.chat-model llama3.2
+lil-rag config set ollama.chat-model llama3.2
 
 # Change vision model for image processing
-./bin/lil-rag config set ollama.vision-model llama3.2-vision
+lil-rag config set ollama.vision-model llama3.2-vision
 
 # Update Ollama timeout (in seconds)
-./bin/lil-rag config set ollama.timeout-seconds 60
+lil-rag config set ollama.timeout-seconds 60
 
 # Update vector size (must match embedding model)
-./bin/lil-rag config set ollama.vector-size 384
+lil-rag config set ollama.vector-size 384
 
 # Change data directory
-./bin/lil-rag config set data.dir /path/to/my/data
+lil-rag config set data.dir /path/to/my/data
 
 # Update server settings
-./bin/lil-rag config set server.port 9000
+lil-rag config set server.port 9000
 ```
 
 ## Library Usage
@@ -741,8 +758,8 @@ This approach uses pre-compiled Go binaries on each platform for reliable builds
 
 All binaries include the version information and can be checked with:
 ```bash
-./lil-rag --version
-./lil-rag-server --version
+lil-rag --version
+lil-rag-server --version
 ```
 
 ## 🏗️ Architecture
@@ -823,4 +840,4 @@ lil-rag/
 
 ## License
 
-MIT License
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.

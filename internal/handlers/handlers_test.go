@@ -45,7 +45,7 @@ func TestNew(t *testing.T) {
 	}
 
 	// Test versioned constructor
-	versionedHandler := NewWithVersion(ragInstance, "1.2.3", "/tmp/data")
+	versionedHandler := NewWithVersion(ragInstance, "1.2.3", "/tmp/data", false)
 	if versionedHandler.version != "1.2.3" {
 		t.Error("Expected version to be '1.2.3'")
 	}

@@ -28,25 +28,25 @@ func main() {
 	}
 
 	fmt.Printf("Comparing PDF text extraction methods for: %s\n", pdfPath)
-	fmt.Printf("=" + strings.Repeat("=", 60) + "\n\n")
+	fmt.Print("=" + strings.Repeat("=", 60) + "\n\n")
 
 	// Test 1: Current pdfcpu implementation
 	fmt.Printf("1. CURRENT PDFCPU IMPLEMENTATION\n")
-	fmt.Printf("-" + strings.Repeat("-", 32) + "\n")
+	fmt.Print("-" + strings.Repeat("-", 32) + "\n")
 	testPDFCPU(pdfPath)
 
-	fmt.Printf("\n" + strings.Repeat("=", 70) + "\n\n")
+	fmt.Print("\n" + strings.Repeat("=", 70) + "\n\n")
 
 	// Test 2: go-fitz (MuPDF) implementation
 	fmt.Printf("2. GO-FITZ (MUPDF) IMPLEMENTATION\n")
-	fmt.Printf("-" + strings.Repeat("-", 34) + "\n")
+	fmt.Print("-" + strings.Repeat("-", 34) + "\n")
 	testGoFitz(pdfPath)
 
-	fmt.Printf("\n" + strings.Repeat("=", 70) + "\n\n")
+	fmt.Print("\n" + strings.Repeat("=", 70) + "\n\n")
 
 	// Test 3: System pdftotext (if available)
 	fmt.Printf("3. SYSTEM PDFTOTEXT (POPPLER) FALLBACK\n")
-	fmt.Printf("-" + strings.Repeat("-", 39) + "\n")
+	fmt.Print("-" + strings.Repeat("-", 39) + "\n")
 	testPDFToText(pdfPath)
 }
 

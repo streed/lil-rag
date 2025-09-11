@@ -682,7 +682,7 @@ func createIntegrationTestHandler(t *testing.T) *Handler {
 		t.Fatalf("Failed to initialize LilRag for integration test: %v", err)
 	}
 
-	return NewWithVersion(ragInstance, "integration-test", config.DataDir)
+	return NewWithVersion(ragInstance, "integration-test", config.DataDir, false)
 }
 
 // Benchmark integration test

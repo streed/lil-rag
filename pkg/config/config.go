@@ -30,8 +30,15 @@ type Ollama struct {
 }
 
 type Server struct {
-	Host string `json:"host" yaml:"host"`
-	Port int    `json:"port" yaml:"port"`
+	Host           string   `json:"host" yaml:"host"`
+	Port           int      `json:"port" yaml:"port"`
+	Secure         bool     `json:"secure" yaml:"secure"`
+	ReadTimeout    int      `json:"read_timeout" yaml:"read_timeout"`
+	WriteTimeout   int      `json:"write_timeout" yaml:"write_timeout"`
+	IdleTimeout    int      `json:"idle_timeout" yaml:"idle_timeout"`
+	MaxHeaderBytes int      `json:"max_header_bytes" yaml:"max_header_bytes"`
+	EnableCORS     bool     `json:"enable_cors" yaml:"enable_cors"`
+	TrustedProxies []string `json:"trusted_proxies" yaml:"trusted_proxies"`
 }
 
 type Chunk struct {
@@ -53,8 +60,15 @@ func Default() *Config {
 			ImageMaxSize:   1120,
 		},
 		Server: Server{
-			Host: "localhost",
-			Port: 8080,
+			Host:           "localhost",
+			Port:           12121,
+			Secure:         true,
+			ReadTimeout:    30,
+			WriteTimeout:   30,
+			IdleTimeout:    120,
+			MaxHeaderBytes: 1048576,
+			EnableCORS:     false,
+			TrustedProxies: []string{},
 		},
 		Chunking: Chunk{
 			MaxTokens: 1800,

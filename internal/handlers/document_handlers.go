@@ -620,12 +620,31 @@ func (h *Handler) fallbackDocumentView(
     <script>
         const highlightChunk = %d;
         
+        // HTML escape function to prevent XSS and rendering issues
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        console.log('Document viewer script starting...');
+        
         // Load document chunks for highlighting
         fetch('/api/documents/' + '%s' + '/chunks')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch chunks: ' + response.status);
+                }
+                return response.json();
+            })
             .then(chunks => {
                 const contentDiv = document.getElementById('content');
                 contentDiv.innerHTML = '';
+                
+                if (!chunks || chunks.length === 0) {
+                    contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">No content chunks available for this document.</div></div>';
+                    return;
+                }
                 
                 chunks.forEach((chunk, index) => {
                     const chunkDiv = document.createElement('div');
@@ -633,16 +652,39 @@ func (h *Handler) fallbackDocumentView(
                     if (index === highlightChunk) {
                         chunkDiv.className += ' highlighted-chunk';
                     }
-                    chunkDiv.innerHTML = '<div class="chunk-text">' + chunk.Text.replace(/\n/g, '<br>') + '</div>';
+                    
+                    // Handle different chunk formats (Text vs text property)
+                    const chunkText = chunk.Text || chunk.text || '';
+                    const escapedText = escapeHtml(chunkText).replace(/\n/g, '<br>');
+                    chunkDiv.innerHTML = '<div class="chunk-text">' + escapedText + '</div>';
                     contentDiv.appendChild(chunkDiv);
                 });
             })
             .catch(error => {
+                console.error('Error loading chunks:', error);
                 // Fallback to regular content loading
                 fetch('/api/documents/' + '%s')
-                    .then(response => response.text())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch document: ' + response.status);
+                        }
+                        return response.text();
+                    })
                     .then(content => {
-                        document.getElementById('content').textContent = content;
+                        const contentDiv = document.getElementById('content');
+                        if (content && content.trim()) {
+                            const escapedContent = escapeHtml(content).replace(/\n/g, '<br>');
+                            contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">' + 
+                                escapedContent + '</div></div>';
+                        } else {
+                            contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">No content available for this document.</div></div>';
+                        }
+                    })
+                    .catch(fallbackError => {
+                        console.error('Error loading document content:', fallbackError);
+                        document.getElementById('content').innerHTML = 
+                            '<div class="chunk"><div class="chunk-text">Error loading document content: ' + 
+                            fallbackError.message + '</div></div>';
                     });
             });
 
@@ -1073,23 +1115,42 @@ func (h *Handler) fallbackImageDocumentView(
     <script>
         const highlightChunk = %d;
         
+        // HTML escape function to prevent XSS and rendering issues
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        console.log('Image document viewer script starting...');
+        
         // Load document chunks for OCR content display
         fetch('/api/documents/' + '%s' + '/chunks')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch chunks: ' + response.status);
+                }
+                return response.json();
+            })
             .then(chunks => {
                 const contentDiv = document.getElementById('content');
                 contentDiv.innerHTML = '';
                 
-                if (chunks.length === 0) {
-                    contentDiv.innerHTML = '<div class="ocr-text">No OCR content available.</div>';
+                if (!chunks || chunks.length === 0) {
+                    contentDiv.innerHTML = '<div class="ocr-text">No OCR content available for this image document.</div>';
                     return;
                 }
                 
                 chunks.forEach((chunk, index) => {
                     const chunkDiv = document.createElement('div');
                     chunkDiv.className = 'chunk';
-                    chunkDiv.dataset.chunkId = chunk.id;
-                    chunkDiv.dataset.originalText = chunk.text;
+                    
+                    // Handle different chunk ID formats
+                    const chunkId = chunk.id || chunk.ID || 'chunk-' + index;
+                    const chunkText = chunk.text || chunk.Text || '';
+                    
+                    chunkDiv.dataset.chunkId = chunkId;
+                    chunkDiv.dataset.originalText = chunkText;
                     
                     if (index === highlightChunk) {
                         chunkDiv.className += ' highlighted-chunk';
@@ -1098,18 +1159,18 @@ func (h *Handler) fallbackImageDocumentView(
                     // Create chunk content HTML with edit functionality
                     chunkDiv.innerHTML = 
                         '<div class="chunk-actions">' +
-                            '<button class="edit-btn" onclick="editChunk(\'' + chunk.id + '\')">' + 
+                            '<button class="edit-btn" onclick="editChunk(\'' + chunkId + '\')">' + 
                             '✏️ Edit</button>' +
                         '</div>' +
-                        '<div class="chunk-text" id="text-' + chunk.id + '">' + 
-                        chunk.text.replace(/\\n/g, '<br>') + '</div>';
+                        '<div class="chunk-text" id="text-' + chunkId + '">' + 
+                        escapeHtml(chunkText).replace(/\n/g, '<br>') + '</div>';
                     
                     contentDiv.appendChild(chunkDiv);
                 });
             })
             .catch(error => {
                 console.error('Error loading OCR content:', error);
-                document.getElementById('content').innerHTML = '<div class="ocr-text">Error loading OCR content.</div>';
+                document.getElementById('content').innerHTML = '<div class="ocr-text">Error loading OCR content: ' + error.message + '</div>';
             });
 
         function editChunk(chunkId) {
@@ -1170,7 +1231,7 @@ func (h *Handler) fallbackImageDocumentView(
                 if (data.success) {
                     // Update the chunk display
                     const textDiv = document.getElementById('text-' + chunkId);
-                    textDiv.innerHTML = newText.replace(/\\n/g, '<br>');
+                    textDiv.innerHTML = escapeHtml(newText).replace(/\n/g, '<br>');
                     textDiv.style.display = 'block';
                     
                     // Update stored original text

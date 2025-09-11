@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"lil-rag/internal/theme"
+	"lil-rag/pkg/chathistory"
 	"lil-rag/pkg/metrics"
 )
 
@@ -95,6 +97,84 @@ func (h *Handler) fallbackChatPage(w http.ResponseWriter, _ *http.Request) {
             display: flex;
             flex: 1;
             overflow: hidden;
+            gap: 20px;
+        }
+
+        .sidebar {
+            width: 280px;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .sidebar-header {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-header h3 {
+            font-size: 1rem;
+            margin: 0;
+            color: #333;
+        }
+
+        .new-chat-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            transition: background-color 0.2s ease;
+        }
+
+        .new-chat-btn:hover {
+            background: #0056b3;
+        }
+
+        .chat-sessions {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .chat-session {
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .chat-session:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+        }
+
+        .chat-session.active {
+            background: #007bff;
+            color: white;
+        }
+
+        .chat-session-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-session-time {
+            font-size: 0.75rem;
+            opacity: 0.7;
         }
 
         .chat-panel {
@@ -411,6 +491,23 @@ func (h *Handler) fallbackChatPage(w http.ResponseWriter, _ *http.Request) {
             background: #f8f9fa;
         }
 
+        .token-counter {
+            font-size: 0.8rem;
+            color: #666;
+            text-align: right;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .token-counter.warning {
+            color: #ff6b35;
+        }
+
+        .token-counter.danger {
+            color: #dc3545;
+            font-weight: 500;
+        }
+
         .input-container {
             display: flex;
             gap: 10px;
@@ -587,6 +684,18 @@ func (h *Handler) fallbackChatPage(w http.ResponseWriter, _ *http.Request) {
         </div>
         
         <div class="chat-main">
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Chat History</h3>
+                    <button class="new-chat-btn" onclick="startNewChat()">
+                        ➕ New Chat
+                    </button>
+                </div>
+                <div class="chat-sessions" id="chatSessions">
+                    <!-- Chat sessions will be loaded here -->
+                </div>
+            </div>
+            
             <div class="chat-panel">
                 <div class="chat-messages" id="messages">
                 </div>
@@ -600,20 +709,23 @@ func (h *Handler) fallbackChatPage(w http.ResponseWriter, _ *http.Request) {
                 </div>
                 
                 <div class="chat-input">
-            <div class="input-container">
-                <textarea 
-                    class="message-input" 
-                    id="messageInput" 
-                    placeholder="Ask a question about your documents..."
-                    rows="1"
-                ></textarea>
-                <button class="send-button" id="sendButton" onclick="sendMessage()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                </button>
+                    <div class="token-counter" id="tokenCounter">
+                        Tokens remaining: <span id="remainingTokens">1000</span>
+                    </div>
+                    <div class="input-container">
+                        <textarea 
+                            class="message-input" 
+                            id="messageInput" 
+                            placeholder="Ask a question about your documents..."
+                            rows="1"
+                        ></textarea>
+                        <button class="send-button" id="sendButton" onclick="sendMessage()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-            </div>
         </div>
     </div>
 
@@ -853,12 +965,72 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 		req.Limit = 20 // Cap at 20 sources
 	}
 
-	log.Printf("Chat request - message: '%s', limit: %d", req.Message, req.Limit)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
 
-	// Generate LLM response using retrieved documents as context with query optimization
+	log.Printf("Chat request - message: '%s', session: '%s', limit: %d", req.Message, req.SessionID, req.Limit)
+
+	// Handle chat history integration
+	var sessionID string
+	var chatContext *chathistory.ChatContext
+	var hasCompacted bool
+
+	if h.chatHistory != nil {
+		// Create or get session
+		if req.SessionID == "" {
+			// Create new session
+			session, err := h.chatHistory.CreateSession(ctx)
+			if err != nil {
+				log.Printf("Failed to create chat session: %v", err)
+				// Continue without history if creation fails
+				sessionID = ""
+			} else {
+				sessionID = session.ID
+			}
+		} else {
+			sessionID = req.SessionID
+		}
+
+		// Get chat context if we have a session
+		if sessionID != "" {
+			var err error
+			chatContext, err = h.chatHistory.GetChatContext(ctx, sessionID)
+			if err != nil {
+				log.Printf("Failed to get chat context: %v", err)
+				// Continue without context if retrieval fails
+				chatContext = nil
+			} else {
+				hasCompacted = chatContext.HasCompactedData
+
+				// Check if we need to compact the history
+				if chatContext.TotalTokens > chathistory.MaxContextTokens {
+					err = h.compactChatHistory(ctx, sessionID, chatContext)
+					if err != nil {
+						log.Printf("Failed to compact chat history: %v", err)
+					} else {
+						// Refresh context after compaction
+						chatContext, _ = h.chatHistory.GetChatContext(ctx, sessionID)
+						hasCompacted = true
+					}
+				}
+			}
+		}
+	}
+
+	// Store user message in history
+	if h.chatHistory != nil && sessionID != "" {
+		_, err := h.chatHistory.AddMessage(ctx, sessionID, "user", req.Message)
+		if err != nil {
+			log.Printf("Failed to store user message: %v", err)
+		}
+	}
+
+	// Generate enhanced message with context
+	enhancedMessage := h.buildContextualMessage(req.Message, chatContext)
+
+	// Generate LLM response using retrieved documents as context
 	chatStart := time.Now()
-	response, searchResults, err := h.rag.Chat(ctx, req.Message, req.Limit)
+	response, searchResults, err := h.rag.Chat(ctx, enhancedMessage, req.Limit)
 	chatDuration := time.Since(chatStart)
 
 	if err != nil {
@@ -868,18 +1040,130 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Store assistant response in history
+	if h.chatHistory != nil && sessionID != "" {
+		_, err := h.chatHistory.AddMessage(ctx, sessionID, "assistant", response)
+		if err != nil {
+			log.Printf("Failed to store assistant response: %v", err)
+		}
+
+		// Generate title after each response to keep it updated
+		go h.generateSessionTitle(sessionID, req.Message)
+	}
+
+	// Calculate remaining tokens
+	remainingTokens := chathistory.MaxContextTokens
+	if chatContext != nil {
+		remainingTokens = chatContext.RemainingTokens
+	}
+
 	chatResp := ChatResponse{
-		Response: response,
-		Sources:  searchResults,
-		Query:    req.Message,
+		Response:        response,
+		Sources:         searchResults,
+		Query:           req.Message,
+		SessionID:       sessionID,
+		RemainingTokens: remainingTokens,
+		HasCompacted:    hasCompacted,
 	}
 
 	metrics.RecordChatRequest(chatDuration, true, len(searchResults), len(response))
-	// Token tracking is now handled within the chat client itself
 
-	log.Printf("Chat completed successfully - found %d sources, response length: %d", len(searchResults), len(response))
+	log.Printf("Chat completed successfully - session: %s, sources: %d, response length: %d, remaining tokens: %d",
+		sessionID, len(searchResults), len(response), remainingTokens)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(chatResp); err != nil {
 		log.Printf("Error encoding chat response: %v", err)
+	}
+}
+
+// buildContextualMessage combines the current message with previous chat context
+func (h *Handler) buildContextualMessage(currentMessage string, chatContext *chathistory.ChatContext) string {
+	if chatContext == nil || len(chatContext.Messages) == 0 {
+		return currentMessage
+	}
+
+	var contextParts []string
+
+	// Add compacted history if available
+	if chatContext.CompactedHistory != nil {
+		contextParts = append(contextParts, "Previous conversation summary: "+chatContext.CompactedHistory.CompactedContent)
+	}
+
+	// Add recent message history
+	recentMessages := chatContext.Messages
+	if len(recentMessages) > 6 { // Limit to last 6 messages (3 exchanges)
+		recentMessages = recentMessages[len(recentMessages)-6:]
+	}
+
+	for _, msg := range recentMessages {
+		role := "User"
+		if msg.Role == "assistant" {
+			role = "Assistant"
+		}
+		contextParts = append(contextParts, fmt.Sprintf("%s: %s", role, msg.Content))
+	}
+
+	// Add current message
+	contextParts = append(contextParts, "User: "+currentMessage)
+
+	return strings.Join(contextParts, "\n\n")
+}
+
+// compactChatHistory compacts chat history when it gets too long
+func (h *Handler) compactChatHistory(ctx context.Context, sessionID string, chatContext *chathistory.ChatContext) error {
+	if h.summarizer == nil {
+		return fmt.Errorf("summarizer not available")
+	}
+
+	// Generate summary of the messages
+	summary, err := h.summarizer.CompactHistory(ctx, chatContext.Messages)
+	if err != nil {
+		return fmt.Errorf("failed to generate chat summary: %w", err)
+	}
+
+	// Store the compaction
+	return h.chatHistory.CompactChatHistory(ctx, sessionID, summary)
+}
+
+// generateSessionTitle asynchronously generates a title for a new chat session
+func (h *Handler) generateSessionTitle(sessionID, firstMessage string) {
+	if h.summarizer == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// First check if the session already has a custom title
+	session, err := h.chatHistory.GetSession(ctx, sessionID)
+	if err != nil {
+		log.Printf("Failed to get session for title check: %v", err)
+		return
+	}
+
+	// Don't generate title if it already has a custom title (not "New Chat" and not empty)
+	if session.Title != "" && session.Title != "New Chat" {
+		return
+	}
+
+	// Get the first few messages to generate a title
+	chatContext, err := h.chatHistory.GetChatContext(ctx, sessionID)
+	if err != nil {
+		log.Printf("Failed to get chat context for title generation: %v", err)
+		return
+	}
+
+	title, err := h.summarizer.GenerateTitle(ctx, chatContext.Messages)
+	if err != nil {
+		log.Printf("Failed to generate chat title: %v", err)
+		// Fallback to simple title
+		title = chathistory.GenerateChatSummary(chatContext.Messages)
+	}
+
+	// Update the session title
+	err = h.chatHistory.UpdateSessionTitle(ctx, sessionID, title)
+	if err != nil {
+		log.Printf("Failed to update session title: %v", err)
 	}
 }

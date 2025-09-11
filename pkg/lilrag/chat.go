@@ -152,16 +152,28 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) string {
 	var prompt strings.Builder
 
-	prompt.WriteString("You are a helpful AI assistant that answers questions based on provided document context. ")
-	prompt.WriteString("Use the following documents to answer the user's question. ")
-	prompt.WriteString("Be accurate, concise, and cite which documents you're referencing.\n\n")
+	prompt.WriteString("You are a helpful AI assistant that answers questions based strictly on provided document context. ")
 
 	if len(searchResults) == 0 {
-		prompt.WriteString("No relevant documents were found. Please inform the user that you don't " +
-			"have enough context to answer their question and suggest they provide more relevant " +
-			"documents or rephrase their query.")
+		prompt.WriteString("No relevant documents were found in the knowledge base. ")
+		prompt.WriteString("You MUST respond with: \"I was unable to find any relevant information in the knowledge base to answer your question. ")
+		prompt.WriteString("This could mean: (1) the information isn't available in the indexed documents, ")
+		prompt.WriteString("(2) your query might need to be rephrased with different keywords, or ")
+		prompt.WriteString("(3) additional documents containing this information may need to be added to the knowledge base.\"")
 		return prompt.String()
 	}
+
+	prompt.WriteString("CRITICAL INSTRUCTIONS:\n")
+	prompt.WriteString("1. Answer ONLY based on the provided documents below\n")
+	prompt.WriteString("2. EVERY fact, claim, or piece of information MUST be linked to a source using [document-id]\n")
+	prompt.WriteString("3. If the documents don't fully answer the question, clearly state what information is missing\n")
+	prompt.WriteString("4. If the documents contradict each other, acknowledge this and cite both sources\n")
+	prompt.WriteString("5. Never make assumptions or add information not present in the documents\n\n")
+
+	prompt.WriteString("CITATION FORMAT:\n")
+	prompt.WriteString("- Use [document-id] immediately after each fact or claim\n")
+	prompt.WriteString("- Example: \"The system uses vector embeddings [tech-overview] to enable semantic search [search-guide].\"\n")
+	prompt.WriteString("- Multiple sources: \"This approach improves accuracy [study-2023] and performance [benchmark-results].\"\n\n")
 
 	prompt.WriteString("RELEVANT DOCUMENTS:\n\n")
 
@@ -171,20 +183,19 @@ func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) stri
 
 		// Use a reasonable excerpt length
 		text := result.Text
-		if len(text) > 2000 {
-			text = text[:2000] + "..."
+		if len(text) > 3000 {
+			text = text[:3000] + "..."
 		}
 
 		prompt.WriteString(text)
 		prompt.WriteString("\n\n")
 	}
 
-	prompt.WriteString("Please answer the user's question based on these documents. ")
-	prompt.WriteString("If the documents don't contain relevant information, say so clearly. ")
-	prompt.WriteString("When referencing information from a document, cite it using square " +
-		"brackets with the document ID: [document-id]. ")
-	prompt.WriteString("For example: \"According to [lilrag-overview]...\" or \"As mentioned in [vector-search]...\". ")
-	prompt.WriteString("Use only the document ID inside the brackets, not \"Document 1\" or similar.")
+	prompt.WriteString("RESPONSE REQUIREMENTS:\n")
+	prompt.WriteString("- Provide a comprehensive answer if the documents contain sufficient information\n")
+	prompt.WriteString("- If information is incomplete, clearly state: \"Based on the available documents, I can provide partial information: [your answer with citations]. However, the documents don't contain information about [specific missing aspects].\"\n")
+	prompt.WriteString("- If the documents are not relevant to the question, state: \"The available documents don't contain relevant information to answer your question about [topic]. You may need to add more specific documents or rephrase your query.\"\n")
+	prompt.WriteString("- Always maintain accuracy over completeness - never guess or extrapolate beyond what's explicitly stated in the documents")
 
 	return prompt.String()
 }
