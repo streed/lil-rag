@@ -13,7 +13,13 @@ lil-rag-server
 
 # Example binaries
 examples/library/library
+examples/library/library_usage
 examples/profile/profile
+examples/profile/profile_usage
+examples/advanced_examples/chat_example
+examples/advanced_examples/configuration_example
+examples/advanced_examples/file_formats_example
+examples/advanced_examples/mcp_example
 
 # Test binary, built with `go test -c`
 *.test
