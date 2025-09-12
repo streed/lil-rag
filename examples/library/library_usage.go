@@ -85,11 +85,12 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to create LilRag:", err)
 	}
-	defer rag.Close()
 
 	if err := rag.Initialize(); err != nil {
+		rag.Close()
 		log.Fatal("Failed to initialize LilRag:", err)
 	}
+	defer rag.Close()
 
 	ctx := context.Background()
 

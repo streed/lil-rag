@@ -656,35 +656,6 @@ func TestIntegration_ConcurrentRequests(t *testing.T) {
 	})
 }
 
-// Helper function to create test handler for integration tests
-func createIntegrationTestHandler(t *testing.T) *Handler {
-	config := &lilrag.Config{
-		DatabasePath: filepath.Join(t.TempDir(), "integration_test.db"),
-		DataDir:      filepath.Join(t.TempDir(), "data"),
-		VectorSize:   384, // Use realistic vector size
-		MaxTokens:    500,
-		Overlap:      50,
-		OllamaURL:    "http://localhost:11434", // Use localhost for integration tests
-	}
-
-	ragInstance, err := lilrag.New(config)
-	if err != nil {
-		t.Fatalf("Failed to create LilRag for integration test: %v", err)
-	}
-
-	// Try to initialize - if it fails due to missing dependencies, skip
-	if err := ragInstance.Initialize(); err != nil {
-		if strings.Contains(err.Error(), "sqlite-vec extension not available") ||
-			strings.Contains(err.Error(), "connection refused") ||
-			strings.Contains(err.Error(), "context deadline exceeded") {
-			t.Skipf("Skipping integration test due to missing dependencies: %v", err)
-		}
-		t.Fatalf("Failed to initialize LilRag for integration test: %v", err)
-	}
-
-	return NewWithVersion(ragInstance, "integration-test", config.DataDir, false)
-}
-
 // Benchmark integration test
 func BenchmarkIntegration_IndexAndSearch(b *testing.B) {
 	if testing.Short() {

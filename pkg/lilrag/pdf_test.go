@@ -473,14 +473,6 @@ func containsAlphabetic(s string) bool {
 	return false
 }
 
-// abs function for integer absolute value (reused from other tests)
-func absInt(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
 func TestPDFParser_EdgeCases(t *testing.T) {
 	parser := NewPDFParser()
 

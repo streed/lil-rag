@@ -82,11 +82,12 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to create LilRag:", err)
 	}
-	defer rag.Close()
 
 	if err := rag.Initialize(); err != nil {
+		rag.Close()
 		log.Fatal("Failed to initialize LilRag:", err)
 	}
+	defer rag.Close()
 
 	ctx := context.Background()
 
@@ -194,11 +195,12 @@ func main() {
 		fmt.Printf("Context: %s\n", scenario.context)
 
 		results, err := rag.Search(ctx, scenario.query, 2)
-		if err != nil {
+		switch {
+		case err != nil:
 			fmt.Printf("❌ Search failed: %v\n", err)
-		} else if len(results) == 0 {
+		case len(results) == 0:
 			fmt.Printf("ℹ️  No results found\n")
-		} else {
+		default:
 			for i, result := range results {
 				fmt.Printf("  %d. %s (Score: %.4f)\n", i+1, result.ID, result.Score)
 				preview := result.Text
@@ -339,29 +341,32 @@ func main() {
 
 	fmt.Printf("Current Settings Analysis:\n")
 	fmt.Printf("  Chunk size: %d tokens ", currentChunkSize)
-	if currentChunkSize < 200 {
+	switch {
+	case currentChunkSize < 200:
 		fmt.Printf("(⚡ Fast searches, precise results)\n")
-	} else if currentChunkSize < 400 {
+	case currentChunkSize < 400:
 		fmt.Printf("(⚖️  Balanced performance)\n")
-	} else {
+	default:
 		fmt.Printf("(🎯 Better context, slower searches)\n")
 	}
 
 	fmt.Printf("  Overlap: %d tokens (%.1f%%) ", currentOverlap, overlapPercentage)
-	if overlapPercentage < 10 {
+	switch {
+	case overlapPercentage < 10:
 		fmt.Printf("(⚡ Minimal redundancy)\n")
-	} else if overlapPercentage < 20 {
+	case overlapPercentage < 20:
 		fmt.Printf("(⚖️  Good balance)\n")
-	} else {
+	default:
 		fmt.Printf("(🎯 Maximum context preservation)\n")
 	}
 
 	fmt.Printf("  Vector size: %d dimensions ", profileConfig.Ollama.VectorSize)
-	if profileConfig.Ollama.VectorSize <= 384 {
+	switch {
+	case profileConfig.Ollama.VectorSize <= 384:
 		fmt.Printf("(⚡ Fast, compact)\n")
-	} else if profileConfig.Ollama.VectorSize <= 768 {
+	case profileConfig.Ollama.VectorSize <= 768:
 		fmt.Printf("(⚖️  Standard quality)\n")
-	} else {
+	default:
 		fmt.Printf("(🎯 High precision)\n")
 	}
 	fmt.Println()

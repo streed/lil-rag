@@ -9,6 +9,11 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+const (
+	// testDatabasePath is the database path used in tests
+	testDatabasePath = "saved.db"
+)
+
 func TestDefault(t *testing.T) {
 	config := Default()
 
@@ -240,7 +245,7 @@ func TestConfig_Save_JSON(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	config := Default()
-	config.Database.Path = "saved.db"
+	config.Database.Path = testDatabasePath
 	config.Server.Port = 9999
 
 	configPath := filepath.Join(tempDir, "saved_config.json")
@@ -262,7 +267,7 @@ func TestConfig_Save_JSON(t *testing.T) {
 		t.Fatalf("Failed to unmarshal saved config: %v", err)
 	}
 
-	if savedConfig.Database.Path != "saved.db" {
+	if savedConfig.Database.Path != testDatabasePath {
 		t.Errorf("Expected saved database path 'saved.db', got %q", savedConfig.Database.Path)
 	}
 	if savedConfig.Server.Port != 9999 {
@@ -279,7 +284,7 @@ func TestConfig_Save_YAML(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	config := Default()
-	config.Database.Path = "saved.db"
+	config.Database.Path = testDatabasePath
 	config.Server.Port = 9999
 
 	configPath := filepath.Join(tempDir, "saved_config.yaml")
@@ -301,7 +306,7 @@ func TestConfig_Save_YAML(t *testing.T) {
 		t.Fatalf("Failed to unmarshal saved YAML config: %v", err)
 	}
 
-	if savedConfig.Database.Path != "saved.db" {
+	if savedConfig.Database.Path != testDatabasePath {
 		t.Errorf("Expected saved database path 'saved.db', got %q", savedConfig.Database.Path)
 	}
 	if savedConfig.Server.Port != 9999 {

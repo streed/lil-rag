@@ -11,6 +11,8 @@ import (
 const (
 	// ContentTypeJSON is the JSON content type
 	ContentTypeJSON = "application/json"
+	// ContentTypeHTML is the HTML content type
+	ContentTypeHTML = "text/html"
 )
 
 // contextKey is a type for context keys to avoid collision
