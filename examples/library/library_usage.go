@@ -107,12 +107,16 @@ func main() {
 	}{
 		{
 			"go_lang",
-			"Go (Golang) is a programming language developed by Google. It's statically typed, compiled, and designed for simplicity and efficiency. Key features include garbage collection, memory safety, structural typing, and CSP-style concurrency with goroutines and channels.",
+			"Go (Golang) is a programming language developed by Google. It's statically typed, compiled, and " +
+				"designed for simplicity and efficiency. Key features include garbage collection, memory safety, " +
+				"structural typing, and CSP-style concurrency with goroutines and channels.",
 			"Programming Languages",
 		},
 		{
 			"python_overview",
-			"Python is a high-level, interpreted programming language known for its clear syntax and readability. It supports multiple programming paradigms including procedural, object-oriented, and functional programming. Python is widely used in web development, data science, artificial intelligence, and automation.",
+			"Python is a high-level, interpreted programming language known for its clear syntax and readability. " +
+				"It supports multiple programming paradigms including procedural, object-oriented, and functional " +
+				"programming. Python is widely used in web development, data science, artificial intelligence, and automation.",
 			"Programming Languages",
 		},
 		{

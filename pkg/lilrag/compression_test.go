@@ -229,7 +229,7 @@ func TestCompressFile(t *testing.T) {
 			outputPath := filepath.Join(tempDir, "output.gz")
 
 			// Create input file
-			err := os.WriteFile(inputPath, []byte(tt.content), 0o644)
+			err := os.WriteFile(inputPath, []byte(tt.content), 0o600)
 			if err != nil {
 				t.Fatalf("Failed to create input file: %v", err)
 			}
@@ -296,7 +296,7 @@ func TestCompressFile_InvalidPaths(t *testing.T) {
 
 	// Create valid input file for some tests
 	validInput := filepath.Join(tempDir, "input.txt")
-	if err := os.WriteFile(validInput, []byte("test content"), 0o644); err != nil {
+	if err := os.WriteFile(validInput, []byte("test content"), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -327,7 +327,7 @@ func TestDecompressFile(t *testing.T) {
 	inputPath := filepath.Join(tempDir, "input.txt")
 	compressedPath := filepath.Join(tempDir, "compressed.gz")
 
-	err = os.WriteFile(inputPath, []byte(originalContent), 0o644)
+	err = os.WriteFile(inputPath, []byte(originalContent), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create input file: %v", err)
 	}

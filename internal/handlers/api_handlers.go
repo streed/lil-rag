@@ -288,7 +288,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	if h.dataDir != "" && lilrag.IsImageFile(tempFile.Name()) {
 		// Create images directory
 		imagesDir := filepath.Join(h.dataDir, "images")
-		if err := os.MkdirAll(imagesDir, 0o755); err != nil {
+		if err := os.MkdirAll(imagesDir, 0o750); err != nil {
 			log.Printf("Warning: Failed to create images directory: %v", err)
 		} else {
 			// Generate a unique filename

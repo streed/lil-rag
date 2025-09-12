@@ -507,7 +507,7 @@ func TestHandler_FileUpload(t *testing.T) {
 	// Create test files
 	txtFile := filepath.Join(tempDir, "test.txt")
 	txtContent := "This is test text content"
-	err := os.WriteFile(txtFile, []byte(txtContent), 0o644)
+	err := os.WriteFile(txtFile, []byte(txtContent), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
