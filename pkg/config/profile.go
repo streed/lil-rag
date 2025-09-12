@@ -87,7 +87,7 @@ func GetProfileConfigPath() (string, error) {
 	}
 
 	configDir := filepath.Join(homeDir, ".lilrag")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -149,14 +149,14 @@ func (p *ProfileConfig) Save() error {
 
 func (p *ProfileConfig) ensureDirectories() error {
 	if p.DataDir != "" {
-		if err := os.MkdirAll(p.DataDir, 0o755); err != nil {
+		if err := os.MkdirAll(p.DataDir, 0o750); err != nil {
 			return fmt.Errorf("failed to create data directory: %w", err)
 		}
 	}
 
 	if p.StoragePath != "" {
 		storageDir := filepath.Dir(p.StoragePath)
-		if err := os.MkdirAll(storageDir, 0o755); err != nil {
+		if err := os.MkdirAll(storageDir, 0o750); err != nil {
 			return fmt.Errorf("failed to create storage directory: %w", err)
 		}
 	}

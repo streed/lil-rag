@@ -30,13 +30,13 @@ func NewLLMSummarizer(client LLMClient) *LLMSummarizer {
 // GenerateTitle creates a concise title for a chat session
 func (s *LLMSummarizer) GenerateTitle(ctx context.Context, messages []ChatMessage) (string, error) {
 	if len(messages) == 0 {
-		return "New Chat", nil
+		return DefaultChatTitle, nil
 	}
 
 	// Take first few messages to understand the topic
 	conversationText := formatMessagesForSummary(messages, 3)
 	if conversationText == "" {
-		return "New Chat", nil
+		return DefaultChatTitle, nil
 	}
 
 	systemPrompt := `You are an expert at creating concise, descriptive titles for chat conversations. 
@@ -159,5 +159,5 @@ func generateFallbackTitle(messages []ChatMessage) string {
 			}
 		}
 	}
-	return "New Chat"
+	return DefaultChatTitle
 }
