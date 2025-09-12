@@ -1,8 +1,6 @@
 # Configuration for golangci-lint
 # https://github.com/golangci/golangci-lint
 
-version: 2
-
 run:
   timeout: 5m
   modules-download-mode: readonly
@@ -117,6 +115,7 @@ issues:
   new: false
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
