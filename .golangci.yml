@@ -1,4 +1,4 @@
-# Configuration for golangci-lint v2
+# Configuration for golangci-lint v2.4
 # https://github.com/golangci/golangci-lint
 
 version: 2
@@ -6,9 +6,9 @@ version: 2
 run:
   timeout: 5m
   modules-download-mode: readonly
-  skip-files:
-    - ".*_test\\.go$"
-    - "test_pdfs/.*"
+  tests: false
+  skip-dirs:
+    - test_pdfs
 
 linters-settings:
   gocritic:
@@ -77,59 +77,6 @@ linters:
     - whitespace
 
 issues:
-  exclude-rules:
-    # Disable all lint checks for test files
-    - path: ".*_test\\.go$"
-      linters:
-        - bodyclose
-        - dogsled
-        - errcheck
-        - exhaustive
-        - goconst
-        - gocritic
-        - revive
-        - gosec
-        - govet
-        - ineffassign
-        - lll
-        - misspell
-        - nakedret
-        - rowserrcheck
-        - staticcheck
-        - typecheck
-        - unconvert
-        - unparam
-        - unused
-        - whitespace
-    
-    # Disable all lint checks for test utilities and development tools
-    - path: "test_pdfs/"
-      linters:
-        - bodyclose
-        - dogsled
-        - errcheck
-        - exhaustive
-        - goconst
-        - gocritic
-        - revive
-        - gosec
-        - govet
-        - ineffassign
-        - lll
-        - misspell
-        - nakedret
-        - rowserrcheck
-        - staticcheck
-        - typecheck
-        - unconvert
-        - unparam
-        - unused
-        - whitespace
-    
-    - linters:
-        - lll
-      source: "^//go:generate "
-
   exclude:
     # Exclude some gosec messages
     - "G404: Use of weak random number generator"
@@ -139,6 +86,7 @@ issues:
   new: false
 
 output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
+  text:
+    colors: true
+    print-linter-name: true
+    print-issued-lines: true
