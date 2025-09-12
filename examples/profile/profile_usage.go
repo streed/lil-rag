@@ -115,9 +115,9 @@ func main() {
 			"Team Meeting Notes (2024-01-15): Discussed Q1 objectives, reviewed sprint progress, and planned upcoming feature releases. Action items include updating documentation, optimizing search performance, and scheduling security reviews. Next meeting: January 22nd.",
 			"Meeting Minutes",
 			map[string]string{
-				"type":       "meeting",
-				"date":       "2024-01-15",
-				"attendees":  "12",
+				"type":      "meeting",
+				"date":      "2024-01-15",
+				"attendees": "12",
 			},
 		},
 		{
@@ -145,13 +145,13 @@ func main() {
 	fmt.Printf("📚 Indexing documents using profile settings...\n")
 	for _, doc := range documents {
 		fmt.Printf("Processing: %s (%s)\n", doc.id, doc.source)
-		
+
 		// The profile's chunking settings will be used automatically
 		if err := rag.Index(ctx, doc.text, doc.id); err != nil {
 			fmt.Printf("  ❌ Failed to index %s: %v\n", doc.id, err)
 		} else {
 			fmt.Printf("  ✅ Successfully indexed using profile chunk settings\n")
-			fmt.Printf("     Chunk size: %d tokens, Overlap: %d tokens\n", 
+			fmt.Printf("     Chunk size: %d tokens, Overlap: %d tokens\n",
 				profileConfig.Chunking.MaxTokens, profileConfig.Chunking.Overlap)
 		}
 		fmt.Println()
@@ -286,7 +286,7 @@ func main() {
 			fmt.Printf("  ⚠️  File not found or processing failed: %v\n", err)
 		} else {
 			fmt.Printf("  ✅ File processed successfully using profile settings\n")
-			
+
 			// Test search for the file content
 			results, err := rag.Search(ctx, "document content", 1)
 			if err == nil && len(results) > 0 {
@@ -309,16 +309,16 @@ func main() {
 	if err == nil {
 		fmt.Printf("📊 Profile-Based Setup Statistics:\n")
 		fmt.Printf("   Documents indexed: %d\n", len(docs))
-		
+
 		totalChunks := 0
 		for _, doc := range docs {
 			totalChunks += doc.ChunkCount
 		}
-		
+
 		fmt.Printf("   Total chunks: %d\n", totalChunks)
 		fmt.Printf("   Chunks per document: %.1f\n", float64(totalChunks)/float64(len(docs)))
 		fmt.Println()
-		
+
 		fmt.Printf("📁 Storage Information:\n")
 		fmt.Printf("   Database: %s\n", ragConfig.DatabasePath)
 		fmt.Printf("   Data directory: %s\n", ragConfig.DataDir)
@@ -331,7 +331,7 @@ func main() {
 
 	fmt.Println("🎯 Profile Configuration Recommendations:")
 	fmt.Println()
-	
+
 	// Analyze current profile settings and provide recommendations
 	currentChunkSize := profileConfig.Chunking.MaxTokens
 	currentOverlap := profileConfig.Chunking.Overlap
@@ -346,7 +346,7 @@ func main() {
 	} else {
 		fmt.Printf("(🎯 Better context, slower searches)\n")
 	}
-	
+
 	fmt.Printf("  Overlap: %d tokens (%.1f%%) ", currentOverlap, overlapPercentage)
 	if overlapPercentage < 10 {
 		fmt.Printf("(⚡ Minimal redundancy)\n")
@@ -355,7 +355,7 @@ func main() {
 	} else {
 		fmt.Printf("(🎯 Maximum context preservation)\n")
 	}
-	
+
 	fmt.Printf("  Vector size: %d dimensions ", profileConfig.Ollama.VectorSize)
 	if profileConfig.Ollama.VectorSize <= 384 {
 		fmt.Printf("(⚡ Fast, compact)\n")

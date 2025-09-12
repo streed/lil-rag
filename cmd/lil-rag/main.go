@@ -769,21 +769,21 @@ func renderWithGlow(markdown string) error {
 // formatSearchResultsAsMarkdown formats search results as markdown
 func formatSearchResultsAsMarkdown(query string, results []lilrag.SearchResult) string {
 	var md strings.Builder
-	
-	md.WriteString(fmt.Sprintf("# Search Results\n\n"))
+
+	md.WriteString("# Search Results\n\n")
 	md.WriteString(fmt.Sprintf("**Query:** %s  \n", query))
 	md.WriteString(fmt.Sprintf("**Results found:** %d\n\n", len(results)))
-	
+
 	if len(results) == 0 {
 		md.WriteString("*No results found.*\n")
 		return md.String()
 	}
-	
+
 	md.WriteString("---\n\n")
-	
+
 	for i, result := range results {
 		matchInfo := ""
-		
+
 		if result.Metadata != nil {
 			// Show information about which part matched
 			if pageNum, ok := result.Metadata["page_number"].(int); ok {
@@ -796,32 +796,32 @@ func formatSearchResultsAsMarkdown(query string, results []lilrag.SearchResult) 
 				}
 			}
 		}
-		
+
 		md.WriteString(fmt.Sprintf("## %d. %s%s\n\n", i+1, result.ID, matchInfo))
 		md.WriteString(fmt.Sprintf("**Score:** %.4f\n\n", result.Score))
 		md.WriteString(fmt.Sprintf("```\n%s\n```\n\n", result.Text))
-		
+
 		if i < len(results)-1 {
 			md.WriteString("---\n\n")
 		}
 	}
-	
+
 	return md.String()
 }
 
 // formatChatResponseAsMarkdown formats chat response and sources as markdown
 func formatChatResponseAsMarkdown(message, response string, sources []lilrag.SearchResult) string {
 	var md strings.Builder
-	
-	md.WriteString(fmt.Sprintf("# Chat Response\n\n"))
+
+	md.WriteString("# Chat Response\n\n")
 	md.WriteString(fmt.Sprintf("**Your message:** %s\n\n", message))
 	md.WriteString("---\n\n")
 	md.WriteString(fmt.Sprintf("## 🤖 Response\n\n%s\n\n", response))
-	
+
 	if len(sources) > 0 {
 		md.WriteString("---\n\n")
 		md.WriteString(fmt.Sprintf("## 📚 Sources (%d)\n\n", len(sources)))
-		
+
 		for i, source := range sources {
 			md.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, source.ID))
 			md.WriteString(fmt.Sprintf("**Score:** %.4f\n\n", source.Score))
@@ -829,7 +829,7 @@ func formatChatResponseAsMarkdown(message, response string, sources []lilrag.Sea
 			md.WriteString(fmt.Sprintf("```\n%s\n```\n\n", truncatedText))
 		}
 	}
-	
+
 	return md.String()
 }
 
@@ -1002,7 +1002,8 @@ func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
 
 	case "reset-password":
 		if len(args) != 3 {
-			return fmt.Errorf("auth reset-password requires username and new password: lil-rag auth reset-password <username> <new-password>")
+			return fmt.Errorf("auth reset-password requires username and new password: " +
+				"lil-rag auth reset-password <username> <new-password>")
 		}
 		username := args[1]
 		newPassword := args[2]
