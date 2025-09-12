@@ -94,7 +94,7 @@ func testGoFitz(pdfPath string) {
 		fmt.Printf("ERROR opening document: %v\n", err)
 		return
 	}
-	defer doc.Close()
+	defer func() { _ = doc.Close() }()
 
 	var allText strings.Builder
 	pageCount := doc.NumPage()

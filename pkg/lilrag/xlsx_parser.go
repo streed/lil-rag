@@ -23,7 +23,7 @@ func (xp *XLSXParser) Parse(filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open XLSX file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var content strings.Builder
 
@@ -77,7 +77,7 @@ func (xp *XLSXParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open XLSX file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Use a default chunker if none provided
 	if xp.chunker == nil {

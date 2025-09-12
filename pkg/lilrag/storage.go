@@ -497,7 +497,7 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute search query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Use a map to deduplicate results by document ID, keeping the best score per document
 	documentResults := make(map[string]SearchResult)
@@ -618,7 +618,7 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to query documents: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var documents []DocumentInfo
 	for rows.Next() {
@@ -726,7 +726,7 @@ func (s *SQLiteStorage) GetDocumentChunks(ctx context.Context, documentID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to query chunks: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var chunks []Chunk
 	for rows.Next() {
@@ -944,7 +944,7 @@ func (s *SQLiteStorage) GetDocumentChunksWithInfo(ctx context.Context, documentI
 	if err != nil {
 		return nil, fmt.Errorf("failed to query chunks: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var chunks []ChunkInfo
 	for rows.Next() {
