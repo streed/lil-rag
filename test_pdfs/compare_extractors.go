@@ -10,7 +10,7 @@ import (
 
 	"lil-rag/pkg/lilrag"
 
-	"github.com/gen2brain/go-fitz"
+	fitz "github.com/gen2brain/go-fitz"
 )
 
 func main() {

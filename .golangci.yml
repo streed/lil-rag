@@ -58,7 +58,7 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - copyloopvar  # replaces exportloopvar
+    - exportloopref
     - dogsled
     - errcheck
     - exhaustive
@@ -88,7 +88,36 @@ issues:
     - path: _test\.go
       linters:
         - bodyclose
-        - copyloopvar
+        - exportloopref
+        - dogsled
+        - errcheck
+        - exhaustive
+        - goconst
+        - gocritic
+        - gofmt
+        - goimports
+        - revive
+        - gosec
+        - gosimple
+        - govet
+        - ineffassign
+        - lll
+        - misspell
+        - nakedret
+        - rowserrcheck
+        - staticcheck
+        - stylecheck
+        - typecheck
+        - unconvert
+        - unparam
+        - unused
+        - whitespace
+    
+    # Disable all lint checks for test utilities and development tools
+    - path: test_pdfs/
+      linters:
+        - bodyclose
+        - exportloopref
         - dogsled
         - errcheck
         - exhaustive

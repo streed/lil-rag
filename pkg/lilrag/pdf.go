@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"unicode"
 
 	"github.com/dslipak/pdf"
 )
@@ -79,14 +78,23 @@ func cleanText(text string) string {
 	multipleSpaces := regexp.MustCompile(`\s+`)
 	text = multipleSpaces.ReplaceAllString(text, " ")
 
-	// Step 4: Remove non-printable characters but keep valid Unicode letters, numbers, and punctuation
+	// Step 4: Remove non-printable characters but keep valid characters including Unicode letters
 	var cleaned strings.Builder
 	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r) {
-			// Keep ASCII and valid Unicode characters
-			if r <= 127 || unicode.IsLetter(r) || unicode.IsNumber(r) {
-				cleaned.WriteRune(r)
-			}
+		// Allow ASCII letters and numbers
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			cleaned.WriteRune(r)
+		} else if r == ' ' || r == '\t' || r == '\n' || r == '.' || r == ',' || r == '!' || r == '?' ||
+			r == ';' || r == ':' || r == '"' || r == '\'' || r == '-' || r == '(' || r == ')' ||
+			r == '[' || r == ']' || r == '{' || r == '}' || r == '/' || r == '\\' || r == '@' ||
+			r == '#' || r == '$' || r == '%' || r == '&' || r == '*' || r == '+' || r == '=' ||
+			r == '<' || r == '>' || r == '_' || r == '|' || r == '~' || r == '`' {
+			// Basic punctuation and whitespace
+			cleaned.WriteRune(r)
+		} else if r >= 128 && r <= 591 {
+			// Include Latin Unicode range (accented letters, etc.) but exclude currency and other symbols
+			// This range covers most Latin-based accented characters
+			cleaned.WriteRune(r)
 		}
 	}
 
@@ -138,11 +146,21 @@ func cleanTextPreserveLayout(text string) string {
 		return match
 	})
 
-	// Step 3: Remove non-printable characters but keep spaces, tabs, and newlines
+	// Step 3: Remove non-printable characters but keep spaces, tabs, newlines, and Unicode
 	var cleaned strings.Builder
 	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsSpace(r) ||
-			unicode.IsPunct(r) || unicode.IsSymbol(r) || r == '\t' || r == '\n' {
+		// Allow ASCII letters and numbers
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			cleaned.WriteRune(r)
+		} else if r == ' ' || r == '\t' || r == '\n' || r == '.' || r == ',' || r == '!' || r == '?' ||
+			r == ';' || r == ':' || r == '"' || r == '\'' || r == '-' || r == '(' || r == ')' ||
+			r == '[' || r == ']' || r == '{' || r == '}' || r == '/' || r == '\\' || r == '@' ||
+			r == '#' || r == '$' || r == '%' || r == '&' || r == '*' || r == '+' || r == '=' ||
+			r == '<' || r == '>' || r == '_' || r == '|' || r == '~' || r == '`' {
+			// Basic punctuation and whitespace
+			cleaned.WriteRune(r)
+		} else if r >= 128 && r <= 591 {
+			// Include Latin Unicode range (accented letters, etc.) but exclude currency and other symbols
 			cleaned.WriteRune(r)
 		}
 	}

@@ -590,12 +590,12 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 	// Parse arguments
 	var message, sessionID string
 	limit := 5
-	
+
 	// Simple argument parsing
 	i := 0
 	for i < len(args) {
 		arg := args[i]
-		
+
 		if arg == "--session" || arg == "-s" {
 			if i+1 >= len(args) {
 				return fmt.Errorf("--session requires a session ID")
@@ -644,7 +644,7 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 	// Handle session management
 	var session *chathistory.ChatSession
 	var chatContext *chathistory.ChatContext
-	
+
 	if chatHistory != nil {
 		if sessionID == "" {
 			// Create new session
@@ -663,14 +663,14 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 			if err != nil {
 				return fmt.Errorf("failed to get session %s: %w", sessionID, err)
 			}
-			
+
 			// Get chat context for the session
 			chatContext, err = chatHistory.GetChatContext(ctx, sessionID)
 			if err != nil {
 				fmt.Printf("Warning: Failed to get chat context: %v\n", err)
 				chatContext = nil
 			}
-			
+
 			fmt.Printf("# 💬 Continuing Chat Session\n\n**Session ID:** `%s`\n**Title:** %s\n\n", sessionID, session.Title)
 		}
 	}
@@ -682,7 +682,7 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 	}
 
 	fmt.Printf("**You:** %s\n\n", message)
-	
+
 	// Store user message in history
 	if chatHistory != nil && sessionID != "" {
 		_, err := chatHistory.AddMessage(ctx, sessionID, "user", message)
