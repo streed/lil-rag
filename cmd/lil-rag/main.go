@@ -105,7 +105,9 @@ func run() error {
 	if err := rag.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize MiniRag: %w", err)
 	}
-	defer rag.Close()
+	defer func() {
+		_ = rag.Close() // Ignore close errors in defer
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -927,7 +929,9 @@ func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize auth system: %w", err)
 	}
-	defer authSystem.Close()
+	defer func() {
+		_ = authSystem.Close() // Ignore close errors in defer
+	}()
 
 	command := args[0]
 	ctx := context.Background()

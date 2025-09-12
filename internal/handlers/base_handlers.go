@@ -85,6 +85,7 @@ func New(rag *lilrag.LilRag) *Handler {
 	return &Handler{rag: rag, version: "dev", dataDir: "", renderer: renderer}
 }
 
+// NewWithVersion creates a new Handler with specified version and configuration options.
 func NewWithVersion(rag *lilrag.LilRag, version, dataDir string, secure bool) *Handler {
 	renderer, err := theme.NewRenderer()
 	if err != nil {

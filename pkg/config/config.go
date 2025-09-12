@@ -46,6 +46,7 @@ type Chunk struct {
 	Overlap   int `json:"overlap" yaml:"overlap"`
 }
 
+// Default returns a new Config with default values.
 func Default() *Config {
 	return &Config{
 		Database: Database{

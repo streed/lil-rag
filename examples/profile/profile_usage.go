@@ -84,10 +84,12 @@ func main() {
 	}
 
 	if err := rag.Initialize(); err != nil {
-		rag.Close()
+		_ = rag.Close() // Ignore close errors before fatal exit
 		log.Fatal("Failed to initialize LilRag:", err)
 	}
-	defer rag.Close()
+	defer func() {
+		_ = rag.Close() // Ignore close errors in defer
+	}()
 
 	ctx := context.Background()
 

@@ -1,3 +1,4 @@
+// Package main provides a utility to compare different PDF extraction methods.
 package main
 
 import (

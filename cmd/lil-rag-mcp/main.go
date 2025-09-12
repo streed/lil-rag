@@ -130,7 +130,7 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 
 func (s *LilRagMCPServer) Close() {
 	if s.rag != nil {
-		s.rag.Close()
+		_ = s.rag.Close() // Ignore close errors in cleanup
 	}
 }
 
