@@ -1,9 +1,14 @@
-# Configuration for golangci-lint
+# Configuration for golangci-lint v2
 # https://github.com/golangci/golangci-lint
+
+version: 2
 
 run:
   timeout: 5m
   modules-download-mode: readonly
+  skip-files:
+    - ".*_test\\.go$"
+    - "test_pdfs/.*"
 
 linters-settings:
   gocritic:
@@ -32,12 +37,6 @@ linters-settings:
   exhaustive:
     default-signifies-exhaustive: true
 
-  gofmt:
-    simplify: true
-
-  goimports:
-    local-prefixes: lil-rag
-
   goconst:
     min-len: 3
     min-occurrences: 3
@@ -58,17 +57,13 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - exportloopref
     - dogsled
     - errcheck
     - exhaustive
     - goconst
     - gocritic
-    - gofmt
-    - goimports
-    - revive  # replaces golint
+    - revive
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - lll
@@ -76,7 +71,6 @@ linters:
     - nakedret
     - rowserrcheck
     - staticcheck
-    - stylecheck
     - unconvert
     - unparam
     - unused
@@ -85,20 +79,16 @@ linters:
 issues:
   exclude-rules:
     # Disable all lint checks for test files
-    - path: _test\.go
+    - path: ".*_test\\.go$"
       linters:
         - bodyclose
-        - exportloopref
         - dogsled
         - errcheck
         - exhaustive
         - goconst
         - gocritic
-        - gofmt
-        - goimports
         - revive
         - gosec
-        - gosimple
         - govet
         - ineffassign
         - lll
@@ -106,7 +96,6 @@ issues:
         - nakedret
         - rowserrcheck
         - staticcheck
-        - stylecheck
         - typecheck
         - unconvert
         - unparam
@@ -114,20 +103,16 @@ issues:
         - whitespace
     
     # Disable all lint checks for test utilities and development tools
-    - path: test_pdfs/
+    - path: "test_pdfs/"
       linters:
         - bodyclose
-        - exportloopref
         - dogsled
         - errcheck
         - exhaustive
         - goconst
         - gocritic
-        - gofmt
-        - goimports
         - revive
         - gosec
-        - gosimple
         - govet
         - ineffassign
         - lll
@@ -135,7 +120,6 @@ issues:
         - nakedret
         - rowserrcheck
         - staticcheck
-        - stylecheck
         - typecheck
         - unconvert
         - unparam
@@ -155,7 +139,6 @@ issues:
   new: false
 
 output:
-  formats:
-    - format: colored-line-number
+  format: colored-line-number
   print-issued-lines: true
   print-linter-name: true

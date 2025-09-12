@@ -250,7 +250,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "file is required", err.Error())
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Create temporary file to save uploaded content
 	tempDir := os.TempDir()
@@ -259,8 +259,8 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusInternalServerError, "failed to create temp file", err.Error())
 		return
 	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	defer func() { _ = tempFile.Close() }()
 
 	// Copy uploaded file to temporary file
 	if _, err := io.Copy(tempFile, file); err != nil {
@@ -269,7 +269,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Close temp file to ensure all data is written
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
@@ -279,7 +279,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	if h.dataDir != "" && lilrag.IsImageFile(tempFile.Name()) {
 		// Create images directory
 		imagesDir := filepath.Join(h.dataDir, "images")
-		if err := os.MkdirAll(imagesDir, 0o755); err != nil {
+		if err := os.MkdirAll(imagesDir, 0o750); err != nil {
 			log.Printf("Warning: Failed to create images directory: %v", err)
 		} else {
 			// Generate a unique filename
@@ -350,13 +350,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err

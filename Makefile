@@ -88,6 +88,9 @@ lint: fmt vet ## Run linting tools
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		echo "Running golangci-lint..."; \
 		golangci-lint run --timeout=5m; \
+	elif command -v ~/go/bin/golangci-lint >/dev/null 2>&1; then \
+		echo "Running golangci-lint..."; \
+		~/go/bin/golangci-lint run --timeout=5m; \
 	else \
 		echo "golangci-lint not found, skipping advanced linting"; \
 	fi

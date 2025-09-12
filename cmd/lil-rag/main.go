@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"lil-rag/pkg/auth"
 	"lil-rag/pkg/chathistory"
 	"lil-rag/pkg/config"
@@ -105,7 +108,7 @@ func run() error {
 	if err := rag.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize MiniRag: %w", err)
 	}
-	defer rag.Close()
+	defer func() { _ = rag.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -637,7 +640,7 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 			fmt.Printf("Warning: Failed to initialize chat history: %v\n", err)
 			chatHistory = nil
 		} else {
-			defer chatHistory.Close()
+			defer func() { _ = chatHistory.Close() }()
 		}
 	}
 
@@ -741,7 +744,8 @@ func buildContextualMessage(currentMessage string, chatContext *chathistory.Chat
 		var messageHistory strings.Builder
 		messageHistory.WriteString("Recent conversation:\n")
 		for _, msg := range recentMessages {
-			messageHistory.WriteString(fmt.Sprintf("%s: %s\n", strings.Title(msg.Role), msg.Content))
+			caser := cases.Title(language.English)
+			messageHistory.WriteString(fmt.Sprintf("%s: %s\n", caser.String(msg.Role), msg.Content))
 		}
 		contextParts = append(contextParts, messageHistory.String())
 	}
@@ -962,7 +966,7 @@ func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize auth system: %w", err)
 	}
-	defer authSystem.Close()
+	defer func() { _ = authSystem.Close() }()
 
 	command := args[0]
 	ctx := context.Background()

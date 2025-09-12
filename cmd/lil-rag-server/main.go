@@ -130,7 +130,7 @@ func run() error {
 	if err := rag.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize MiniRag: %w", err)
 	}
-	defer rag.Close()
+	defer func() { _ = rag.Close() }()
 
 	handler := handlers.NewWithVersion(rag, version, profileConfig.DataDir, profileConfig.Server.Secure)
 	mux := http.NewServeMux()

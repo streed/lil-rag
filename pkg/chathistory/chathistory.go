@@ -85,7 +85,7 @@ func New(dbPath string) (*ChatHistory, error) {
 	ch := &ChatHistory{db: db}
 
 	if err := ch.initializeSchema(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to initialize chat history schema: %w", err)
 	}
 
@@ -179,7 +179,7 @@ func (ch *ChatHistory) GetSessions(ctx context.Context) ([]ChatSession, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chat sessions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sessions []ChatSession
 	for rows.Next() {
@@ -301,7 +301,7 @@ func (ch *ChatHistory) GetChatContext(ctx context.Context, sessionID string) (*C
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chat messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	totalTokens := 0
 	if compaction != nil {

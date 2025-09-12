@@ -130,7 +130,7 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("unsupported config file format: %s", ext)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 

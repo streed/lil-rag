@@ -82,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to create LilRag:", err)
 	}
-	defer rag.Close()
+	defer func() { _ = rag.Close() }()
 
 	if err := rag.Initialize(); err != nil {
 		log.Fatal("Failed to initialize LilRag:", err)
