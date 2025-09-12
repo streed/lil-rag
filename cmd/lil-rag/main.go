@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lil-rag/pkg/auth"
+	"lil-rag/pkg/chathistory"
 	"lil-rag/pkg/config"
 	"lil-rag/pkg/lilrag"
 )
@@ -581,37 +582,175 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-func handleChat(ctx context.Context, rag *lilrag.LilRag, _ *config.ProfileConfig, args []string) error {
+func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.ProfileConfig, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag chat <message> [limit]")
+		return fmt.Errorf("usage: lil-rag chat <message> [--session <session-id>] [--limit <limit>]")
 	}
 
-	message := args[0]
+	// Parse arguments
+	var message, sessionID string
 	limit := 5
-
-	if len(args) > 1 {
-		if _, err := fmt.Sscanf(args[1], "%d", &limit); err != nil {
-			return fmt.Errorf("invalid limit: %s", args[1])
+	
+	// Simple argument parsing
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+		
+		if arg == "--session" || arg == "-s" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("--session requires a session ID")
+			}
+			sessionID = args[i+1]
+			i += 2
+		} else if arg == "--limit" || arg == "-l" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("--limit requires a number")
+			}
+			if _, err := fmt.Sscanf(args[i+1], "%d", &limit); err != nil {
+				return fmt.Errorf("invalid limit: %s", args[i+1])
+			}
+			i += 2
+		} else if message == "" {
+			message = arg
+			i++
+		} else {
+			// For backward compatibility, if we have a second argument that's not a flag, treat it as limit
+			if _, err := fmt.Sscanf(arg, "%d", &limit); err == nil {
+				i++
+			} else {
+				return fmt.Errorf("unexpected argument: %s", arg)
+			}
 		}
 	}
 
-	fmt.Printf("Chatting about: %s\n", message)
-	response, sources, err := rag.Chat(ctx, message, limit)
+	if message == "" {
+		return fmt.Errorf("message is required")
+	}
+
+	// Initialize ChatHistory for session management
+	var chatHistory *chathistory.ChatHistory
+	if profileConfig.DataDir != "" {
+		chatHistoryPath := profileConfig.DataDir + "/chat_history.db"
+		var err error
+		chatHistory, err = chathistory.New(chatHistoryPath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to initialize chat history: %v\n", err)
+			chatHistory = nil
+		} else {
+			defer chatHistory.Close()
+		}
+	}
+
+	// Handle session management
+	var session *chathistory.ChatSession
+	var chatContext *chathistory.ChatContext
+	
+	if chatHistory != nil {
+		if sessionID == "" {
+			// Create new session
+			var err error
+			session, err = chatHistory.CreateSession(ctx)
+			if err != nil {
+				fmt.Printf("Warning: Failed to create chat session: %v\n", err)
+			} else {
+				sessionID = session.ID
+				fmt.Printf("# 💬 New Chat Session\n\n**Session ID:** `%s`\n\n", sessionID)
+			}
+		} else {
+			// Use existing session
+			var err error
+			session, err = chatHistory.GetSession(ctx, sessionID)
+			if err != nil {
+				return fmt.Errorf("failed to get session %s: %w", sessionID, err)
+			}
+			
+			// Get chat context for the session
+			chatContext, err = chatHistory.GetChatContext(ctx, sessionID)
+			if err != nil {
+				fmt.Printf("Warning: Failed to get chat context: %v\n", err)
+				chatContext = nil
+			}
+			
+			fmt.Printf("# 💬 Continuing Chat Session\n\n**Session ID:** `%s`\n**Title:** %s\n\n", sessionID, session.Title)
+		}
+	}
+
+	// Build contextual message if we have chat history
+	enhancedMessage := message
+	if chatContext != nil {
+		enhancedMessage = buildContextualMessage(message, chatContext)
+	}
+
+	fmt.Printf("**You:** %s\n\n", message)
+	
+	// Store user message in history
+	if chatHistory != nil && sessionID != "" {
+		_, err := chatHistory.AddMessage(ctx, sessionID, "user", message)
+		if err != nil {
+			fmt.Printf("Warning: Failed to store user message: %v\n", err)
+		}
+	}
+
+	// Generate response
+	response, sources, err := rag.Chat(ctx, enhancedMessage, limit)
 	if err != nil {
 		return fmt.Errorf("failed to chat: %w", err)
 	}
 
-	fmt.Printf("\n🤖 Response:\n%s\n\n", response)
+	// Store assistant response in history
+	if chatHistory != nil && sessionID != "" {
+		_, err := chatHistory.AddMessage(ctx, sessionID, "assistant", response)
+		if err != nil {
+			fmt.Printf("Warning: Failed to store assistant response: %v\n", err)
+		}
+	}
+
+	fmt.Printf("**🤖 Assistant:**\n\n%s\n\n", response)
 
 	if len(sources) > 0 {
-		fmt.Printf("📚 Sources (%d):\n", len(sources))
+		fmt.Printf("## 📚 Sources (%d)\n\n", len(sources))
 		for i, source := range sources {
-			fmt.Printf("%d. %s (Score: %.4f)\n", i+1, source.ID, source.Score)
+			fmt.Printf("%d. **%s** (Score: %.4f)\n", i+1, source.ID, source.Score)
 			fmt.Printf("   %s\n\n", truncateText(source.Text, 200))
 		}
 	}
 
 	return nil
+}
+
+// buildContextualMessage combines the current message with previous chat context
+func buildContextualMessage(currentMessage string, chatContext *chathistory.ChatContext) string {
+	if chatContext == nil || len(chatContext.Messages) == 0 {
+		return currentMessage
+	}
+
+	var contextParts []string
+
+	// Add compacted history if available
+	if chatContext.CompactedHistory != nil {
+		contextParts = append(contextParts, "Previous conversation summary: "+chatContext.CompactedHistory.CompactedContent)
+	}
+
+	// Add recent message history
+	recentMessages := chatContext.Messages
+	if len(recentMessages) > 6 { // Limit to last 6 messages (3 exchanges)
+		recentMessages = recentMessages[len(recentMessages)-6:]
+	}
+
+	if len(recentMessages) > 0 {
+		var messageHistory strings.Builder
+		messageHistory.WriteString("Recent conversation:\n")
+		for _, msg := range recentMessages {
+			messageHistory.WriteString(fmt.Sprintf("%s: %s\n", strings.Title(msg.Role), msg.Content))
+		}
+		contextParts = append(contextParts, messageHistory.String())
+	}
+
+	if len(contextParts) > 0 {
+		return fmt.Sprintf("Context:\n%s\n\nCurrent question: %s", strings.Join(contextParts, "\n\n"), currentMessage)
+	}
+
+	return currentMessage
 }
 
 func handleDocuments(ctx context.Context, rag *lilrag.LilRag, args []string) error {
@@ -732,12 +871,16 @@ func printUsage() {
 	fmt.Println("Commands:")
 	fmt.Println("  index [id] <text|file|->     Index text, file, or stdin (ID optional, auto-generated if not provided)")
 	fmt.Println("  search <query> [limit]       Search for similar text (default limit: 10)")
-	fmt.Println("  chat <message> [limit]       Interactive chat with RAG context (default limit: 5)")
+	fmt.Println("  chat <message> [options]     Interactive chat with RAG context and session support")
 	fmt.Println("  documents                    List all indexed documents")
 	fmt.Println("  delete <id> [--force]        Delete a document by ID")
 	fmt.Println("  health                       Check system health status")
 	fmt.Println("  config <init|show|set>       Manage user profile configuration")
 	fmt.Println("  reset [--force]              Delete database and all indexed data")
+	fmt.Println("")
+	fmt.Println("Chat Options:")
+	fmt.Println("  --session, -s <id>           Continue existing chat session")
+	fmt.Println("  --limit, -l <number>         Limit number of source documents (default: 5)")
 	fmt.Println("")
 	fmt.Println("Flags:")
 	fmt.Println("  -db string           Database path (overrides profile config)")
@@ -784,7 +927,9 @@ func printUsage() {
 	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin")
 	fmt.Println("  echo \"Hello world\" | lil-rag index doc3 -  # Explicit ID from stdin")
 	fmt.Println("  lil-rag search \"hello\" 5")
-	fmt.Println("  lil-rag chat \"What is machine learning?\" 3")
+	fmt.Println("  lil-rag chat \"What is machine learning?\"      # Start new chat session")
+	fmt.Println("  lil-rag chat \"Tell me more\" --session <id>   # Continue existing session")
+	fmt.Println("  lil-rag chat \"How does AI work?\" --limit 3   # Limit sources to 3")
 	fmt.Println("  lil-rag documents               # List all documents")
 	fmt.Println("  lil-rag delete doc1 --force     # Delete document")
 	fmt.Println("  lil-rag health                  # Check system health")
