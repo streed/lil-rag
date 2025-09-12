@@ -23,7 +23,9 @@ func (cp *CSVParser) Parse(filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open CSV file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close() // Ignore close errors in defer
+	}()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
@@ -69,7 +71,9 @@ func (cp *CSVParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open CSV file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close() // Ignore close errors in defer
+	}()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()

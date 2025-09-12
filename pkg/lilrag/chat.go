@@ -125,7 +125,9 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 	if err != nil {
 		return "", fmt.Errorf("failed to send chat request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() // Ignore close errors in defer
+	}()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
@@ -213,7 +215,9 @@ func (c *OllamaChatClient) TestConnection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to Ollama server: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() // Ignore close errors in defer
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ollama server returned status %d", resp.StatusCode)
@@ -328,7 +332,9 @@ Extract the subject matter only. Respond with ONLY the subject-focused query ter
 		metrics.RecordQueryOptimization(optimizationDuration, false)
 		return userQuery, fmt.Errorf("failed to send query optimization request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() // Ignore close errors in defer
+	}()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
