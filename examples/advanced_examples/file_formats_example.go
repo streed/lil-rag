@@ -13,7 +13,7 @@ import (
 
 // This example demonstrates lil-rag's multi-format document support:
 // - PDF parsing and OCR
-// - DOCX document processing  
+// - DOCX document processing
 // - XLSX spreadsheet parsing
 // - HTML content extraction
 // - CSV data processing
@@ -31,9 +31,9 @@ func main() {
 		DatabasePath:   "file_formats_example.db",
 		DataDir:        "./data_formats",
 		OllamaURL:      "http://localhost:11434",
-		Model:          "nomic-embed-text",        // Embedding model
-		ChatModel:      "llama3.2:3b",            // Chat model for conversations
-		VisionModel:    "llama3.2-vision",        // Vision model for image OCR
+		Model:          "nomic-embed-text", // Embedding model
+		ChatModel:      "llama3.2:3b",      // Chat model for conversations
+		VisionModel:    "llama3.2-vision",  // Vision model for image OCR
 		VectorSize:     768,
 		TimeoutSeconds: 30,
 		MaxTokens:      256,  // Optimal chunk size for most content
@@ -67,10 +67,10 @@ func main() {
 
 	// Also test with programmatically created content
 	sampleDocuments := []struct {
-		id       string
-		content  string
-		docType  string
-		format   string
+		id      string
+		content string
+		docType string
+		format  string
 	}{
 		{
 			"html_doc",
@@ -101,12 +101,12 @@ func main() {
 			fmt.Printf("Processing %s: %s\n", testFile.docType, testFile.filename)
 
 			docID := fmt.Sprintf("file_%s", strings.ReplaceAll(filepath.Base(testFile.filename), ".", "_"))
-			
+
 			if err := rag.IndexFile(ctx, testFile.filename, docID); err != nil {
 				fmt.Printf("  ❌ Failed to index %s: %v\n", testFile.filename, err)
 			} else {
 				fmt.Printf("  ✅ Successfully indexed %s\n", filepath.Base(testFile.filename))
-				
+
 				// Show document info
 				docs, err := rag.ListDocuments(ctx)
 				if err == nil {
@@ -135,7 +135,7 @@ func main() {
 
 	for _, doc := range sampleDocuments {
 		fmt.Printf("Processing %s (%s format)\n", doc.docType, doc.format)
-		
+
 		if err := rag.Index(ctx, doc.content, doc.id); err != nil {
 			fmt.Printf("  ❌ Failed to index %s: %v\n", doc.id, err)
 		} else {
@@ -161,7 +161,7 @@ func main() {
 	for _, sq := range searchQueries {
 		fmt.Printf("Query: %s\n", sq.query)
 		fmt.Printf("Context: %s\n", sq.description)
-		
+
 		results, err := rag.Search(ctx, sq.query, 3)
 		if err != nil {
 			fmt.Printf("  ❌ Search failed: %v\n", err)
@@ -189,12 +189,12 @@ func main() {
 		fmt.Printf("❌ Failed to list documents: %v\n", err)
 	} else {
 		fmt.Printf("Total documents indexed: %d\n\n", len(docs))
-		
+
 		for _, doc := range docs {
 			fmt.Printf("📄 Document: %s\n", doc.ID)
 			fmt.Printf("   Chunks: %d\n", doc.ChunkCount)
 			fmt.Printf("   Size: %d characters\n", len(doc.Text))
-			
+
 			// Determine likely format from content
 			content := doc.Text
 			var format string
@@ -222,9 +222,9 @@ func main() {
 			if err == nil && len(chunks) > 0 {
 				fmt.Printf("Document: %s\n", doc.ID)
 				fmt.Printf("Total chunks: %d\n", len(chunks))
-				
+
 				for i, chunk := range chunks {
-					fmt.Printf("  Chunk %d: %d tokens, %d chars\n", 
+					fmt.Printf("  Chunk %d: %d tokens, %d chars\n",
 						i+1, chunk.TokenCount, len(chunk.Text))
 					if i >= 2 { // Show only first 3 chunks
 						if len(chunks) > 3 {

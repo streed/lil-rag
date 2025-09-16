@@ -74,7 +74,7 @@ func TestOllamaChatClient_GenerateResponseStreaming(t *testing.T) {
 	// Track streaming chunks
 	var receivedChunks []string
 	var doneReceived bool
-	
+
 	handler := func(chunk string, done bool) error {
 		receivedChunks = append(receivedChunks, chunk)
 		if done {
@@ -86,7 +86,7 @@ func TestOllamaChatClient_GenerateResponseStreaming(t *testing.T) {
 	// Test streaming
 	ctx := context.Background()
 	err := client.GenerateResponseStreaming(ctx, "test message", nil, handler)
-	
+
 	if err != nil {
 		t.Fatalf("GenerateResponseStreaming failed: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestOllamaChatClient_GenerateResponseStreaming_Error(t *testing.T) {
 
 	ctx := context.Background()
 	err := client.GenerateResponseStreaming(ctx, "test message", nil, handler)
-	
+
 	if err == nil {
 		t.Error("Expected error for server failure")
 	}
@@ -160,7 +160,7 @@ func TestOllamaChatClient_GenerateResponseStreaming_HandlerError(t *testing.T) {
 
 	ctx := context.Background()
 	err := client.GenerateResponseStreaming(ctx, "test message", nil, handler)
-	
+
 	if err == nil {
 		t.Error("Expected error from handler")
 	}

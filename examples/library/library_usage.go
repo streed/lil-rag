@@ -12,7 +12,7 @@ import (
 // This example demonstrates comprehensive library usage of lil-rag:
 // - Manual configuration setup
 // - Builder pattern with configuration templates
-// - Custom parsers and chunking strategies  
+// - Custom parsers and chunking strategies
 // - Document indexing and management
 // - Advanced search capabilities
 // - Chat functionality with RAG context
@@ -33,7 +33,7 @@ func main() {
 		DatabasePath:   "library_example.db",
 		DataDir:        "./data_library",
 		OllamaURL:      "http://localhost:11434",
-		Model:          "nomic-embed-text",  // Embedding model
+		Model:          "nomic-embed-text", // Embedding model
 		ChatModel:      "llama3.2:3b",      // Chat model for conversations
 		VisionModel:    "llama3.2-vision",  // Vision model for images
 		VectorSize:     768,
@@ -59,8 +59,8 @@ func main() {
 	fastBuilder.WithDatabase("fast_library_example.db", 384).
 		WithDataDir("./data_fast").
 		WithOllama("http://localhost:11434", "all-MiniLM-L6-v2", 30).
-		WithChunking(128, 19).     // Small chunks for speed
-		WithMetrics(true)          // Enable metrics collection
+		WithChunking(128, 19). // Small chunks for speed
+		WithMetrics(true)      // Enable metrics collection
 
 	fmt.Printf("   Optimized for: Speed and precision\n")
 	fmt.Printf("   Chunk size: 128 tokens (small for fast processing)\n")
@@ -72,7 +72,7 @@ func main() {
 	contextBuilder.WithDatabase("contextual_library_example.db", 768).
 		WithDataDir("./data_contextual").
 		WithOllama("http://localhost:11434", "nomic-embed-text", 30).
-		WithChunking(512, 77).     // Large chunks for context
+		WithChunking(512, 77). // Large chunks for context
 		WithMetrics(true)
 
 	fmt.Printf("   Optimized for: Context preservation\n")
@@ -214,7 +214,7 @@ func main() {
 	} else {
 		fmt.Printf("Total documents: %d\n", len(docs))
 		for i, doc := range docs {
-			fmt.Printf("  %d. %s (%d chunks)\n", 
+			fmt.Printf("  %d. %s (%d chunks)\n",
 				i+1, doc.ID, doc.ChunkCount)
 		}
 	}
@@ -224,14 +224,14 @@ func main() {
 	if len(docs) > 0 {
 		docID := docs[0].ID
 		fmt.Printf("📄 Document Details for '%s':\n", docID)
-		
+
 		chunks, err := rag.GetDocumentChunks(ctx, docID)
 		if err != nil {
 			fmt.Printf("❌ Failed to get chunks: %v\n", err)
 		} else {
 			fmt.Printf("Chunks: %d\n", len(chunks))
 			for i, chunk := range chunks {
-				fmt.Printf("  Chunk %d: %d tokens\n", 
+				fmt.Printf("  Chunk %d: %d tokens\n",
 					i+1, chunk.TokenCount)
 				if i >= 2 { // Show only first 3 chunks
 					if len(chunks) > 3 {
@@ -257,7 +257,7 @@ func main() {
 
 	for i, query := range chatQueries {
 		fmt.Printf("💬 Chat %d: %s\n", i+1, query)
-		
+
 		response, sources, err := rag.Chat(ctx, query, 3)
 		if err != nil {
 			fmt.Printf("❌ Chat failed: %v\n", err)
@@ -314,7 +314,7 @@ func main() {
 	fmt.Printf("  Database: %s\n", config.DatabasePath)
 	fmt.Printf("  Data Directory: %s\n", config.DataDir)
 	fmt.Printf("  Total Documents: %d\n", len(docs))
-	
+
 	if len(docs) > 0 {
 		totalChunks := 0
 		for _, doc := range docs {
@@ -334,7 +334,7 @@ func main() {
 			fmt.Printf("  ❌ Failed to delete: %v\n", err)
 		} else {
 			fmt.Printf("  ✅ Document deleted successfully\n")
-			
+
 			// Verify deletion
 			newDocs, _ := rag.ListDocuments(ctx)
 			fmt.Printf("  Documents after deletion: %d (was %d)\n", len(newDocs), len(docs))

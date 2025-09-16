@@ -124,8 +124,8 @@ func main() {
 		VisionModel:    profileConfig.Ollama.VisionModel,
 		VectorSize:     profileConfig.Ollama.VectorSize,
 		TimeoutSeconds: profileConfig.Ollama.TimeoutSeconds,
-		MaxTokens:      384,  // Custom chunk size
-		Overlap:        57,   // Custom overlap (15% of MaxTokens)
+		MaxTokens:      384, // Custom chunk size
+		Overlap:        57,  // Custom overlap (15% of MaxTokens)
 		ImageMaxSize:   profileConfig.Ollama.ImageMaxSize,
 	}
 
@@ -152,11 +152,11 @@ func main() {
 				OllamaURL:      profileConfig.Ollama.Endpoint,
 				Model:          "all-MiniLM-L6-v2", // Fast, small model
 				ChatModel:      "llama3.2:3b",      // Smaller chat model
-				VectorSize:     384,                 // Smaller vectors
-				TimeoutSeconds: 15,                  // Shorter timeouts
-				MaxTokens:      128,                 // Small chunks
-				Overlap:        19,                  // Minimal overlap
-				ImageMaxSize:   800,                 // Smaller images
+				VectorSize:     384,                // Smaller vectors
+				TimeoutSeconds: 15,                 // Shorter timeouts
+				MaxTokens:      128,                // Small chunks
+				Overlap:        19,                 // Minimal overlap
+				ImageMaxSize:   800,                // Smaller images
 			},
 		},
 		{
@@ -167,7 +167,7 @@ func main() {
 				DataDir:        "./data_quality",
 				OllamaURL:      profileConfig.Ollama.Endpoint,
 				Model:          "mxbai-embed-large", // High-quality model
-				ChatModel:      "llama3.2:7b",      // Larger chat model
+				ChatModel:      "llama3.2:7b",       // Larger chat model
 				VectorSize:     1024,                // Larger vectors
 				TimeoutSeconds: 60,                  // Longer timeouts
 				MaxTokens:      512,                 // Large chunks
@@ -183,7 +183,7 @@ func main() {
 				DataDir:        "./data_balanced",
 				OllamaURL:      profileConfig.Ollama.Endpoint,
 				Model:          "nomic-embed-text", // Standard model
-				ChatModel:      "llama3.2:3b",     // Standard chat model
+				ChatModel:      "llama3.2:3b",      // Standard chat model
 				VectorSize:     768,                // Standard vectors
 				TimeoutSeconds: 30,                 // Standard timeout
 				MaxTokens:      256,                // Standard chunks
@@ -210,7 +210,7 @@ func main() {
 	fmt.Println("🧪 Testing Balanced Configuration:")
 
 	balancedConfig := performanceConfigs[2].config // Balanced config
-	
+
 	rag, err := lilrag.New(balancedConfig)
 	if err != nil {
 		fmt.Printf("❌ Configuration validation failed: %v\n", err)
@@ -230,12 +230,12 @@ func main() {
 
 	// Test basic functionality
 	testDoc := "Configuration testing document. This demonstrates that the custom configuration is working properly with optimized settings for balanced performance."
-	
+
 	if err := rag.Index(ctx, testDoc, "config_test"); err != nil {
 		fmt.Printf("❌ Indexing test failed: %v\n", err)
 	} else {
 		fmt.Printf("✅ Indexing test passed\n")
-		
+
 		// Test search
 		results, err := rag.Search(ctx, "configuration testing", 1)
 		if err != nil {

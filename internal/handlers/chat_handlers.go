@@ -1200,24 +1200,24 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 	// Create a streaming handler
 	streamHandler := func(chunk string, done bool) error {
 		completeResponse.WriteString(chunk)
-		
+
 		// Send the chunk as SSE
 		chunkData := ChatStreamChunk{
 			Type:    "chunk",
 			Content: chunk,
 			Done:    done,
 		}
-		
+
 		data, err := json.Marshal(chunkData)
 		if err != nil {
 			return fmt.Errorf("failed to marshal chunk: %w", err)
 		}
-		
+
 		_, err = fmt.Fprintf(w, "data: %s\n\n", data)
 		if err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)
 		}
-		
+
 		flusher.Flush()
 		return nil
 	}
@@ -1226,11 +1226,11 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 	var err error
 	searchResults, err = h.rag.ChatStreaming(ctx, enhancedMessage, req.Limit, streamHandler)
 	chatDuration := time.Since(chatStart)
-	
+
 	if err != nil {
 		log.Printf("Streaming chat failed for message '%s': %v", req.Message, err)
 		metrics.RecordChatRequest(chatDuration, false, 0, 0)
-		
+
 		// Send error as SSE
 		errorChunk := ChatStreamChunk{
 			Type:    "error",
@@ -1271,7 +1271,7 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 		RemainingTokens: remainingTokens,
 		HasCompacted:    hasCompacted,
 	}
-	
+
 	data, err := json.Marshal(sourcesChunk)
 	if err != nil {
 		log.Printf("Failed to marshal sources chunk: %v", err)
@@ -1285,7 +1285,7 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 		Type: "done",
 		Done: true,
 	}
-	
+
 	data, err = json.Marshal(doneChunk)
 	if err != nil {
 		log.Printf("Failed to marshal done chunk: %v", err)
