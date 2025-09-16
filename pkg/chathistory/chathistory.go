@@ -186,7 +186,8 @@ func (ch *ChatHistory) GetSessions(ctx context.Context) ([]ChatSession, error) {
 	var sessions []ChatSession
 	for rows.Next() {
 		var session ChatSession
-		err := rows.Scan(&session.ID, &session.Title, &session.CreatedAt, &session.UpdatedAt, &session.TotalTokens, &session.MessageCount)
+		err := rows.Scan(&session.ID, &session.Title, &session.CreatedAt, &session.UpdatedAt,
+			&session.TotalTokens, &session.MessageCount)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan chat session: %w", err)
 		}
@@ -232,7 +233,9 @@ func (ch *ChatHistory) AddMessage(ctx context.Context, sessionID, role, content 
 
 	// Get the next message order for this session
 	var messageOrder int
-	err := ch.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(message_order), -1) + 1 FROM chat_messages WHERE session_id = ?", sessionID).Scan(&messageOrder)
+	err := ch.db.QueryRowContext(ctx,
+		"SELECT COALESCE(MAX(message_order), -1) + 1 FROM chat_messages WHERE session_id = ?",
+		sessionID).Scan(&messageOrder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get next message order: %w", err)
 	}
@@ -252,13 +255,16 @@ func (ch *ChatHistory) AddMessage(ctx context.Context, sessionID, role, content 
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err = ch.db.ExecContext(ctx, query, message.ID, message.SessionID, message.Role, message.Content, message.Tokens, message.CreatedAt, message.MessageOrder)
+	_, err = ch.db.ExecContext(ctx, query, message.ID, message.SessionID, message.Role,
+		message.Content, message.Tokens, message.CreatedAt, message.MessageOrder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add chat message: %w", err)
 	}
 
 	// Update session total tokens and updated_at timestamp
-	_, err = ch.db.ExecContext(ctx, "UPDATE chat_sessions SET total_tokens = total_tokens + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", tokens, sessionID)
+	_, err = ch.db.ExecContext(ctx,
+		"UPDATE chat_sessions SET total_tokens = total_tokens + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		tokens, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update session tokens: %w", err)
 	}
@@ -394,16 +400,20 @@ func (ch *ChatHistory) CompactChatHistory(ctx context.Context, sessionID, compac
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			// Log the rollback error, but don't override the main error
+		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+			// Rollback error is logged but doesn't override the main error
+			_ = rbErr // Explicitly ignore error
 		}
 	}()
 
 	// Insert compaction
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO chat_compactions (id, session_id, compacted_content, original_message_count, original_tokens, compacted_tokens, compacted_at)
+		INSERT INTO chat_compactions (id, session_id, compacted_content, original_message_count, 
+		original_tokens, compacted_tokens, compacted_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, compaction.ID, compaction.SessionID, compaction.CompactedContent, compaction.OriginalMessageCount, compaction.OriginalTokens, compaction.CompactedTokens, compaction.CompactedAt)
+	`, compaction.ID, compaction.SessionID, compaction.CompactedContent,
+		compaction.OriginalMessageCount, compaction.OriginalTokens,
+		compaction.CompactedTokens, compaction.CompactedAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert compaction: %w", err)
 	}
@@ -417,7 +427,9 @@ func (ch *ChatHistory) CompactChatHistory(ctx context.Context, sessionID, compac
 	}
 
 	// Update session token count
-	_, err = tx.ExecContext(ctx, "UPDATE chat_sessions SET total_tokens = total_tokens - ? + ? WHERE id = ?", originalTokens, compactedTokens, sessionID)
+	_, err = tx.ExecContext(ctx,
+		"UPDATE chat_sessions SET total_tokens = total_tokens - ? + ? WHERE id = ?",
+		originalTokens, compactedTokens, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to update session tokens after compaction: %w", err)
 	}

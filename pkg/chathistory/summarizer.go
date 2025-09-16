@@ -41,7 +41,8 @@ func (s *LLMSummarizer) GenerateTitle(ctx context.Context, messages []ChatMessag
 
 	systemPrompt := `You are an expert at creating concise, descriptive titles for chat conversations. 
 
-Your task is to read a conversation and create a single, clear title that captures the main topic or question being discussed.
+Your task is to read a conversation and create a single, clear title that captures the main topic or 
+question being discussed.
 
 Requirements:
 - Maximum 8 words
