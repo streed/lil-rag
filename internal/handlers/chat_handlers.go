@@ -969,7 +969,8 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	log.Printf("Chat request - message: '%s', session: '%s', limit: %d, stream: %v", req.Message, req.SessionID, req.Limit, req.Stream)
+	log.Printf("Chat request - message: '%s', session: '%s', limit: %d, stream: %v",
+		req.Message, req.SessionID, req.Limit, req.Stream)
 
 	// Handle chat history integration
 	var sessionID string
@@ -1033,7 +1034,7 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Check if streaming is requested
 	if req.Stream {
-		h.handleStreamingChat(w, ctx, enhancedMessage, req, sessionID, chatContext, hasCompacted)
+		h.handleStreamingChat(ctx, w, enhancedMessage, req, sessionID, chatContext, hasCompacted)
 		return
 	}
 
@@ -1178,7 +1179,9 @@ func (h *Handler) generateSessionTitle(sessionID, _ string) {
 }
 
 // handleStreamingChat processes streaming chat requests using Server-Sent Events
-func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context, enhancedMessage string, req ChatRequest, sessionID string, chatContext *chathistory.ChatContext, hasCompacted bool) {
+func (h *Handler) handleStreamingChat(ctx context.Context, w http.ResponseWriter,
+	enhancedMessage string, req ChatRequest, sessionID string,
+	chatContext *chathistory.ChatContext, hasCompacted bool) {
 	// Set headers for Server-Sent Events
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -1237,8 +1240,12 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 			Content: "Failed to generate response",
 			Done:    true,
 		}
-		data, _ := json.Marshal(errorChunk)
-		fmt.Fprintf(w, "data: %s\n\n", data)
+		data, marshalErr := json.Marshal(errorChunk)
+		if marshalErr != nil {
+			log.Printf("Failed to marshal error chunk: %v", marshalErr)
+		} else {
+			fmt.Fprintf(w, "data: %s\n\n", data)
+		}
 		flusher.Flush()
 		return
 	}
@@ -1247,9 +1254,9 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 
 	// Store assistant response in history
 	if h.chatHistory != nil && sessionID != "" {
-		_, err := h.chatHistory.AddMessage(ctx, sessionID, "assistant", finalResponse)
-		if err != nil {
-			log.Printf("Failed to store assistant response: %v", err)
+		_, histErr := h.chatHistory.AddMessage(ctx, sessionID, "assistant", finalResponse)
+		if histErr != nil {
+			log.Printf("Failed to store assistant response: %v", histErr)
 		}
 
 		// Generate title after each response to keep it updated
@@ -1296,6 +1303,6 @@ func (h *Handler) handleStreamingChat(w http.ResponseWriter, ctx context.Context
 
 	metrics.RecordChatRequest(chatDuration, true, len(searchResults), len(finalResponse))
 
-	log.Printf("Streaming chat completed successfully - session: %s, sources: %d, response length: %d, remaining tokens: %d",
-		sessionID, len(searchResults), len(finalResponse), remainingTokens)
+	log.Printf("Streaming chat completed successfully - session: %s, sources: %d, response length: %d, "+
+		"remaining tokens: %d", sessionID, len(searchResults), len(finalResponse), remainingTokens)
 }

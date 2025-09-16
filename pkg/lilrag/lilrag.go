@@ -597,7 +597,8 @@ func (m *LilRag) Chat(ctx context.Context, userMessage string, limit int) (strin
 }
 
 // ChatStreaming performs a conversational query using retrieved context with streaming response
-func (m *LilRag) ChatStreaming(ctx context.Context, userMessage string, limit int, handler StreamingChatHandler) ([]SearchResult, error) {
+func (m *LilRag) ChatStreaming(ctx context.Context, userMessage string, limit int,
+	handler StreamingChatHandler) ([]SearchResult, error) {
 	if userMessage == "" {
 		return nil, fmt.Errorf("user message cannot be empty")
 	}
