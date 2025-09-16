@@ -43,6 +43,7 @@ type ChatRequest struct {
 	Message   string `json:"message"`
 	SessionID string `json:"session_id,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
+	Stream    bool   `json:"stream,omitempty"`
 }
 
 type ChatResponse struct {
@@ -52,6 +53,18 @@ type ChatResponse struct {
 	SessionID       string                `json:"session_id"`
 	RemainingTokens int                   `json:"remaining_tokens"`
 	HasCompacted    bool                  `json:"has_compacted"`
+}
+
+// ChatStreamChunk represents a single chunk in a streaming chat response
+type ChatStreamChunk struct {
+	Type            string                `json:"type"` // "chunk", "sources", "metadata", "done"
+	Content         string                `json:"content,omitempty"`
+	Sources         []lilrag.SearchResult `json:"sources,omitempty"`
+	Query           string                `json:"query,omitempty"`
+	SessionID       string                `json:"session_id,omitempty"`
+	RemainingTokens int                   `json:"remaining_tokens,omitempty"`
+	HasCompacted    bool                  `json:"has_compacted,omitempty"`
+	Done            bool                  `json:"done,omitempty"`
 }
 
 type ChatSessionsResponse struct {

@@ -596,6 +596,49 @@ func (m *LilRag) Chat(ctx context.Context, userMessage string, limit int) (strin
 	return response, searchResults, nil
 }
 
+// ChatStreaming performs a conversational query using retrieved context with streaming response
+func (m *LilRag) ChatStreaming(ctx context.Context, userMessage string, limit int,
+	handler StreamingChatHandler) ([]SearchResult, error) {
+	if userMessage == "" {
+		return nil, fmt.Errorf("user message cannot be empty")
+	}
+	if limit <= 0 {
+		limit = 5 // Default limit for chat context
+	}
+	if m.chatClient == nil {
+		return nil, fmt.Errorf("chat client not initialized")
+	}
+
+	// First, optimize the query using the LLM for better semantic search
+	optimizedQuery, err := m.chatClient.OptimizeQuery(ctx, userMessage)
+	if err != nil {
+		// Log the error but continue with the original query
+		fmt.Printf("Warning: Query optimization failed, using original query: %v\n", err)
+		optimizedQuery = userMessage
+	}
+
+	// Log the query transformation for visibility
+	if optimizedQuery != userMessage {
+		fmt.Printf("Query optimization: '%s' → '%s'\n", userMessage, optimizedQuery)
+	} else {
+		fmt.Printf("Query optimization: No change needed for '%s'\n", userMessage)
+	}
+
+	// Search for relevant documents using the optimized query
+	searchResults, err := m.Search(ctx, optimizedQuery, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search documents: %w", err)
+	}
+
+	// Generate streaming chat response using the original user message and search results as context
+	err = m.chatClient.GenerateResponseStreaming(ctx, userMessage, searchResults, handler)
+	if err != nil {
+		return searchResults, fmt.Errorf("failed to generate streaming chat response: %w", err)
+	}
+
+	return searchResults, nil
+}
+
 func (m *LilRag) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {
 	return m.storage.ListDocuments(ctx)
 }

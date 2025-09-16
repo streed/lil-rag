@@ -72,6 +72,9 @@ type ChatResponse struct {
 	Done      bool        `json:"done"`
 }
 
+// StreamingChatHandler is a function type for handling streaming chat chunks
+type StreamingChatHandler func(chunk string, done bool) error
+
 // GenerateResponse generates a chat response using the provided context and user message
 func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage string,
 	searchResults []SearchResult) (string, error) {
@@ -148,6 +151,105 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 	metrics.RecordChatOutputTokens(c.model, chatResp.Message.Content)
 
 	return chatResp.Message.Content, nil
+}
+
+// GenerateResponseStreaming generates a chat response using streaming API with provided context and user message
+func (c *OllamaChatClient) GenerateResponseStreaming(ctx context.Context, userMessage string,
+	searchResults []SearchResult, handler StreamingChatHandler) error {
+	// Create system prompt with search results context
+	systemPrompt := c.createSystemPrompt(searchResults)
+
+	// Record input tokens
+	metrics.RecordChatInputTokens(c.model, systemPrompt)
+	metrics.RecordChatInputTokens(c.model, userMessage)
+
+	// Build chat messages
+	messages := []ChatMessage{
+		{
+			Role:    "system",
+			Content: systemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: userMessage,
+		},
+	}
+
+	// Create request with streaming enabled
+	requestBody := ChatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Stream:   true, // Enable streaming
+		Options: &ChatOptions{
+			Temperature: 0.7,
+			TopP:        0.9,
+		},
+	}
+
+	// Marshal request
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal chat request: %w", err)
+	}
+
+	// Create HTTP request
+	url := fmt.Sprintf("%s/api/chat", c.baseURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send chat request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("ollama server returned status %d", resp.StatusCode)
+		}
+		return fmt.Errorf("chat request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Process streaming response
+	decoder := json.NewDecoder(resp.Body)
+	var completeResponse strings.Builder
+
+	for {
+		var chatResp ChatResponse
+		if err := decoder.Decode(&chatResp); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to decode streaming chat response: %w", err)
+		}
+
+		// Add this chunk to the complete response
+		chunk := chatResp.Message.Content
+		completeResponse.WriteString(chunk)
+
+		// Call the handler with the chunk
+		if err := handler(chunk, chatResp.Done); err != nil {
+			return fmt.Errorf("handler error: %w", err)
+		}
+
+		// Break if this is the final chunk
+		if chatResp.Done {
+			break
+		}
+	}
+
+	// Record output tokens for the complete response
+	finalResponse := completeResponse.String()
+	metrics.RecordChatOutputTokens(c.model, finalResponse)
+
+	return nil
 }
 
 // createSystemPrompt creates a system prompt with search results context

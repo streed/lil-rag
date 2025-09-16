@@ -879,13 +879,15 @@
         showTyping();
 
         try {
+            // Try streaming first
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: message,
                     session_id: currentSession,
-                    limit: 5
+                    limit: 5,
+                    stream: true
                 })
             });
 
@@ -893,26 +895,29 @@
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const data = await response.json();
-            
-            // Update session ID if this was a new chat
-            if (data.session_id && data.session_id !== currentSession) {
-                currentSession = data.session_id;
-                await loadChatSessions(); // Reload to show new session
+            // Check if response is streaming (text/event-stream)
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/event-stream')) {
+                // Handle streaming response
+                await handleStreamingResponse(response);
+            } else {
+                // Handle non-streaming response (fallback)
+                const data = await response.json();
+                handleNonStreamingResponse(data);
             }
-            
-            // Update token counter
-            updateTokenCounter(data.remaining_tokens, data.has_compacted);
-
-            // Add assistant response
-            addMessage(data.response, 'assistant', data.sources);
             
             // Start polling for title updates after sending a message
             startTitlePolling();
 
         } catch (error) {
             console.error('Error sending message:', error);
-            addMessage('Sorry, I encountered an error processing your request. Please try again.', 'assistant');
+            // Fallback to non-streaming mode
+            try {
+                await sendNonStreamingMessage(message);
+            } catch (fallbackError) {
+                console.error('Fallback also failed:', fallbackError);
+                addMessage('Sorry, I encountered an error processing your request. Please try again.', 'assistant');
+            }
         } finally {
             hideTyping();
             messageInput.disabled = false;
@@ -1030,6 +1035,202 @@
             console.error('Error deleting chat session:', error);
             alert('Failed to delete chat session');
         }
+    }
+
+    // Handle streaming response using Server-Sent Events
+    async function handleStreamingResponse(response) {
+        hideTyping(); // Hide typing indicator first
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentMessageElement = null;
+        let currentMessageContent = '';
+        let sources = null;
+        let metadata = {};
+
+        // Create an empty assistant message element for streaming content
+        currentMessageElement = createStreamingMessage();
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete lines
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.slice(6); // Remove 'data: ' prefix
+                        if (jsonStr.trim() === '') continue;
+
+                        try {
+                            const chunk = JSON.parse(jsonStr);
+                            
+                            switch (chunk.type) {
+                                case 'chunk':
+                                    if (chunk.content) {
+                                        currentMessageContent += chunk.content;
+                                        updateStreamingMessage(currentMessageElement, currentMessageContent);
+                                    }
+                                    break;
+                                    
+                                case 'sources':
+                                    sources = chunk.sources;
+                                    if (chunk.session_id && chunk.session_id !== currentSession) {
+                                        currentSession = chunk.session_id;
+                                        await loadChatSessions();
+                                    }
+                                    if (chunk.remaining_tokens !== undefined) {
+                                        updateTokenCounter(chunk.remaining_tokens, chunk.has_compacted);
+                                    }
+                                    metadata = chunk;
+                                    break;
+                                    
+                                case 'done':
+                                    // Finalize the message with sources
+                                    finalizeStreamingMessage(currentMessageElement, currentMessageContent, sources);
+                                    return;
+                                    
+                                case 'error':
+                                    throw new Error(chunk.content || 'Streaming error');
+                            }
+                        } catch (parseError) {
+                            console.error('Error parsing SSE data:', parseError, jsonStr);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Streaming error:', error);
+            if (currentMessageElement) {
+                currentMessageElement.innerHTML = '<p style="color: red;">Error occurred during streaming</p>';
+            }
+            throw error;
+        }
+    }
+
+    // Create a new streaming message element
+    function createStreamingMessage() {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+        return messageDiv;
+    }
+
+    // Update streaming message content
+    function updateStreamingMessage(messageElement, content) {
+        if (typeof marked !== 'undefined') {
+            messageElement.innerHTML = marked.parse(content);
+        } else {
+            messageElement.innerHTML = escapeHtml(content);
+        }
+        
+        // Style document references in square brackets
+        let html = messageElement.innerHTML;
+        html = html.replace(/\[([a-zA-Z0-9_-]+)\]/g, function(match, docId) {
+            return '<a href="/view/' + docId + 
+                '" class="doc-ref-link" target="_blank">[' + docId + ']</a>';
+        });
+        messageElement.innerHTML = html;
+        
+        scrollToBottom();
+    }
+
+    // Finalize streaming message with sources
+    function finalizeStreamingMessage(messageElement, content, sources) {
+        let html = (typeof marked !== 'undefined') ? marked.parse(content) : escapeHtml(content);
+        
+        // Style document references in square brackets
+        html = html.replace(/\[([a-zA-Z0-9_-]+)\]/g, function(match, docId) {
+            let chunkParam = '';
+            if (sources) {
+                const source = sources.find(s => s.ID === docId);
+                if (source && source.Metadata && source.Metadata.chunk_index !== undefined) {
+                    chunkParam = '?highlight=' + source.Metadata.chunk_index;
+                }
+            }
+            return '<a href="/view/' + docId + chunkParam + 
+                '" class="doc-ref-link" target="_blank">[' + docId + ']</a>';
+        });
+        
+        // Add sources section if available
+        if (sources && sources.length > 0) {
+            html += '<div class="sources-section">';
+            html += '<div class="sources-header">📚 Sources (' + sources.length + '):</div>';
+            html += '<div class="sources-compact">';
+            sources.forEach((source, index) => {
+                const sourceId = 'source-' + Date.now() + '-' + index;
+                html += '<button class="source-button" onclick="toggleSource(\'' + sourceId + '\')">';
+                html += source.ID + ' (' + (source.Score * 100).toFixed(1) + '%)';
+                html += '</button>';
+            });
+            html += '</div>';
+            
+            sources.forEach((source, index) => {
+                const sourceId = 'source-' + Date.now() + '-' + index;
+                html += '<div id="' + sourceId + '" class="source-expandable" style="display: none;">';
+                html += '<div class="source-content">';
+                html += '<div class="source-header">';
+                html += '<span class="source-id">' + source.ID + '</span>';
+                html += '<span class="source-score">' + (source.Score * 100).toFixed(1) + '% relevance</span>';
+                const chunkParam = source.Metadata && source.Metadata.chunk_index !== undefined ? 
+                    '?highlight=' + source.Metadata.chunk_index : '';
+                html += '<a href="/view/' + source.ID + chunkParam + 
+                    '" class="view-document-link" target="_blank">📄 View Document</a>';
+                html += '</div>';
+                html += '<div class="source-text">' + source.Text + '</div>';
+                html += '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        
+        messageElement.innerHTML = html;
+        scrollToBottom();
+    }
+
+    // Handle non-streaming response (fallback)
+    function handleNonStreamingResponse(data) {
+        hideTyping();
+        
+        // Update session ID if this was a new chat
+        if (data.session_id && data.session_id !== currentSession) {
+            currentSession = data.session_id;
+            loadChatSessions(); // Reload to show new session
+        }
+        
+        // Update token counter
+        updateTokenCounter(data.remaining_tokens, data.has_compacted);
+
+        // Add assistant response
+        addMessage(data.response, 'assistant', data.sources);
+    }
+
+    // Send non-streaming message (fallback)
+    async function sendNonStreamingMessage(message) {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                session_id: currentSession,
+                limit: 5,
+                stream: false // Explicitly request non-streaming
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        handleNonStreamingResponse(data);
     }
 
     // Focus input on load

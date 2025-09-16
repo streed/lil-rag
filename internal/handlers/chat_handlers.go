@@ -11,6 +11,7 @@ import (
 
 	"lil-rag/internal/theme"
 	"lil-rag/pkg/chathistory"
+	"lil-rag/pkg/lilrag"
 	"lil-rag/pkg/metrics"
 )
 
@@ -968,7 +969,8 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	log.Printf("Chat request - message: '%s', session: '%s', limit: %d", req.Message, req.SessionID, req.Limit)
+	log.Printf("Chat request - message: '%s', session: '%s', limit: %d, stream: %v",
+		req.Message, req.SessionID, req.Limit, req.Stream)
 
 	// Handle chat history integration
 	var sessionID string
@@ -1029,6 +1031,12 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Generate enhanced message with context
 	enhancedMessage := h.buildContextualMessage(req.Message, chatContext)
+
+	// Check if streaming is requested
+	if req.Stream {
+		h.handleStreamingChat(ctx, w, enhancedMessage, req, sessionID, chatContext, hasCompacted)
+		return
+	}
 
 	// Generate LLM response using retrieved documents as context
 	chatStart := time.Now()
@@ -1172,4 +1180,133 @@ func (h *Handler) generateSessionTitle(sessionID, _ string) {
 	if err != nil {
 		log.Printf("Failed to update session title: %v", err)
 	}
+}
+
+// handleStreamingChat processes streaming chat requests using Server-Sent Events
+func (h *Handler) handleStreamingChat(ctx context.Context, w http.ResponseWriter,
+	enhancedMessage string, req ChatRequest, sessionID string,
+	chatContext *chathistory.ChatContext, hasCompacted bool) {
+	// Set headers for Server-Sent Events
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
+
+	// Send initial metadata with session info
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.writeError(w, http.StatusInternalServerError, "streaming not supported", "")
+		return
+	}
+
+	chatStart := time.Now()
+	var completeResponse strings.Builder
+	var searchResults []lilrag.SearchResult
+
+	// Create a streaming handler
+	streamHandler := func(chunk string, done bool) error {
+		completeResponse.WriteString(chunk)
+
+		// Send the chunk as SSE
+		chunkData := ChatStreamChunk{
+			Type:    "chunk",
+			Content: chunk,
+			Done:    done,
+		}
+
+		data, err := json.Marshal(chunkData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal chunk: %w", err)
+		}
+
+		_, err = fmt.Fprintf(w, "data: %s\n\n", data)
+		if err != nil {
+			return fmt.Errorf("failed to write chunk: %w", err)
+		}
+
+		flusher.Flush()
+		return nil
+	}
+
+	// Generate streaming response
+	var err error
+	searchResults, err = h.rag.ChatStreaming(ctx, enhancedMessage, req.Limit, streamHandler)
+	chatDuration := time.Since(chatStart)
+
+	if err != nil {
+		log.Printf("Streaming chat failed for message '%s': %v", req.Message, err)
+		metrics.RecordChatRequest(chatDuration, false, 0, 0)
+
+		// Send error as SSE
+		errorChunk := ChatStreamChunk{
+			Type:    "error",
+			Content: "Failed to generate response",
+			Done:    true,
+		}
+		data, marshalErr := json.Marshal(errorChunk)
+		if marshalErr != nil {
+			log.Printf("Failed to marshal error chunk: %v", marshalErr)
+		} else {
+			fmt.Fprintf(w, "data: %s\n\n", data)
+		}
+		flusher.Flush()
+		return
+	}
+
+	finalResponse := completeResponse.String()
+
+	// Store assistant response in history
+	if h.chatHistory != nil && sessionID != "" {
+		_, histErr := h.chatHistory.AddMessage(ctx, sessionID, "assistant", finalResponse)
+		if histErr != nil {
+			log.Printf("Failed to store assistant response: %v", histErr)
+		}
+
+		// Generate title after each response to keep it updated
+		go h.generateSessionTitle(sessionID, req.Message)
+	}
+
+	// Calculate remaining tokens
+	remainingTokens := chathistory.MaxContextTokens
+	if chatContext != nil {
+		remainingTokens = chatContext.RemainingTokens
+	}
+
+	// Send sources and metadata
+	sourcesChunk := ChatStreamChunk{
+		Type:            "sources",
+		Sources:         searchResults,
+		Query:           req.Message,
+		SessionID:       sessionID,
+		RemainingTokens: remainingTokens,
+		HasCompacted:    hasCompacted,
+	}
+
+	data, err := json.Marshal(sourcesChunk)
+	if err != nil {
+		log.Printf("Failed to marshal sources chunk: %v", err)
+	} else {
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	// Send final done message
+	doneChunk := ChatStreamChunk{
+		Type: "done",
+		Done: true,
+	}
+
+	data, err = json.Marshal(doneChunk)
+	if err != nil {
+		log.Printf("Failed to marshal done chunk: %v", err)
+	} else {
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	metrics.RecordChatRequest(chatDuration, true, len(searchResults), len(finalResponse))
+
+	log.Printf("Streaming chat completed successfully - session: %s, sources: %d, response length: %d, "+
+		"remaining tokens: %d", sessionID, len(searchResults), len(finalResponse), remainingTokens)
 }
