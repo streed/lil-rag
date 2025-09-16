@@ -323,8 +323,9 @@ func (a *Auth) DeleteUser(ctx context.Context, username string) error {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			// Log the rollback error, but don't override the main error
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+			// Rollback failed, but we don't want to override the main error
+			_ = rollbackErr
 		}
 	}()
 

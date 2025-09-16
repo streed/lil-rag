@@ -152,14 +152,17 @@ func (c *OllamaChatClient) GenerateResponse(ctx context.Context, userMessage str
 func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) string {
 	var prompt strings.Builder
 
-	prompt.WriteString("You are a helpful AI assistant that answers questions based strictly on provided document context. ")
+	prompt.WriteString("You are a helpful AI assistant that answers questions based strictly on " +
+		"provided document context. ")
 
 	if len(searchResults) == 0 {
 		prompt.WriteString("No relevant documents were found in the knowledge base. ")
-		prompt.WriteString("You MUST respond with: \"I was unable to find any relevant information in the knowledge base to answer your question. ")
+		prompt.WriteString("You MUST respond with: \"I was unable to find any relevant information in " +
+			"the knowledge base to answer your question. ")
 		prompt.WriteString("This could mean: (1) the information isn't available in the indexed documents, ")
 		prompt.WriteString("(2) your query might need to be rephrased with different keywords, or ")
-		prompt.WriteString("(3) additional documents containing this information may need to be added to the knowledge base.\"")
+		prompt.WriteString("(3) additional documents containing this information may need to be " +
+			"added to the knowledge base.\"")
 		return prompt.String()
 	}
 
@@ -172,8 +175,10 @@ func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) stri
 
 	prompt.WriteString("CITATION FORMAT:\n")
 	prompt.WriteString("- Use [document-id] immediately after each fact or claim\n")
-	prompt.WriteString("- Example: \"The system uses vector embeddings [tech-overview] to enable semantic search [search-guide].\"\n")
-	prompt.WriteString("- Multiple sources: \"This approach improves accuracy [study-2023] and performance [benchmark-results].\"\n\n")
+	prompt.WriteString("- Example: \"The system uses vector embeddings [tech-overview] to enable " +
+		"semantic search [search-guide].\"\n")
+	prompt.WriteString("- Multiple sources: \"This approach improves accuracy [study-2023] and " +
+		"performance [benchmark-results].\"\n\n")
 
 	prompt.WriteString("RELEVANT DOCUMENTS:\n\n")
 
@@ -193,9 +198,14 @@ func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) stri
 
 	prompt.WriteString("RESPONSE REQUIREMENTS:\n")
 	prompt.WriteString("- Provide a comprehensive answer if the documents contain sufficient information\n")
-	prompt.WriteString("- If information is incomplete, clearly state: \"Based on the available documents, I can provide partial information: [your answer with citations]. However, the documents don't contain information about [specific missing aspects].\"\n")
-	prompt.WriteString("- If the documents are not relevant to the question, state: \"The available documents don't contain relevant information to answer your question about [topic]. You may need to add more specific documents or rephrase your query.\"\n")
-	prompt.WriteString("- Always maintain accuracy over completeness - never guess or extrapolate beyond what's explicitly stated in the documents")
+	prompt.WriteString("- If information is incomplete, clearly state: \"Based on the available documents, " +
+		"I can provide partial information: [your answer with citations]. However, the documents don't " +
+		"contain information about [specific missing aspects].\"\n")
+	prompt.WriteString("- If the documents are not relevant to the question, state: \"The available " +
+		"documents don't contain relevant information to answer your question about [topic]. You may " +
+		"need to add more specific documents or rephrase your query.\"\n")
+	prompt.WriteString("- Always maintain accuracy over completeness - never guess or extrapolate " +
+		"beyond what's explicitly stated in the documents")
 
 	return prompt.String()
 }
@@ -255,9 +265,11 @@ func (c *OllamaChatClient) OptimizeQuery(ctx context.Context, userQuery string) 
 
 	optimizationStart := time.Now()
 
-	systemPrompt := `You are an expert at identifying the core subject matter in user queries for semantic search optimization.
+	systemPrompt := `You are an expert at identifying the core subject matter in user queries for ` +
+		`semantic search optimization.
 
-Your task is to extract ONLY the main subject, topic, or thing the user is asking about. Ignore all directive language and focus solely on what the query is actually about.
+Your task is to extract ONLY the main subject, topic, or thing the user is asking about. Ignore all ` +
+		`directive language and focus solely on what the query is actually about.
 
 Key principles:
 1. Identify the primary SUBJECT or TOPIC the user wants information about

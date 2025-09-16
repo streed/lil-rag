@@ -16,6 +16,7 @@ linters-settings:
       - unnamedResult
       - hugeParam
       - rangeValCopy
+      - ifElseChain
 
   gocyclo:
     min-complexity: 15
@@ -78,6 +79,9 @@ issues:
     - "G404: Use of weak random number generator"
     # Exclude test files and directories from linting
     - "test_pdfs/.*"
+    # Exclude unused functions that are used in tests
+    - "func.*getOverlapText.*is unused"
+    - "func.*findStartPosition.*is unused"
     
   max-issues-per-linter: 0
   max-same-issues: 0

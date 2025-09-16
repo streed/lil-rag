@@ -642,7 +642,8 @@ func (h *Handler) fallbackDocumentView(
                 contentDiv.innerHTML = '';
                 
                 if (!chunks || chunks.length === 0) {
-                    contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">No content chunks available for this document.</div></div>';
+                    contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">' +
+                        'No content chunks available for this document.</div></div>';
                     return;
                 }
                 
@@ -677,7 +678,8 @@ func (h *Handler) fallbackDocumentView(
                             contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">' + 
                                 escapedContent + '</div></div>';
                         } else {
-                            contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">No content available for this document.</div></div>';
+                            contentDiv.innerHTML = '<div class="chunk"><div class="chunk-text">' +
+                                'No content available for this document.</div></div>';
                         }
                     })
                     .catch(fallbackError => {
@@ -1137,7 +1139,8 @@ func (h *Handler) fallbackImageDocumentView(
                 contentDiv.innerHTML = '';
                 
                 if (!chunks || chunks.length === 0) {
-                    contentDiv.innerHTML = '<div class="ocr-text">No OCR content available for this image document.</div>';
+                    contentDiv.innerHTML = '<div class="ocr-text">' +
+                        'No OCR content available for this image document.</div>';
                     return;
                 }
                 
@@ -1170,7 +1173,8 @@ func (h *Handler) fallbackImageDocumentView(
             })
             .catch(error => {
                 console.error('Error loading OCR content:', error);
-                document.getElementById('content').innerHTML = '<div class="ocr-text">Error loading OCR content: ' + error.message + '</div>';
+                document.getElementById('content').innerHTML = '<div class="ocr-text">Error loading OCR content: ' +
+                    error.message + '</div>';
             });
 
         function editChunk(chunkId) {

@@ -1041,7 +1041,8 @@ func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
 
 	case "reset-password":
 		if len(args) != 3 {
-			return fmt.Errorf("auth reset-password requires username and new password: lil-rag auth reset-password <username> <new-password>")
+			return fmt.Errorf("auth reset-password requires username and new password: " +
+				"lil-rag auth reset-password <username> <new-password>")
 		}
 		username := args[1]
 		newPassword := args[2]

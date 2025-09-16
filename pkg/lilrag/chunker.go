@@ -507,11 +507,13 @@ func (tc *TextChunker) splitByWhitespace(text string) []string {
 	return cleanParts
 }
 
+// getOverlapText is a helper function used by tests for contextual overlap
 func (tc *TextChunker) getOverlapText(sentences []string, currentIndex, overlapTokens int) string {
 	// Delegate to contextual overlap with default content type
 	return tc.getContextualOverlap(sentences, currentIndex, overlapTokens, "text")
 }
 
+// findStartPosition is a helper function used by tests for text positioning
 func (tc *TextChunker) findStartPosition(text, sentence string) int {
 	index := strings.Index(text, sentence)
 	if index != -1 {
