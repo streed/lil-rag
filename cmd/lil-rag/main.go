@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -104,7 +105,9 @@ func run() error {
 	if err := rag.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize MiniRag: %w", err)
 	}
-	defer rag.Close()
+	defer func() {
+		_ = rag.Close() // Ignore close errors in defer
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -263,6 +266,17 @@ func handleSearch(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 		return fmt.Errorf("failed to search: %w", err)
 	}
 
+	// Try to render with glow first
+	if isGlowAvailable() {
+		markdown := formatSearchResultsAsMarkdown(query, results)
+		if err := renderWithGlow(markdown); err == nil {
+			return nil
+		}
+		// If glow fails, fall back to plain text
+		fmt.Fprintf(os.Stderr, "Warning: Failed to render with glow, falling back to plain text\n")
+	}
+
+	// Fallback to original plain text output
 	if len(results) == 0 {
 		fmt.Println("No results found.")
 		return nil
@@ -601,6 +615,17 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, _ *config.ProfileConfig
 		return fmt.Errorf("failed to chat: %w", err)
 	}
 
+	// Try to render with glow first
+	if isGlowAvailable() {
+		markdown := formatChatResponseAsMarkdown(message, response, sources)
+		if err := renderWithGlow(markdown); err == nil {
+			return nil
+		}
+		// If glow fails, fall back to plain text
+		fmt.Fprintf(os.Stderr, "Warning: Failed to render with glow, falling back to plain text\n")
+	}
+
+	// Fallback to original plain text output
 	fmt.Printf("\n🤖 Response:\n%s\n\n", response)
 
 	if len(sources) > 0 {
@@ -723,6 +748,93 @@ func truncateText(text string, maxLength int) string {
 	return text[:maxLength] + "..."
 }
 
+// isGlowAvailable checks if the glow command is available on the system
+func isGlowAvailable() bool {
+	_, err := exec.LookPath("glow")
+	return err == nil
+}
+
+// renderWithGlow renders markdown content using glow if available
+func renderWithGlow(markdown string) error {
+	if !isGlowAvailable() {
+		return fmt.Errorf("glow not available")
+	}
+
+	cmd := exec.Command("glow", "-")
+	cmd.Stdin = strings.NewReader(markdown)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+// formatSearchResultsAsMarkdown formats search results as markdown
+func formatSearchResultsAsMarkdown(query string, results []lilrag.SearchResult) string {
+	var md strings.Builder
+
+	md.WriteString("# Search Results\n\n")
+	md.WriteString(fmt.Sprintf("**Query:** %s  \n", query))
+	md.WriteString(fmt.Sprintf("**Results found:** %d\n\n", len(results)))
+
+	if len(results) == 0 {
+		md.WriteString("*No results found.*\n")
+		return md.String()
+	}
+
+	md.WriteString("---\n\n")
+
+	for i, result := range results {
+		matchInfo := ""
+
+		if result.Metadata != nil {
+			// Show information about which part matched
+			if pageNum, ok := result.Metadata["page_number"].(int); ok {
+				matchInfo = fmt.Sprintf(" *(Best match: Page %d)*", pageNum)
+			} else if chunkType, ok := result.Metadata["chunk_type"].(string); ok && chunkType == "pdf_page" {
+				matchInfo = " *(Best match: PDF Page)*"
+			} else if isChunk, ok := result.Metadata["is_chunk"].(bool); ok && isChunk {
+				if chunkIndex, ok := result.Metadata["chunk_index"].(int); ok {
+					matchInfo = fmt.Sprintf(" *(Best match: Chunk %d)*", chunkIndex)
+				}
+			}
+		}
+
+		md.WriteString(fmt.Sprintf("## %d. %s%s\n\n", i+1, result.ID, matchInfo))
+		md.WriteString(fmt.Sprintf("**Score:** %.4f\n\n", result.Score))
+		md.WriteString(fmt.Sprintf("```\n%s\n```\n\n", result.Text))
+
+		if i < len(results)-1 {
+			md.WriteString("---\n\n")
+		}
+	}
+
+	return md.String()
+}
+
+// formatChatResponseAsMarkdown formats chat response and sources as markdown
+func formatChatResponseAsMarkdown(message, response string, sources []lilrag.SearchResult) string {
+	var md strings.Builder
+
+	md.WriteString("# Chat Response\n\n")
+	md.WriteString(fmt.Sprintf("**Your message:** %s\n\n", message))
+	md.WriteString("---\n\n")
+	md.WriteString(fmt.Sprintf("## 🤖 Response\n\n%s\n\n", response))
+
+	if len(sources) > 0 {
+		md.WriteString("---\n\n")
+		md.WriteString(fmt.Sprintf("## 📚 Sources (%d)\n\n", len(sources)))
+
+		for i, source := range sources {
+			md.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, source.ID))
+			md.WriteString(fmt.Sprintf("**Score:** %.4f\n\n", source.Score))
+			truncatedText := truncateText(source.Text, 200)
+			md.WriteString(fmt.Sprintf("```\n%s\n```\n\n", truncatedText))
+		}
+	}
+
+	return md.String()
+}
+
 func printUsage() {
 	fmt.Printf("LilRag - A simple RAG system with SQLite and Ollama (version %s)\n", version)
 	fmt.Println("")
@@ -817,7 +929,9 @@ func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize auth system: %w", err)
 	}
-	defer authSystem.Close()
+	defer func() {
+		_ = authSystem.Close() // Ignore close errors in defer
+	}()
 
 	command := args[0]
 	ctx := context.Background()
@@ -892,7 +1006,8 @@ func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
 
 	case "reset-password":
 		if len(args) != 3 {
-			return fmt.Errorf("auth reset-password requires username and new password: lil-rag auth reset-password <username> <new-password>")
+			return fmt.Errorf("auth reset-password requires username and new password: " +
+				"lil-rag auth reset-password <username> <new-password>")
 		}
 		username := args[1]
 		newPassword := args[2]

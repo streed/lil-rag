@@ -82,11 +82,14 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to create LilRag:", err)
 	}
-	defer rag.Close()
 
 	if err := rag.Initialize(); err != nil {
+		_ = rag.Close() // Ignore close errors before fatal exit
 		log.Fatal("Failed to initialize LilRag:", err)
 	}
+	defer func() {
+		_ = rag.Close() // Ignore close errors in defer
+	}()
 
 	ctx := context.Background()
 
@@ -115,9 +118,9 @@ func main() {
 			"Team Meeting Notes (2024-01-15): Discussed Q1 objectives, reviewed sprint progress, and planned upcoming feature releases. Action items include updating documentation, optimizing search performance, and scheduling security reviews. Next meeting: January 22nd.",
 			"Meeting Minutes",
 			map[string]string{
-				"type":       "meeting",
-				"date":       "2024-01-15",
-				"attendees":  "12",
+				"type":      "meeting",
+				"date":      "2024-01-15",
+				"attendees": "12",
 			},
 		},
 		{
@@ -145,13 +148,13 @@ func main() {
 	fmt.Printf("📚 Indexing documents using profile settings...\n")
 	for _, doc := range documents {
 		fmt.Printf("Processing: %s (%s)\n", doc.id, doc.source)
-		
+
 		// The profile's chunking settings will be used automatically
 		if err := rag.Index(ctx, doc.text, doc.id); err != nil {
 			fmt.Printf("  ❌ Failed to index %s: %v\n", doc.id, err)
 		} else {
 			fmt.Printf("  ✅ Successfully indexed using profile chunk settings\n")
-			fmt.Printf("     Chunk size: %d tokens, Overlap: %d tokens\n", 
+			fmt.Printf("     Chunk size: %d tokens, Overlap: %d tokens\n",
 				profileConfig.Chunking.MaxTokens, profileConfig.Chunking.Overlap)
 		}
 		fmt.Println()
@@ -194,11 +197,12 @@ func main() {
 		fmt.Printf("Context: %s\n", scenario.context)
 
 		results, err := rag.Search(ctx, scenario.query, 2)
-		if err != nil {
+		switch {
+		case err != nil:
 			fmt.Printf("❌ Search failed: %v\n", err)
-		} else if len(results) == 0 {
+		case len(results) == 0:
 			fmt.Printf("ℹ️  No results found\n")
-		} else {
+		default:
 			for i, result := range results {
 				fmt.Printf("  %d. %s (Score: %.4f)\n", i+1, result.ID, result.Score)
 				preview := result.Text
@@ -286,7 +290,7 @@ func main() {
 			fmt.Printf("  ⚠️  File not found or processing failed: %v\n", err)
 		} else {
 			fmt.Printf("  ✅ File processed successfully using profile settings\n")
-			
+
 			// Test search for the file content
 			results, err := rag.Search(ctx, "document content", 1)
 			if err == nil && len(results) > 0 {
@@ -309,16 +313,16 @@ func main() {
 	if err == nil {
 		fmt.Printf("📊 Profile-Based Setup Statistics:\n")
 		fmt.Printf("   Documents indexed: %d\n", len(docs))
-		
+
 		totalChunks := 0
 		for _, doc := range docs {
 			totalChunks += doc.ChunkCount
 		}
-		
+
 		fmt.Printf("   Total chunks: %d\n", totalChunks)
 		fmt.Printf("   Chunks per document: %.1f\n", float64(totalChunks)/float64(len(docs)))
 		fmt.Println()
-		
+
 		fmt.Printf("📁 Storage Information:\n")
 		fmt.Printf("   Database: %s\n", ragConfig.DatabasePath)
 		fmt.Printf("   Data directory: %s\n", ragConfig.DataDir)
@@ -331,7 +335,7 @@ func main() {
 
 	fmt.Println("🎯 Profile Configuration Recommendations:")
 	fmt.Println()
-	
+
 	// Analyze current profile settings and provide recommendations
 	currentChunkSize := profileConfig.Chunking.MaxTokens
 	currentOverlap := profileConfig.Chunking.Overlap
@@ -339,29 +343,32 @@ func main() {
 
 	fmt.Printf("Current Settings Analysis:\n")
 	fmt.Printf("  Chunk size: %d tokens ", currentChunkSize)
-	if currentChunkSize < 200 {
+	switch {
+	case currentChunkSize < 200:
 		fmt.Printf("(⚡ Fast searches, precise results)\n")
-	} else if currentChunkSize < 400 {
+	case currentChunkSize < 400:
 		fmt.Printf("(⚖️  Balanced performance)\n")
-	} else {
+	default:
 		fmt.Printf("(🎯 Better context, slower searches)\n")
 	}
-	
+
 	fmt.Printf("  Overlap: %d tokens (%.1f%%) ", currentOverlap, overlapPercentage)
-	if overlapPercentage < 10 {
+	switch {
+	case overlapPercentage < 10:
 		fmt.Printf("(⚡ Minimal redundancy)\n")
-	} else if overlapPercentage < 20 {
+	case overlapPercentage < 20:
 		fmt.Printf("(⚖️  Good balance)\n")
-	} else {
+	default:
 		fmt.Printf("(🎯 Maximum context preservation)\n")
 	}
-	
+
 	fmt.Printf("  Vector size: %d dimensions ", profileConfig.Ollama.VectorSize)
-	if profileConfig.Ollama.VectorSize <= 384 {
+	switch {
+	case profileConfig.Ollama.VectorSize <= 384:
 		fmt.Printf("(⚡ Fast, compact)\n")
-	} else if profileConfig.Ollama.VectorSize <= 768 {
+	case profileConfig.Ollama.VectorSize <= 768:
 		fmt.Printf("(⚖️  Standard quality)\n")
-	} else {
+	default:
 		fmt.Printf("(🎯 High precision)\n")
 	}
 	fmt.Println()

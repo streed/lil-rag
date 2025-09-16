@@ -1113,7 +1113,11 @@ func (h *Handler) buildContextualMessage(currentMessage string, chatContext *cha
 }
 
 // compactChatHistory compacts chat history when it gets too long
-func (h *Handler) compactChatHistory(ctx context.Context, sessionID string, chatContext *chathistory.ChatContext) error {
+func (h *Handler) compactChatHistory(
+	ctx context.Context,
+	sessionID string,
+	chatContext *chathistory.ChatContext,
+) error {
 	if h.summarizer == nil {
 		return fmt.Errorf("summarizer not available")
 	}

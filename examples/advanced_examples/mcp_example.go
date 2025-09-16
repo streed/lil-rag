@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -231,7 +233,7 @@ func main() {
 	} else {
 		fmt.Printf("✅ Total documents: %d\n", len(allDocs))
 		for i, doc := range allDocs {
-			fmt.Printf("   %d. %s (%d chunks, %d chars)\n", 
+			fmt.Printf("   %d. %s (%d chunks, %d chars)\n",
 				i+1, doc.ID, doc.ChunkCount, len(doc.Text))
 		}
 	}
@@ -266,7 +268,7 @@ func main() {
 	fmt.Println(strings.Repeat("-", 50))
 
 	fmt.Println("📝 MCP Client Configuration (for AI assistants):")
-	
+
 	mcpConfig := map[string]interface{}{
 		"name":        "lil-rag",
 		"description": "Document search and knowledge management system",
@@ -335,22 +337,22 @@ func main() {
 	if response == "y" || response == "yes" {
 		fmt.Println("\n🎮 Interactive MCP Testing Mode")
 		fmt.Println("Enter search queries to test the search_documents tool (type 'quit' to exit):")
-		
+
 		for {
 			fmt.Print("\n> Search query: ")
 			query, _ := reader.ReadString('\n')
 			query = strings.TrimSpace(query)
-			
+
 			if query == "quit" || query == "exit" {
 				break
 			}
-			
+
 			if query == "" {
 				continue
 			}
-			
+
 			fmt.Printf("📡 MCP Call: search_documents({\"query\": \"%s\", \"limit\": 3})\n", query)
-			
+
 			results, err := rag.Search(ctx, query, 3)
 			if err != nil {
 				fmt.Printf("❌ Error: %v\n", err)

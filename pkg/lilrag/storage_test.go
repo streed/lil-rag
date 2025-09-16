@@ -171,7 +171,7 @@ func TestSQLiteStorage_generateContentHash(t *testing.T) {
 
 			// Check if it's valid hex
 			for _, char := range hash {
-				if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f')) {
+				if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
 					t.Errorf("Invalid hex character in hash: %c", char)
 					break
 				}

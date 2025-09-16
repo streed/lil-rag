@@ -439,6 +439,9 @@ func TestGetChunkID(t *testing.T) {
 }
 
 func TestGenerateDocumentID(t *testing.T) {
+	// Compile regexp once outside the loop for better performance
+	validCharRegex := regexp.MustCompile("^[a-z0-9-]+$")
+
 	// Test that the function generates valid IDs
 	for i := 0; i < 10; i++ {
 		id := GenerateDocumentID()
@@ -455,7 +458,7 @@ func TestGenerateDocumentID(t *testing.T) {
 		}
 
 		// Check that it contains only valid characters (alphanumeric and hyphens)
-		if matched, _ := regexp.MatchString("^[a-z0-9-]+$", id); !matched {
+		if !validCharRegex.MatchString(id) {
 			t.Errorf("Generated ID contains invalid characters: %s", id)
 		}
 

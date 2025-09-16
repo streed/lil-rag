@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -29,7 +31,7 @@ func main() {
 		DatabasePath:   "chat_example.db",
 		DataDir:        "./data_chat",
 		OllamaURL:      "http://localhost:11434",
-		Model:          "nomic-embed-text",  // Embedding model for retrieval
+		Model:          "nomic-embed-text", // Embedding model for retrieval
 		ChatModel:      "llama3.2:3b",      // Chat model for conversations
 		VisionModel:    "llama3.2-vision",  // Vision model for image understanding
 		VectorSize:     768,
@@ -114,7 +116,7 @@ func main() {
 			},
 		},
 		{
-			"AI and Machine Learning Discussion", 
+			"AI and Machine Learning Discussion",
 			[]string{
 				"What's the difference between AI and machine learning?",
 				"How does deep learning work?",
@@ -138,7 +140,7 @@ func main() {
 		// Start a conversation
 		for msgIdx, message := range session.messages {
 			fmt.Printf("👤 User: %s\n", message)
-			
+
 			// Get RAG response
 			response, sources, err := rag.Chat(ctx, message, 3)
 			if err != nil {
@@ -147,7 +149,7 @@ func main() {
 			}
 
 			fmt.Printf("🤖 Assistant: %s\n", response)
-			
+
 			// Show sources if available
 			if len(sources) > 0 {
 				fmt.Printf("📚 Sources: ")
@@ -157,9 +159,9 @@ func main() {
 				}
 				fmt.Printf("%s\n", strings.Join(sourceIDs, ", "))
 			}
-			
+
 			fmt.Println()
-			
+
 			// Add a small delay to simulate natural conversation
 			if msgIdx < len(session.messages)-1 {
 				time.Sleep(500 * time.Millisecond)
@@ -173,7 +175,7 @@ func main() {
 
 	// Demonstrate context preservation
 	fmt.Println("🔄 Context Preservation Example:")
-	
+
 	contextMessages := []string{
 		"Tell me about Python programming",
 		"What makes it different from other languages?",
@@ -183,7 +185,7 @@ func main() {
 
 	for i, message := range contextMessages {
 		fmt.Printf("👤 Message %d: %s\n", i+1, message)
-		
+
 		response, sources, err := rag.Chat(ctx, message, 3)
 		if err != nil {
 			fmt.Printf("❌ Chat failed: %v\n", err)
@@ -201,7 +203,7 @@ func main() {
 	fmt.Println(strings.Repeat("-", 50))
 
 	query := "machine learning applications"
-	
+
 	// Show search results
 	fmt.Printf("🔍 Search Results for '%s':\n", query)
 	searchResults, err := rag.Search(ctx, query, 3)
@@ -250,7 +252,7 @@ func main() {
 	for _, tq := range testQueries {
 		fmt.Printf("📝 Query Type: %s\n", tq.type_)
 		fmt.Printf("👤 Question: %s\n", tq.query)
-		
+
 		response, sources, err := rag.Chat(ctx, tq.query, 3)
 		if err != nil {
 			fmt.Printf("❌ Failed: %v\n", err)
@@ -269,12 +271,12 @@ func main() {
 	if err == nil {
 		fmt.Printf("📊 Knowledge Base Statistics:\n")
 		fmt.Printf("   Documents: %d\n", len(docs))
-		
+
 		totalChunks := 0
 		for _, doc := range docs {
 			totalChunks += doc.ChunkCount
 		}
-		
+
 		fmt.Printf("   Total chunks: %d\n", totalChunks)
 		fmt.Printf("   Average chunks per document: %.1f\n", float64(totalChunks)/float64(len(docs)))
 	}

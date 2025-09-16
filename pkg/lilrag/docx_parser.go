@@ -23,7 +23,9 @@ func (dp *DOCXParser) Parse(filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open DOCX file: %w", err)
 	}
-	defer r.Close()
+	defer func() {
+		_ = r.Close() // Ignore close errors in defer
+	}()
 
 	docData := r.Editable()
 	return docData.GetContent(), nil

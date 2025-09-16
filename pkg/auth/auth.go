@@ -54,7 +54,7 @@ func New(dbPath string) (*Auth, error) {
 	auth := &Auth{db: db}
 
 	if err := auth.initializeSchema(); err != nil {
-		db.Close()
+		_ = db.Close() // Ignore close errors during cleanup
 		return nil, fmt.Errorf("failed to initialize auth schema: %w", err)
 	}
 
@@ -271,7 +271,9 @@ func (a *Auth) ListUsers(ctx context.Context) ([]User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close() // Ignore close errors in defer
+	}()
 
 	var users []User
 	for rows.Next() {
@@ -323,8 +325,9 @@ func (a *Auth) DeleteUser(ctx context.Context, username string) error {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			// Log the rollback error, but don't override the main error
+		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+			// Rollback error is logged but doesn't override the main error
+			_ = rbErr // Explicitly ignore error
 		}
 	}()
 

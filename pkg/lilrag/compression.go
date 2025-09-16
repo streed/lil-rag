@@ -40,7 +40,9 @@ func DecompressText(compressedData []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		_ = gzipReader.Close() // Ignore close errors in defer
+	}()
 
 	var buf bytes.Buffer
 	// #nosec G110 - Controlled decompression of trusted content

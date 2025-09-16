@@ -25,7 +25,9 @@ func (hp *HTMLParser) Parse(filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open HTML file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close() // Ignore close errors in defer
+	}()
 
 	doc, err := html.Parse(file)
 	if err != nil {
@@ -57,7 +59,9 @@ func (hp *HTMLParser) ParseWithChunks(filePath, _ string) ([]Chunk, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open HTML file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close() // Ignore close errors in defer
+	}()
 
 	doc, err := html.Parse(file)
 	if err != nil {

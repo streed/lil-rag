@@ -113,7 +113,9 @@ func (p *ImageParser) ResizeImage(imagePath string, maxSize int) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open image: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close() // Ignore close errors in defer
+	}()
 
 	// Decode image based on file extension
 	ext := strings.ToLower(filepath.Ext(imagePath))
@@ -268,7 +270,9 @@ Provide ONLY the extracted text content in proper markdown format, without any a
 	if err != nil {
 		return "", fmt.Errorf("failed to send OCR request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() // Ignore close errors in defer
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
@@ -378,7 +382,9 @@ func (p *ImageParser) TestVisionModel(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to vision model: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() // Ignore close errors in defer
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)

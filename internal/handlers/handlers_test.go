@@ -158,7 +158,7 @@ func TestHandler_Index_JSON(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(tt.method, "/api/index", body)
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", ContentTypeJSON)
 			w := httptest.NewRecorder()
 
 			handler.Index()(w, req)
@@ -177,7 +177,7 @@ func TestHandler_Index_JSON(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
@@ -242,7 +242,7 @@ func TestHandler_Search_GET(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
@@ -304,7 +304,7 @@ func TestHandler_Search_POST(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(http.MethodPost, "/api/search", body)
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", ContentTypeJSON)
 			w := httptest.NewRecorder()
 
 			handler.Search()(w, req)
@@ -373,7 +373,7 @@ func TestHandler_Health(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
@@ -484,7 +484,7 @@ func TestHandler_Static(t *testing.T) {
 			if tt.expectedStatus == http.StatusOK {
 				// Check response content type
 				contentType := w.Header().Get("Content-Type")
-				if contentType != "text/html" {
+				if contentType != ContentTypeHTML {
 					t.Errorf("Expected Content-Type text/html, got %s", contentType)
 				}
 
@@ -507,7 +507,7 @@ func TestHandler_FileUpload(t *testing.T) {
 	// Create test files
 	txtFile := filepath.Join(tempDir, "test.txt")
 	txtContent := "This is test text content"
-	err := os.WriteFile(txtFile, []byte(txtContent), 0o644)
+	err := os.WriteFile(txtFile, []byte(txtContent), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -586,7 +586,7 @@ func TestHandler_FileUpload(t *testing.T) {
 
 			// Check response content type
 			responseContentType := w.Header().Get("Content-Type")
-			if responseContentType != "application/json" {
+			if responseContentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", responseContentType)
 			}
 
@@ -641,7 +641,7 @@ func TestHandler_writeError(t *testing.T) {
 	}
 
 	contentType := w.Header().Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType != ContentTypeJSON {
 		t.Errorf("Expected Content-Type application/json, got %s", contentType)
 	}
 
@@ -745,7 +745,7 @@ func TestHandler_BasicIntegration(t *testing.T) {
 			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 		}
 
-		if w.Header().Get("Content-Type") != "text/html" {
+		if w.Header().Get("Content-Type") != ContentTypeHTML {
 			t.Error("Expected HTML content type for static page")
 		}
 	})
@@ -808,7 +808,7 @@ func TestHandler_DocumentsList(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
@@ -886,7 +886,7 @@ func TestHandler_DeleteDocument(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
@@ -961,7 +961,7 @@ func TestHandler_ViewDocument(t *testing.T) {
 			// For valid GET requests to non-existent docs, should return HTML error page
 			if tt.method == http.MethodGet && tt.expectedStatus == http.StatusNotFound {
 				contentType := w.Header().Get("Content-Type")
-				if contentType != "application/json" {
+				if contentType != ContentTypeJSON {
 					t.Errorf("Expected Content-Type application/json for error, got %s", contentType)
 				}
 			}
@@ -1142,7 +1142,7 @@ func TestHandler_Chat_GET(t *testing.T) {
 			// Check response content type for HTML
 			if tt.expectedStatus == http.StatusOK {
 				contentType := w.Header().Get("Content-Type")
-				if contentType != "text/html" {
+				if contentType != ContentTypeHTML {
 					t.Errorf("Expected Content-Type text/html, got %s", contentType)
 				}
 
@@ -1220,7 +1220,7 @@ func TestHandler_Chat_POST(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(http.MethodPost, "/api/chat", body)
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", ContentTypeJSON)
 			w := httptest.NewRecorder()
 
 			handler.Chat()(w, req)
@@ -1240,7 +1240,7 @@ func TestHandler_Chat_POST(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
@@ -1365,7 +1365,7 @@ func TestHandler_UpdateChunk(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(tt.method, tt.path, body)
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", ContentTypeJSON)
 			w := httptest.NewRecorder()
 
 			handler.UpdateChunk()(w, req)
@@ -1380,7 +1380,7 @@ func TestHandler_UpdateChunk(t *testing.T) {
 
 			// Check response content type
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSON {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 		})
@@ -1483,7 +1483,7 @@ func TestHandler_Index_EdgeCases(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(http.MethodPost, "/api/index", bytes.NewReader(bodyBytes))
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", ContentTypeJSON)
 			w := httptest.NewRecorder()
 
 			handler.Index()(w, req)
@@ -1565,7 +1565,7 @@ func TestHandler_Search_EdgeCases(t *testing.T) {
 			} else {
 				bodyBytes, _ := json.Marshal(tt.body)
 				req = httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewReader(bodyBytes))
-				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Content-Type", ContentTypeJSON)
 			}
 
 			handler.Search()(w, req)
