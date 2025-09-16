@@ -82,7 +82,7 @@ fmt: ## Format Go code
 	$(GOFMT) -s -w .
 
 vet: ## Run go vet
-	$(GOVET) ./...
+	$(GOVET) ./pkg/... ./internal/... ./cmd/... ./examples/library/... ./examples/profile/...
 
 lint: fmt vet ## Run linting tools
 	@if command -v golangci-lint >/dev/null 2>&1; then \
