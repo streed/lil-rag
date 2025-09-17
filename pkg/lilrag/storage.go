@@ -220,6 +220,19 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 		return fmt.Errorf("chunk count (%d) doesn't match embedding count (%d)", len(chunks), len(embeddings))
 	}
 
+	// Check if document already exists and delete it if it does
+	_, err := s.GetDocumentByID(ctx, documentID)
+	if err == nil {
+		// Document exists, delete it first to remove all chunks and embeddings
+		if deleteErr := s.DeleteDocument(ctx, documentID); deleteErr != nil {
+			return fmt.Errorf("failed to delete existing document before re-indexing: %w", deleteErr)
+		}
+	} else if !strings.Contains(err.Error(), "document not found") {
+		// If error is not "document not found", it's a real error
+		return fmt.Errorf("failed to check if document exists: %w", err)
+	}
+	// If document doesn't exist (err contains "document not found"), continue with normal indexing
+
 	contentHash := s.generateContentHash(text)
 	filePath, err := s.storeContent(documentID, text, contentHash)
 	if err != nil {
@@ -240,21 +253,9 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 		}
 	}()
 
-	// Delete existing chunks first
-	_, err = tx.ExecContext(ctx,
-		"DELETE FROM embeddings WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE document_id = ?)",
-		documentID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing embeddings: %w", err)
-	}
-	_, err = tx.ExecContext(ctx, "DELETE FROM chunks WHERE document_id = ?", documentID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing chunks: %w", err)
-	}
-
-	// Insert or update the document with namespace
+	// Insert document (document should not exist at this point since we deleted it if it existed)
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents 
+		INSERT INTO documents 
 		(id, original_text_compressed, content_hash, file_path, source_path, 
 		 doc_type, namespace, chunk_count, created_at, updated_at) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
@@ -316,6 +317,19 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 		return fmt.Errorf("chunk count (%d) doesn't match embedding count (%d)", len(chunks), len(embeddings))
 	}
 
+	// Check if document already exists and delete it if it does
+	_, err := s.GetDocumentByID(ctx, documentID)
+	if err == nil {
+		// Document exists, delete it first to remove all chunks and embeddings
+		if deleteErr := s.DeleteDocument(ctx, documentID); deleteErr != nil {
+			return fmt.Errorf("failed to delete existing document before re-indexing: %w", deleteErr)
+		}
+	} else if !strings.Contains(err.Error(), "document not found") {
+		// If error is not "document not found", it's a real error
+		return fmt.Errorf("failed to check if document exists: %w", err)
+	}
+	// If document doesn't exist (err contains "document not found"), continue with normal indexing
+
 	contentHash := s.generateContentHash(text)
 	filePath, err := s.storeContent(documentID, text, contentHash)
 	if err != nil {
@@ -344,25 +358,14 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 		return fmt.Errorf("failed to compress document text: %w", err)
 	}
 
-	// Insert or update document
+	// Insert document (document should not exist at this point since we deleted it if it existed)
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents (
+		INSERT INTO documents (
 			id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunk_count, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, len(chunks), time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to insert document: %w", err)
-	}
-
-	// Delete existing chunks and embeddings for this document
-	_, err = tx.ExecContext(ctx, `DELETE FROM chunks WHERE document_id = ?`, documentID)
-	if err != nil {
-		return fmt.Errorf("failed to delete old chunks: %w", err)
-	}
-
-	_, err = tx.ExecContext(ctx, `DELETE FROM embeddings WHERE chunk_id LIKE ?`, documentID+"%")
-	if err != nil {
-		return fmt.Errorf("failed to delete old embeddings: %w", err)
 	}
 
 	// Insert new chunks and embeddings
