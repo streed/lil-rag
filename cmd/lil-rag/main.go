@@ -598,7 +598,11 @@ func fileExists(path string) bool {
 
 func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.ProfileConfig, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag chat [flags] <message> [limit]\n  Flags:\n    --session-id <id>    Resume existing chat session\n    --new-session       Start new chat session\n    --list-sessions     List all chat sessions")
+		return fmt.Errorf("usage: lil-rag chat [flags] <message> [limit]\n" +
+			"  Flags:\n" +
+			"    --session-id <id>    Resume existing chat session\n" +
+			"    --new-session       Start new chat session\n" +
+			"    --list-sessions     List all chat sessions")
 	}
 
 	var sessionID string
@@ -897,30 +901,6 @@ func formatSearchResultsAsMarkdown(query string, results []lilrag.SearchResult) 
 	return md.String()
 }
 
-// formatChatResponseAsMarkdown formats chat response and sources as markdown
-func formatChatResponseAsMarkdown(message, response string, sources []lilrag.SearchResult) string {
-	var md strings.Builder
-
-	md.WriteString("# Chat Response\n\n")
-	md.WriteString(fmt.Sprintf("**Your message:** %s\n\n", message))
-	md.WriteString("---\n\n")
-	md.WriteString(fmt.Sprintf("## 🤖 Response\n\n%s\n\n", response))
-
-	if len(sources) > 0 {
-		md.WriteString("---\n\n")
-		md.WriteString(fmt.Sprintf("## 📚 Sources (%d)\n\n", len(sources)))
-
-		for i, source := range sources {
-			md.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, source.ID))
-			md.WriteString(fmt.Sprintf("**Score:** %.4f\n\n", source.Score))
-			truncatedText := truncateText(source.Text, 200)
-			md.WriteString(fmt.Sprintf("```\n%s\n```\n\n", truncatedText))
-		}
-	}
-
-	return md.String()
-}
-
 // handleListChatSessions lists all available chat sessions
 func handleListChatSessions(ctx context.Context, chatHistory *chathistory.ChatHistory) error {
 	sessions, err := chatHistory.GetSessions(ctx)
@@ -946,7 +926,8 @@ func handleListChatSessions(ctx context.Context, chatHistory *chathistory.ChatHi
 }
 
 // formatChatResponseAsMarkdownWithSession formats chat response with session info
-func formatChatResponseAsMarkdownWithSession(sessionID, message, response string, sources []lilrag.SearchResult) string {
+func formatChatResponseAsMarkdownWithSession(sessionID, message, response string,
+	sources []lilrag.SearchResult) string {
 	var md strings.Builder
 
 	md.WriteString("# Chat Session Response\n\n")
