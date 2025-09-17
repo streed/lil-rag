@@ -10,7 +10,7 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 
 ### Core Capabilities
 - 🔍 **Semantic Vector Search** - Advanced similarity search using SQLite with sqlite-vec extension
-- 💬 **Interactive Chat** - RAG-powered chat with context and source citations
+- 💬 **Interactive Chat** - RAG-powered chat with persistent sessions and source citations
 - 📄 **Multi-Format Support** - Native parsing for PDF, DOCX, XLSX, HTML, CSV, and text files
 - 📚 **Document Management** - Complete CRUD operations for indexed documents
 - 🗜️ **Smart Storage** - Automatic gzip compression and intelligent deduplication
@@ -184,7 +184,10 @@ Found 2 results:
 
 - `index [id] <text|file|->` - Index content (ID optional, auto-generated if not provided)
 - `search <query> [limit]` - Search for similar content  
-- `chat <message> [limit]` - Interactive chat with RAG context
+- `chat [flags] <message> [limit]` - Interactive chat with RAG context
+  - `--session-id <id>` - Resume existing chat session
+  - `--new-session` - Start new chat session  
+  - `--list-sessions` - List all chat sessions
 - `documents` - List all indexed documents
 - `delete <id> [--force]` - Delete a document by ID
 - `health` - Check system health status
@@ -222,6 +225,40 @@ lil-rag search "AI concepts"                       # Default limit (10)
 lil-rag chat "What is machine learning?" 3         # Chat with context limit
 lil-rag chat "Explain neural networks"             # Default context (5 docs)
 ```
+
+### Persistent Chat Sessions
+
+LilRag supports persistent chat sessions that allow you to continue conversations across multiple CLI invocations. Each session gets a unique ID that you can use to resume conversations later.
+
+```bash
+# Create a new chat session
+lil-rag chat --new-session "Hello, I want to start a conversation"
+# Output: 🆕 Created new chat session: abc123-def456-ghi789
+#         💡 Use --session-id abc123-def456-ghi789 to resume this conversation later
+
+# Resume an existing chat session  
+lil-rag chat --session-id abc123-def456-ghi789 "Continue our discussion"
+# Output: 📝 Resuming chat session: abc123-def456-ghi789 (Title: New Chat)
+
+# List all chat sessions
+lil-rag chat --list-sessions
+# Shows: ID, Title, Message count, Created/Updated timestamps
+
+# You can also create sessions without the --new-session flag
+lil-rag chat "This creates a session automatically" 
+# When no session is specified, a new one is created automatically
+
+# Combine with context limit
+lil-rag chat --session-id abc123-def456-ghi789 "Follow up question" 3
+```
+
+**Session Features:**
+- 💾 **Persistent Storage** - Messages are saved even if AI response fails
+- 🔄 **Resume Conversations** - Use session ID to continue discussions  
+- 📊 **Session Management** - List, track, and organize your conversations
+- 🕐 **Automatic Timestamps** - Track when sessions were created and updated
+- 📝 **Message Counting** - See how many messages are in each session
+- 🆔 **Auto-generated IDs** - Unique session identifiers for easy reference
 
 ### System Operations
 
