@@ -932,3 +932,166 @@ func BenchmarkSQLiteStorage_Search(b *testing.B) {
 		}
 	}
 }
+
+// Test document re-indexing with explicit existence check
+func TestSQLiteStorage_DocumentReindexing(t *testing.T) {
+	storage, tempDir := setupTestStorage(t)
+	defer os.RemoveAll(tempDir)
+
+	err := storage.Initialize()
+	if err != nil {
+		if strings.Contains(err.Error(), "sqlite-vec extension not available") {
+			t.Skip("Skipping test: sqlite-vec extension not available")
+		}
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+	defer storage.Close()
+
+	ctx := context.Background()
+	documentID := "reindex-test-doc"
+
+	// Step 1: Index a document for the first time
+	originalText := "Original document about AI technology."
+	originalChunks := []Chunk{
+		{
+			Text:       originalText,
+			Index:      0,
+			StartPos:   0,
+			EndPos:     len(originalText),
+			TokenCount: 6,
+			ChunkType:  "text",
+		},
+	}
+	originalEmbeddings := [][]float32{
+		{0.8, 0.1, 0.1}, // AI focused
+	}
+
+	err = storage.IndexChunks(ctx, documentID, originalText, originalChunks, originalEmbeddings)
+	if err != nil {
+		t.Fatalf("Failed to index original document: %v", err)
+	}
+
+	// Verify document was indexed
+	doc, err := storage.GetDocumentByID(ctx, documentID)
+	if err != nil {
+		t.Fatalf("Failed to get original document: %v", err)
+	}
+	if doc.ChunkCount != 1 {
+		t.Errorf("Expected 1 chunk initially, got %d", doc.ChunkCount)
+	}
+
+	// Step 2: Re-index the same document with different content (more chunks)
+	newText := "Updated document about machine learning and artificial intelligence. This content is much longer and should create multiple chunks."
+	newChunks := []Chunk{
+		{
+			Text:       "Updated document about machine learning and artificial intelligence.",
+			Index:      0,
+			StartPos:   0,
+			EndPos:     65,
+			TokenCount: 9,
+			ChunkType:  "text",
+		},
+		{
+			Text:       "This content is much longer and should create multiple chunks.",
+			Index:      1,
+			StartPos:   66,
+			EndPos:     len(newText),
+			TokenCount: 10,
+			ChunkType:  "text",
+		},
+	}
+	newEmbeddings := [][]float32{
+		{0.5, 0.5, 0.0}, // Balanced AI/ML
+		{0.2, 0.7, 0.1}, // ML focused
+	}
+
+	// This should trigger the existence check and deletion
+	err = storage.IndexChunks(ctx, documentID, newText, newChunks, newEmbeddings)
+	if err != nil {
+		t.Fatalf("Failed to re-index document: %v", err)
+	}
+
+	// Step 3: Verify the document was properly updated
+	updatedDoc, err := storage.GetDocumentByID(ctx, documentID)
+	if err != nil {
+		t.Fatalf("Failed to get updated document: %v", err)
+	}
+	if updatedDoc.ChunkCount != 2 {
+		t.Errorf("Expected 2 chunks after re-indexing, got %d", updatedDoc.ChunkCount)
+	}
+
+	// Verify chunks were replaced
+	chunks, err := storage.GetDocumentChunks(ctx, documentID)
+	if err != nil {
+		t.Fatalf("Failed to get updated document chunks: %v", err)
+	}
+	if len(chunks) != 2 {
+		t.Errorf("Expected 2 chunks in updated document, got %d", len(chunks))
+	}
+
+	// Verify old content is gone - the original text should not be found
+	for _, chunk := range chunks {
+		if strings.Contains(chunk.Text, "Original document") {
+			t.Error("Found old content in updated document, re-indexing didn't properly replace content")
+		}
+	}
+
+	// Verify new content is present
+	foundFirstChunk := false
+	foundSecondChunk := false
+	for _, chunk := range chunks {
+		if strings.Contains(chunk.Text, "Updated document about machine learning") {
+			foundFirstChunk = true
+		}
+		if strings.Contains(chunk.Text, "much longer and should create") {
+			foundSecondChunk = true
+		}
+	}
+	if !foundFirstChunk {
+		t.Error("First chunk of new content not found")
+	}
+	if !foundSecondChunk {
+		t.Error("Second chunk of new content not found")
+	}
+
+	// Step 4: Test with IndexChunksWithMetadata to ensure it also works
+	metadataText := "Document with metadata for re-indexing test."
+	metadataChunks := []Chunk{
+		{
+			Text:       metadataText,
+			Index:      0,
+			StartPos:   0,
+			EndPos:     len(metadataText),
+			TokenCount: 8,
+			ChunkType:  "text",
+		},
+	}
+	metadataEmbeddings := [][]float32{
+		{0.1, 0.1, 0.8}, // Different focus
+	}
+
+	err = storage.IndexChunksWithMetadata(ctx, documentID, metadataText, metadataChunks, metadataEmbeddings, "test.txt", "text")
+	if err != nil {
+		t.Fatalf("Failed to re-index with metadata: %v", err)
+	}
+
+	// Verify it was updated again
+	finalDoc, err := storage.GetDocumentByID(ctx, documentID)
+	if err != nil {
+		t.Fatalf("Failed to get final document: %v", err)
+	}
+	if finalDoc.ChunkCount != 1 {
+		t.Errorf("Expected 1 chunk after metadata re-indexing, got %d", finalDoc.ChunkCount)
+	}
+
+	finalChunks, err := storage.GetDocumentChunks(ctx, documentID)
+	if err != nil {
+		t.Fatalf("Failed to get final document chunks: %v", err)
+	}
+	if len(finalChunks) != 1 {
+		t.Errorf("Expected 1 chunk in final document, got %d", len(finalChunks))
+	}
+	if !strings.Contains(finalChunks[0].Text, "Document with metadata") {
+		t.Error("Final content not found, metadata re-indexing failed")
+	}
+}
