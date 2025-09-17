@@ -139,6 +139,16 @@ CREATE TABLE IF NOT EXISTS chat_compactions (
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_order ON chat_messages(session_id, message_order);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chat_compactions_session ON chat_compactions(session_id);
+
+-- Trigger to update chat_sessions.updated_at and message_count when messages are added
+CREATE TRIGGER IF NOT EXISTS update_session_timestamp
+    AFTER INSERT ON chat_messages
+BEGIN
+    UPDATE chat_sessions 
+    SET updated_at = CURRENT_TIMESTAMP,
+        message_count = message_count + 1
+    WHERE id = NEW.session_id;
+END;
 `
 
 	_, err := ch.db.Exec(schema)
