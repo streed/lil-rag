@@ -259,7 +259,6 @@ lil-rag chat --session-id abc123-def456-ghi789 "Follow up question" 3
 - 🕐 **Automatic Timestamps** - Track when sessions were created and updated
 - 📝 **Message Counting** - See how many messages are in each session
 - 🆔 **Auto-generated IDs** - Unique session identifiers for easy reference
-```
 
 ### System Operations
 
