@@ -159,6 +159,7 @@ func run() error {
 	})
 	mux.Handle("/api/health", handler.Health())
 	mux.Handle("/api/metrics", handler.Metrics())
+	mux.Handle("/api/reindex", handler.Reindex())
 
 	// Authentication routes (not protected)
 	mux.Handle("/api/auth/login", handler.Login())

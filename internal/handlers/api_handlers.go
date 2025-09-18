@@ -184,6 +184,50 @@ func (h *Handler) Metrics() http.HandlerFunc {
 	return promhttp.Handler().ServeHTTP
 }
 
+// Reindex handles reindexing requests at /api/reindex
+func (h *Handler) Reindex() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			h.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+			return
+		}
+
+		log.Printf("Starting reindex of all documents with recursive chunking")
+
+		// Use a longer timeout for reindexing operation
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
+		defer cancel()
+
+		// Start reindexing in the background
+		reindexStart := time.Now()
+		err := h.rag.ReindexAllDocuments(ctx)
+		reindexDuration := time.Since(reindexStart)
+
+		if err != nil {
+			log.Printf("Reindex failed after %v: %v", reindexDuration, err)
+			h.writeError(w, http.StatusInternalServerError, "reindex failed", err.Error())
+			return
+		}
+
+		log.Printf("Reindex completed successfully in %v", reindexDuration)
+
+		// Update system metrics after reindexing
+		h.UpdateSystemMetrics(ctx)
+
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"status":       "success",
+			"message":      "All documents reindexed with recursive chunking",
+			"duration_ms":  reindexDuration.Milliseconds(),
+			"completed_at": time.Now().UTC(),
+		}
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Failed to encode reindex response: %v", err)
+		}
+	}
+}
+
 // UpdateSystemMetrics updates system-wide metrics like document count
 func (h *Handler) UpdateSystemMetrics(ctx context.Context) {
 	// Get document count and update metrics
