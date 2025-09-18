@@ -200,37 +200,37 @@ func (tc *TextChunker) getSeparators(contentType string) []string {
 	switch contentType {
 	case ContentTypeCode:
 		return []string{
-			"\n\n\n",          // Multiple blank lines (major sections)
-			"\n\n",            // Double newlines (functions/classes)
-			"\n",              // Single newlines (statements)
-			". ",              // Sentences
-			" ",               // Words
+			"\n\n\n", // Multiple blank lines (major sections)
+			"\n\n",   // Double newlines (functions/classes)
+			"\n",     // Single newlines (statements)
+			". ",     // Sentences
+			" ",      // Words
 		}
 	case ContentTypeStructured:
 		return []string{
-			"\n\n\n",          // Major sections
-			"\n\n",            // Paragraphs
-			"\n# ",            // Headers
-			"\n- ",            // List items
-			". ",              // Sentences
-			" ",               // Words
+			"\n\n\n", // Major sections
+			"\n\n",   // Paragraphs
+			"\n# ",   // Headers
+			"\n- ",   // List items
+			". ",     // Sentences
+			" ",      // Words
 		}
 	case ContentTypeProse:
 		return []string{
-			"\n\n\n",          // Chapter/section breaks
-			"\n\n",            // Paragraph breaks
-			". ",              // Sentence boundaries
-			"! ",              // Exclamations
-			"? ",              // Questions
-			" ",               // Words
+			"\n\n\n", // Chapter/section breaks
+			"\n\n",   // Paragraph breaks
+			". ",     // Sentence boundaries
+			"! ",     // Exclamations
+			"? ",     // Questions
+			" ",      // Words
 		}
 	default:
 		return []string{
-			"\n\n",            // Paragraphs
-			". ",              // Sentences
-			"! ",              // Exclamations
-			"? ",              // Questions
-			" ",               // Words
+			"\n\n", // Paragraphs
+			". ",   // Sentences
+			"! ",   // Exclamations
+			"? ",   // Questions
+			" ",    // Words
 		}
 	}
 }
