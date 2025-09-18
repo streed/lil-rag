@@ -694,6 +694,138 @@ func (m *LilRag) GetStorage() Storage {
 	return m.storage
 }
 
+// ReindexAllDocuments reprocesses all documents with the current chunking configuration
+func (m *LilRag) ReindexAllDocuments(ctx context.Context) error {
+	if m.storage == nil || m.chunker == nil || m.embedder == nil || m.documentHandler == nil {
+		return fmt.Errorf("LilRag not properly initialized")
+	}
+
+	// Get all documents
+	documents, err := m.storage.ListDocuments(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	if len(documents) == 0 {
+		fmt.Println("No documents found to reindex")
+		return nil
+	}
+
+	fmt.Printf("Starting reindex of %d documents with recursive chunking...\n", len(documents))
+
+	processed := 0
+	failed := 0
+
+	for i, doc := range documents {
+		fmt.Printf("Reindexing document %d/%d: %s\n", i+1, len(documents), doc.ID)
+
+		err := m.reindexDocument(ctx, &doc)
+		if err != nil {
+			fmt.Printf("Failed to reindex document %s: %v\n", doc.ID, err)
+			failed++
+			continue
+		}
+
+		processed++
+		if processed%10 == 0 {
+			fmt.Printf("Progress: %d/%d documents processed\n", processed, len(documents))
+		}
+	}
+
+	fmt.Printf("Reindex completed: %d processed, %d failed\n", processed, failed)
+	if failed > 0 {
+		return fmt.Errorf("reindex completed with %d failures", failed)
+	}
+
+	return nil
+}
+
+// reindexDocument reprocesses a single document with current chunking settings
+func (m *LilRag) reindexDocument(ctx context.Context, doc *DocumentInfo) error {
+	// If document has a source path, try to reprocess from the original file
+	if doc.SourcePath != "" {
+		// Check if the source file still exists
+		if _, err := os.Stat(doc.SourcePath); err == nil {
+			// File exists, reprocess from original
+			return m.reindexFromFile(ctx, doc)
+		}
+		// File doesn't exist, fall back to reprocessing stored text
+		fmt.Printf("Source file %s not found, reprocessing from stored text\n", doc.SourcePath)
+	}
+
+	// Reprocess from stored text content
+	return m.reindexFromText(ctx, doc)
+}
+
+// reindexFromFile reprocesses a document from its original file
+func (m *LilRag) reindexFromFile(ctx context.Context, doc *DocumentInfo) error {
+	if !m.documentHandler.IsSupported(doc.SourcePath) {
+		return fmt.Errorf("unsupported file format: %s", doc.SourcePath)
+	}
+
+	// Parse the file to get new chunks
+	chunks, err := m.documentHandler.ParseFileWithChunks(doc.SourcePath, doc.ID)
+	if err != nil {
+		return fmt.Errorf("failed to parse file %s: %w", doc.SourcePath, err)
+	}
+
+	if len(chunks) == 0 {
+		return fmt.Errorf("no content found in file %s", doc.SourcePath)
+	}
+
+	return m.reindexWithChunks(ctx, doc, chunks)
+}
+
+// reindexFromText reprocesses a document from its stored text
+func (m *LilRag) reindexFromText(ctx context.Context, doc *DocumentInfo) error {
+	if doc.Text == "" {
+		return fmt.Errorf("no text content available for document %s", doc.ID)
+	}
+
+	// Re-chunk the text with current settings
+	chunks := m.chunker.ChunkText(doc.Text)
+	if len(chunks) == 0 {
+		return fmt.Errorf("failed to create chunks from text for document %s", doc.ID)
+	}
+
+	return m.reindexWithChunks(ctx, doc, chunks)
+}
+
+// reindexWithChunks reindexes a document with the given chunks
+func (m *LilRag) reindexWithChunks(ctx context.Context, doc *DocumentInfo, chunks []Chunk) error {
+	fmt.Printf("Re-chunking document %s: %d chunks -> %d chunks\n", doc.ID, doc.ChunkCount, len(chunks))
+
+	// Generate embeddings for all chunks
+	embeddings := make([][]float32, len(chunks))
+	for i, chunk := range chunks {
+		embedding, err := m.embedder.Embed(ctx, chunk.Text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
+		}
+		embeddings[i] = embedding
+	}
+
+	// Build combined text for the document
+	var combinedText strings.Builder
+	for i, chunk := range chunks {
+		if i > 0 {
+			combinedText.WriteString("\n\n")
+		}
+		combinedText.WriteString(chunk.Text)
+	}
+
+	// Update the document with new chunks
+	if doc.SourcePath != "" {
+		// Use metadata version to preserve source path and doc type
+		return m.storage.IndexChunksWithMetadata(
+			ctx, doc.ID, combinedText.String(), chunks, embeddings,
+			doc.SourcePath, doc.DocType,
+		)
+	}
+	// Use basic version for text-only documents
+	return m.storage.IndexChunks(ctx, doc.ID, combinedText.String(), chunks, embeddings)
+}
+
 // Services returns the modern service interfaces
 func (m *LilRag) Services() *Services {
 	return m.services

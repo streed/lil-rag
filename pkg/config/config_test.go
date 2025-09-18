@@ -40,11 +40,11 @@ func TestDefault(t *testing.T) {
 	if config.Server.Port != 12121 {
 		t.Errorf("Expected server port 12121, got %d", config.Server.Port)
 	}
-	if config.Chunking.MaxTokens != 1800 {
-		t.Errorf("Expected max tokens 1800, got %d", config.Chunking.MaxTokens)
+	if config.Chunking.MaxTokens != 800 {
+		t.Errorf("Expected max tokens 800, got %d", config.Chunking.MaxTokens)
 	}
-	if config.Chunking.Overlap != 200 {
-		t.Errorf("Expected overlap 200, got %d", config.Chunking.Overlap)
+	if config.Chunking.Overlap != 100 {
+		t.Errorf("Expected overlap 100, got %d", config.Chunking.Overlap)
 	}
 }
 

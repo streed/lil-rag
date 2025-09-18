@@ -120,110 +120,251 @@ func (tc *TextChunker) detectContentType(text string) string {
 
 // adaptiveChunk applies content-aware chunking strategies with optimal sizing
 func (tc *TextChunker) adaptiveChunk(text, contentType string) []Chunk {
-	var sentences []string
-	var targetChunkSize int
-
-	// Research-based optimal chunk sizes for different content types
-	switch contentType {
-	case ContentTypeCode:
-		sentences = tc.splitByCodeBlocks(text)
-		targetChunkSize = int(float64(tc.MaxTokens) * 1.5) // 384 tokens - larger for code context
-	case ContentTypeStructured:
-		sentences = tc.splitIntoSentences(text)
-		targetChunkSize = tc.MaxTokens // 256 tokens - optimal for structured docs
-	case ContentTypeProse:
-		sentences = tc.splitByParagraphs(text)
-		targetChunkSize = int(float64(tc.MaxTokens) * 1.25) // 320 tokens - medium for narratives
-	default:
-		sentences = tc.splitIntoSentences(text)
-		targetChunkSize = tc.MaxTokens // 256 tokens - default optimal size
-	}
-
-	if len(sentences) == 0 {
-		return nil
-	}
-
-	return tc.buildChunksWithSmartOverlap(sentences, targetChunkSize, contentType)
+	// Use recursive chunking algorithm
+	return tc.recursiveChunk(text, contentType, 0)
 }
 
-// buildChunksWithSmartOverlap creates chunks with context-aware overlap
-func (tc *TextChunker) buildChunksWithSmartOverlap(sentences []string, targetSize int, contentType string) []Chunk {
-	var chunks []Chunk
-	var currentChunk strings.Builder
-	var currentTokenCount int
-	chunkIndex := 0
+// recursiveChunk implements hierarchical text splitting with semantic boundaries
+func (tc *TextChunker) recursiveChunk(text, contentType string, depth int) []Chunk {
+	// Define hierarchical separators based on content type
+	separators := tc.getSeparators(contentType)
 
-	// Adaptive overlap based on content type
-	overlapRatio := tc.getOverlapRatio(contentType)
-	dynamicOverlap := int(float64(tc.Overlap) * overlapRatio)
+	// Prevent infinite recursion
+	maxDepth := 5
+	if depth >= maxDepth {
+		return tc.fallbackChunk(text, contentType)
+	}
 
-	for i, sentence := range sentences {
-		sentenceTokens := tc.EstimateTokenCount(sentence)
+	// If text is already within max tokens, return as single chunk
+	tokenCount := tc.EstimateTokenCount(text)
 
-		// Check if we need to start a new chunk
-		if tc.shouldStartNewChunk(currentTokenCount, sentenceTokens, targetSize) {
-			if currentChunk.Len() > 0 {
-				// Finalize current chunk
-				chunkText := strings.TrimSpace(currentChunk.String())
-				if chunkText != "" {
-					chunks = append(chunks, Chunk{
-						Text:       chunkText,
-						Index:      chunkIndex,
+	if tokenCount <= tc.MaxTokens {
+		return []Chunk{
+			{
+				Text:       strings.TrimSpace(text),
+				Index:      0,
+				StartPos:   0,
+				EndPos:     len(text),
+				TokenCount: tokenCount,
+				ChunkType:  contentType,
+			},
+		}
+	}
+
+	// Try splitting with current separator
+	if depth < len(separators) {
+		separator := separators[depth]
+		parts := tc.splitBySeparator(text, separator)
+
+		// If we got meaningful splits, process them recursively
+		if len(parts) > 1 {
+			var allChunks []Chunk
+
+			for _, part := range parts {
+				part = strings.TrimSpace(part)
+				if part == "" {
+					continue
+				}
+
+				partTokens := tc.EstimateTokenCount(part)
+
+				// If part is still too large, recurse with next separator
+				if partTokens > tc.MaxTokens {
+					subChunks := tc.recursiveChunk(part, contentType, depth+1)
+					allChunks = append(allChunks, subChunks...)
+				} else {
+					// Part fits within target size
+					chunk := Chunk{
+						Text:       part,
+						Index:      len(allChunks),
 						StartPos:   0,
-						EndPos:     len(chunkText),
-						TokenCount: currentTokenCount,
+						EndPos:     len(part),
+						TokenCount: partTokens,
 						ChunkType:  contentType,
-					})
-					chunkIndex++
-				}
-
-				// Start new chunk with smart overlap
-				currentChunk.Reset()
-				currentTokenCount = 0
-
-				// Add contextual overlap
-				if dynamicOverlap > 0 && len(chunks) > 0 {
-					overlapText := tc.getContextualOverlap(sentences, i, dynamicOverlap, contentType)
-					if overlapText != "" {
-						currentChunk.WriteString(overlapText)
-						currentChunk.WriteString("\n")
-						currentTokenCount = tc.EstimateTokenCount(overlapText)
 					}
+					allChunks = append(allChunks, chunk)
 				}
+			}
+
+			// Apply overlap and reindex
+			return tc.applyOverlapAndReindex(allChunks, contentType)
+		}
+	}
+
+	// If we reach here, try next separator level
+	return tc.recursiveChunk(text, contentType, depth+1)
+}
+
+// getSeparators returns hierarchical separators based on content type
+func (tc *TextChunker) getSeparators(contentType string) []string {
+	switch contentType {
+	case ContentTypeCode:
+		return []string{
+			"\n\n\n", // Multiple blank lines (major sections)
+			"\n\n",   // Double newlines (functions/classes)
+			"\n",     // Single newlines (statements)
+			". ",     // Sentences
+			" ",      // Words
+		}
+	case ContentTypeStructured:
+		return []string{
+			"\n\n\n", // Major sections
+			"\n\n",   // Paragraphs
+			"\n# ",   // Headers
+			"\n- ",   // List items
+			". ",     // Sentences
+			" ",      // Words
+		}
+	case ContentTypeProse:
+		return []string{
+			"\n\n\n", // Chapter/section breaks
+			"\n\n",   // Paragraph breaks
+			". ",     // Sentence boundaries
+			"! ",     // Exclamations
+			"? ",     // Questions
+			" ",      // Words
+		}
+	default:
+		return []string{
+			"\n\n", // Paragraphs
+			". ",   // Sentences
+			"! ",   // Exclamations
+			"? ",   // Questions
+			" ",    // Words
+		}
+	}
+}
+
+// splitBySeparator splits text by a specific separator while preserving structure
+func (tc *TextChunker) splitBySeparator(text, separator string) []string {
+	if separator == " " {
+		// Word-level splitting
+		return strings.Fields(text)
+	}
+
+	parts := strings.Split(text, separator)
+	var cleanParts []string
+
+	for i, part := range parts {
+		if i == 0 {
+			// First part - keep as is
+			cleanParts = append(cleanParts, strings.TrimSpace(part))
+		} else if strings.TrimSpace(part) != "" {
+			// Subsequent parts - add separator back for context
+			cleanParts = append(cleanParts, separator+strings.TrimSpace(part))
+		}
+	}
+
+	// Filter out empty parts
+	var result []string
+	for _, part := range cleanParts {
+		if strings.TrimSpace(part) != "" {
+			result = append(result, part)
+		}
+	}
+
+	return result
+}
+
+// applyOverlapAndReindex applies smart overlap and reindexes chunks
+func (tc *TextChunker) applyOverlapAndReindex(chunks []Chunk, contentType string) []Chunk {
+	if len(chunks) <= 1 {
+		return chunks
+	}
+
+	overlapRatio := tc.getOverlapRatio(contentType)
+	overlapTokens := int(float64(tc.Overlap) * overlapRatio)
+
+	var result []Chunk
+
+	for i, chunk := range chunks {
+		if i == 0 {
+			// First chunk - no overlap needed
+			chunk.Index = 0
+			result = append(result, chunk)
+			continue
+		}
+
+		// Add overlap from previous chunk
+		if overlapTokens > 0 && i > 0 {
+			prevChunk := chunks[i-1]
+			overlapText := tc.getOverlapFromChunk(prevChunk, overlapTokens, contentType)
+
+			if overlapText != "" {
+				separator := tc.getSeparator(contentType)
+				newText := overlapText + separator + chunk.Text
+				newTokenCount := tc.EstimateTokenCount(newText)
+
+				// Only add overlap if it doesn't exceed max tokens
+				if newTokenCount <= tc.MaxTokens {
+					chunk.Text = newText
+					chunk.TokenCount = newTokenCount
+				}
+				// If adding overlap would exceed max tokens, keep the chunk as-is
 			}
 		}
 
-		// Add current sentence to chunk
-		if currentChunk.Len() > 0 {
-			separator := tc.getSeparator(contentType)
-			currentChunk.WriteString(separator)
-		}
-		currentChunk.WriteString(sentence)
-		currentTokenCount += sentenceTokens
+		chunk.Index = i
+		chunk.StartPos = 0
+		chunk.EndPos = len(chunk.Text)
+		result = append(result, chunk)
 	}
 
-	// Add final chunk
-	if currentChunk.Len() > 0 {
-		chunkText := strings.TrimSpace(currentChunk.String())
-		if chunkText != "" {
-			chunks = append(chunks, Chunk{
-				Text:       chunkText,
-				Index:      chunkIndex,
-				StartPos:   0,
-				EndPos:     len(chunkText),
-				TokenCount: currentTokenCount,
-				ChunkType:  contentType,
-			})
-		}
-	}
-
-	// Post-process oversized chunks
-	return tc.handleOversizedChunks(chunks)
+	return result
 }
 
-// Helper functions for adaptive chunking
-func (tc *TextChunker) shouldStartNewChunk(currentTokens, newTokens, targetSize int) bool {
-	return currentTokens > 0 && currentTokens+newTokens > targetSize
+// getOverlapFromChunk extracts overlap text from a chunk
+func (tc *TextChunker) getOverlapFromChunk(chunk Chunk, overlapTokens int, _ string) string {
+	if overlapTokens <= 0 {
+		return ""
+	}
+
+	words := strings.Fields(chunk.Text)
+	if len(words) <= overlapTokens {
+		return chunk.Text
+	}
+
+	// Take the last N words for overlap
+	overlapWords := words[len(words)-overlapTokens:]
+	return strings.Join(overlapWords, " ")
+}
+
+// fallbackChunk handles cases where recursive splitting fails
+func (tc *TextChunker) fallbackChunk(text, contentType string) []Chunk {
+	// Use word-level splitting as last resort
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var chunks []Chunk
+
+	for i := 0; i < len(words); i += tc.MaxTokens {
+		end := i + tc.MaxTokens
+		if end > len(words) {
+			end = len(words)
+		}
+
+		chunkWords := words[i:end]
+		chunkText := strings.Join(chunkWords, " ")
+
+		chunk := Chunk{
+			Text:       chunkText,
+			Index:      len(chunks),
+			StartPos:   0,
+			EndPos:     len(chunkText),
+			TokenCount: len(chunkWords),
+			ChunkType:  contentType,
+		}
+
+		chunks = append(chunks, chunk)
+
+		if end >= len(words) {
+			break
+		}
+	}
+
+	return chunks
 }
 
 func (tc *TextChunker) getOverlapRatio(contentType string) float64 {
@@ -304,73 +445,6 @@ func (tc *TextChunker) isImportantCodeConstruct(text string) bool {
 		}
 	}
 	return false
-}
-
-func (tc *TextChunker) handleOversizedChunks(chunks []Chunk) []Chunk {
-	var finalChunks []Chunk
-
-	for _, chunk := range chunks {
-		if chunk.TokenCount <= tc.MaxTokens {
-			finalChunks = append(finalChunks, chunk)
-		} else {
-			// Split oversized chunks with preserved semantics
-			subChunks := tc.splitOversizedChunk(chunk)
-			finalChunks = append(finalChunks, subChunks...)
-		}
-	}
-
-	// Re-index all chunks
-	for i := range finalChunks {
-		finalChunks[i].Index = i
-	}
-
-	return finalChunks
-}
-
-func (tc *TextChunker) splitOversizedChunk(chunk Chunk) []Chunk {
-	if chunk.ChunkType == ContentTypeCode {
-		return tc.splitCodeChunk(chunk)
-	}
-	return tc.splitLongChunkByWords(chunk)
-}
-
-func (tc *TextChunker) splitCodeChunk(chunk Chunk) []Chunk {
-	lines := strings.Split(chunk.Text, "\n")
-	var chunks []Chunk
-	var currentChunk strings.Builder
-	var currentTokens int
-
-	for _, line := range lines {
-		lineTokens := tc.EstimateTokenCount(line)
-
-		if currentTokens > 0 && currentTokens+lineTokens > tc.MaxTokens {
-			if currentChunk.Len() > 0 {
-				chunks = append(chunks, Chunk{
-					Text:       strings.TrimSpace(currentChunk.String()),
-					TokenCount: currentTokens,
-					ChunkType:  "code",
-				})
-			}
-			currentChunk.Reset()
-			currentTokens = 0
-		}
-
-		if currentChunk.Len() > 0 {
-			currentChunk.WriteString("\n")
-		}
-		currentChunk.WriteString(line)
-		currentTokens += lineTokens
-	}
-
-	if currentChunk.Len() > 0 {
-		chunks = append(chunks, Chunk{
-			Text:       strings.TrimSpace(currentChunk.String()),
-			TokenCount: currentTokens,
-			ChunkType:  "code",
-		})
-	}
-
-	return chunks
 }
 
 func (tc *TextChunker) splitIntoSentences(text string) []string {

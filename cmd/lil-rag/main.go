@@ -18,7 +18,9 @@ import (
 )
 
 const (
-	helpFlag = "--help"
+	helpFlag  = "--help"
+	forceFlag = "--force"
+	yesAnswer = "yes"
 )
 
 // version is set during build time via ldflags
@@ -110,7 +112,13 @@ func run() error {
 		_ = rag.Close() // Ignore close errors in defer
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Use longer timeout for reindex operation
+	timeout := 5 * time.Minute
+	if command == "reindex" {
+		timeout = 30 * time.Minute
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	switch command {
@@ -124,6 +132,8 @@ func run() error {
 		return handleDocuments(ctx, rag, args[1:])
 	case "delete", "rm":
 		return handleDelete(ctx, rag, args[1:])
+	case "reindex":
+		return handleReindex(ctx, rag, args[1:])
 	case "health":
 		return handleHealth(rag)
 	case "config":
@@ -474,7 +484,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 	// Check if --force flag is provided
 	force := false
 	for _, arg := range args {
-		if arg == "--force" {
+		if arg == forceFlag {
 			force = true
 			break
 		}
@@ -509,7 +519,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 		}
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if response != "y" && response != "yes" {
+		if response != "y" && response != yesAnswer {
 			fmt.Println("Operation canceled.")
 			return nil
 		}
@@ -783,7 +793,7 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 	// Check if --force flag is provided
 	force := false
 	for _, arg := range args[1:] {
-		if arg == "--force" {
+		if arg == forceFlag {
 			force = true
 			break
 		}
@@ -798,7 +808,7 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 		}
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if response != "y" && response != "yes" {
+		if response != "y" && response != yesAnswer {
 			fmt.Println("Operation canceled.")
 			return nil
 		}
@@ -811,6 +821,88 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 	}
 
 	fmt.Printf("✓ Document '%s' deleted successfully.\n", documentID)
+	return nil
+}
+
+func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
+		fmt.Println("Usage: lil-rag reindex [--force]")
+		fmt.Println("")
+		fmt.Println("Reprocess all documents with the current recursive chunking configuration.")
+		fmt.Println("This will:")
+		fmt.Println("  • Re-chunk all documents using the latest algorithm")
+		fmt.Println("  • Regenerate embeddings for all chunks")
+		fmt.Println("  • Update chunk boundaries and overlap")
+		fmt.Println("  • Preserve original document content and metadata")
+		fmt.Println("")
+		fmt.Println("Options:")
+		fmt.Println("  --force    Skip confirmation prompt")
+		fmt.Println("")
+		fmt.Println("Note: This operation can take several minutes depending on the number")
+		fmt.Println("of documents and their size. The system will remain accessible during")
+		fmt.Println("reindexing, but performance may be impacted.")
+		return nil
+	}
+
+	// Check if --force flag is provided
+	force := false
+	for _, arg := range args {
+		if arg == forceFlag {
+			force = true
+			break
+		}
+	}
+
+	// Get document count for confirmation
+	documents, err := rag.ListDocuments(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check documents: %w", err)
+	}
+
+	if len(documents) == 0 {
+		fmt.Println("No documents found to reindex.")
+		return nil
+	}
+
+	fmt.Printf("This will reindex %d documents with recursive chunking.\n", len(documents))
+	fmt.Println("The process will:")
+	fmt.Println("  • Re-chunk all documents using the latest algorithm")
+	fmt.Println("  • Regenerate embeddings for improved search performance")
+	fmt.Println("  • Update chunk boundaries for better semantic coherence")
+	fmt.Printf("\nEstimated time: %d-%d minutes (depending on document size and Ollama performance)\n",
+		len(documents)/10, len(documents)/5)
+
+	if !force {
+		// Prompt for confirmation
+		fmt.Printf("\nProceed with reindexing? (y/N): ")
+		scanner := bufio.NewScanner(os.Stdin)
+		if !scanner.Scan() {
+			return fmt.Errorf("failed to read input")
+		}
+
+		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		if response != "y" && response != yesAnswer {
+			fmt.Println("Operation canceled.")
+			return nil
+		}
+	}
+
+	fmt.Println("\n🔄 Starting reindex with recursive chunking...")
+	fmt.Println("This may take several minutes. Please do not interrupt the process.")
+
+	startTime := time.Now()
+	err = rag.ReindexAllDocuments(ctx)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		fmt.Printf("\n❌ Reindex failed after %v: %v\n", duration, err)
+		return fmt.Errorf("reindex failed: %w", err)
+	}
+
+	fmt.Printf("\n✅ Reindex completed successfully in %v\n", duration)
+	fmt.Printf("All %d documents have been reprocessed with recursive chunking.\n", len(documents))
+	fmt.Println("Your RAG system now uses improved chunk boundaries for better search performance.")
+
 	return nil
 }
 
@@ -966,6 +1058,7 @@ func printUsage() {
 	fmt.Println("      --list-sessions         List all chat sessions")
 	fmt.Println("  documents                    List all indexed documents")
 	fmt.Println("  delete <id> [--force]        Delete a document by ID")
+	fmt.Println("  reindex [--force]            Reprocess all documents with recursive chunking")
 	fmt.Println("  health                       Check system health status")
 	fmt.Println("  config <init|show|set>       Manage user profile configuration")
 	fmt.Println("  reset [--force]              Delete database and all indexed data")
@@ -1021,6 +1114,8 @@ func printUsage() {
 	fmt.Println("  lil-rag chat --list-sessions             # List all chat sessions")
 	fmt.Println("  lil-rag documents               # List all documents")
 	fmt.Println("  lil-rag delete doc1 --force     # Delete document")
+	fmt.Println("  lil-rag reindex                 # Reindex all documents with recursive chunking")
+	fmt.Println("  lil-rag reindex --force         # Reindex without confirmation")
 	fmt.Println("  lil-rag health                  # Check system health")
 	fmt.Println("  lil-rag auth add alice password123  # Add user with username and password")
 	fmt.Println("  lil-rag auth list               # List all users")
