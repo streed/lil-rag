@@ -22,6 +22,7 @@ require (
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/ebitengine/purego v0.8.4 // indirect
 	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc // indirect
 	github.com/jupiterrider/ffi v0.5.0 // indirect
@@ -33,6 +34,7 @@ require (
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/tiendc/go-deepcopy v1.6.0 // indirect
+	github.com/tiktoken-go/tokenizer v0.7.0 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	golang.org/x/sys v0.36.0 // indirect

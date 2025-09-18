@@ -96,8 +96,8 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 			OllamaURL:    getEnvOrDefault("LILRAG_OLLAMA_URL", "http://localhost:11434"),
 			Model:        getEnvOrDefault("LILRAG_MODEL", "nomic-embed-text"),
 			VectorSize:   getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),
-			MaxTokens:    getEnvIntOrDefault("LILRAG_MAX_TOKENS", 200),
-			Overlap:      getEnvIntOrDefault("LILRAG_OVERLAP", 50),
+			MaxTokens:    getEnvIntOrDefault("LILRAG_MAX_TOKENS", 1024),
+			Overlap:      getEnvIntOrDefault("LILRAG_OVERLAP", 128),
 			ImageMaxSize: getEnvIntOrDefault("LILRAG_IMAGE_MAX_SIZE", 1120),
 		}
 	} else {
@@ -218,6 +218,11 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 						"type":        "string",
 						"description": "Optional document ID. If not provided, one will be auto-generated",
 					},
+					"chunking_method": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional chunking method: 'simple' (token-based), 'recursive' (semantic boundaries), 'semantic' (embedding-based), or 'auto' (intelligent selection). Defaults to 'auto'",
+						"enum":        []string{"simple", "recursive", "semantic", "auto"},
+					},
 				},
 				"required": []string{"text"},
 			},
@@ -235,6 +240,11 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					"id": map[string]interface{}{
 						"type":        "string",
 						"description": "Optional document ID. If not provided, filename will be used",
+					},
+					"chunking_method": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional chunking method: 'simple' (token-based), 'recursive' (semantic boundaries), 'semantic' (embedding-based), or 'auto' (intelligent selection). Defaults to 'auto'",
+						"enum":        []string{"simple", "recursive", "semantic", "auto"},
 					},
 				},
 				"required": []string{"file_path"},
@@ -355,10 +365,24 @@ func (s *LilRagMCPServer) handleIndex(id interface{}, args map[string]interface{
 		docID = lilrag.GenerateDocumentID()
 	}
 
+	chunkingMethod, _ := args["chunking_method"].(string)
+
 	// Index the content
 	ctx := context.Background()
-	if err := s.rag.Index(ctx, text, docID); err != nil {
+	var err error
+	if chunkingMethod != "" {
+		err = s.rag.IndexWithChunkingMethod(ctx, text, docID, chunkingMethod)
+	} else {
+		err = s.rag.Index(ctx, text, docID)
+	}
+
+	if err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to index content: %v", err))
+	}
+
+	resultMessage := fmt.Sprintf("Successfully indexed content with ID: %s", docID)
+	if chunkingMethod != "" {
+		resultMessage += fmt.Sprintf(" using %s chunking method", chunkingMethod)
 	}
 
 	return &MCPMessage{
@@ -370,7 +394,7 @@ func (s *LilRagMCPServer) handleIndex(id interface{}, args map[string]interface{
 				Text string `json:"text"`
 			}{{
 				Type: "text",
-				Text: fmt.Sprintf("Successfully indexed content with ID: %s", docID),
+				Text: resultMessage,
 			}},
 		},
 	}
@@ -393,10 +417,17 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 		docID = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	}
 
-	// Index the file
+	chunkingMethod, _ := args["chunking_method"].(string)
+
+	// Index the file (Note: IndexFile uses default chunking method for complex file types like PDF)
 	ctx := context.Background()
 	if err := s.rag.IndexFile(ctx, filePath, docID); err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to index file: %v", err))
+	}
+
+	resultMessage := fmt.Sprintf("Successfully indexed file '%s' with ID: %s", filePath, docID)
+	if chunkingMethod != "" {
+		resultMessage += fmt.Sprintf(" (Note: chunking method '%s' specified but IndexFile uses appropriate default method for file type)", chunkingMethod)
 	}
 
 	return &MCPMessage{
@@ -408,7 +439,7 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 				Text string `json:"text"`
 			}{{
 				Type: "text",
-				Text: fmt.Sprintf("Successfully indexed file '%s' with ID: %s", filePath, docID),
+				Text: resultMessage,
 			}},
 		},
 	}

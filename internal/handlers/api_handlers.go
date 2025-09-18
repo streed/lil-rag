@@ -63,7 +63,13 @@ func (h *Handler) Index() http.HandlerFunc {
 
 		// Record metrics for indexing
 		indexStart := time.Now()
-		err := h.rag.Index(ctx, req.Text, req.ID)
+		var err error
+		if req.ChunkingMethod != "" {
+			log.Printf("Using chunking method: %s", req.ChunkingMethod)
+			err = h.rag.IndexWithChunkingMethod(ctx, req.Text, req.ID, req.ChunkingMethod)
+		} else {
+			err = h.rag.Index(ctx, req.Text, req.ID)
+		}
 		indexDuration := time.Since(indexStart)
 
 		if err != nil {

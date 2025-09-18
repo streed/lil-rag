@@ -40,11 +40,11 @@ func TestDefault(t *testing.T) {
 	if config.Server.Port != 12121 {
 		t.Errorf("Expected server port 12121, got %d", config.Server.Port)
 	}
-	if config.Chunking.MaxTokens != 800 {
-		t.Errorf("Expected max tokens 800, got %d", config.Chunking.MaxTokens)
+	if config.Chunking.MaxTokens != 1024 {
+		t.Errorf("Expected max tokens 1024, got %d", config.Chunking.MaxTokens)
 	}
-	if config.Chunking.Overlap != 100 {
-		t.Errorf("Expected overlap 100, got %d", config.Chunking.Overlap)
+	if config.Chunking.Overlap != 128 {
+		t.Errorf("Expected overlap 128, got %d", config.Chunking.Overlap)
 	}
 }
 
@@ -457,5 +457,71 @@ func TestConfig_RoundTrip_YAML(t *testing.T) {
 	}
 	if loadedConfig.Server.Port != originalConfig.Server.Port {
 		t.Errorf("Server port mismatch: got %d, want %d", loadedConfig.Server.Port, originalConfig.Server.Port)
+	}
+}
+
+func TestServerConfig_SecurityDefaults(t *testing.T) {
+	config := Default()
+
+	// Verify security defaults
+	if !config.Server.Secure {
+		t.Error("Expected server security to be enabled by default")
+	}
+	if config.Server.EnableCORS {
+		t.Error("Expected CORS to be disabled by default for security")
+	}
+	if len(config.Server.TrustedProxies) != 0 {
+		t.Error("Expected trusted proxies to be empty by default")
+	}
+
+	// Verify timeout defaults
+	if config.Server.ReadTimeout != 30 {
+		t.Errorf("Expected read timeout 30s, got %d", config.Server.ReadTimeout)
+	}
+	if config.Server.WriteTimeout != 30 {
+		t.Errorf("Expected write timeout 30s, got %d", config.Server.WriteTimeout)
+	}
+	if config.Server.IdleTimeout != 120 {
+		t.Errorf("Expected idle timeout 120s, got %d", config.Server.IdleTimeout)
+	}
+	if config.Server.MaxHeaderBytes != 1048576 {
+		t.Errorf("Expected max header bytes 1MB, got %d", config.Server.MaxHeaderBytes)
+	}
+}
+
+func TestOllamaConfig_Defaults(t *testing.T) {
+	config := Default()
+
+	// Verify model defaults are research-optimal
+	if config.Ollama.Model != "nomic-embed-text" {
+		t.Errorf("Expected embedding model 'nomic-embed-text', got %q", config.Ollama.Model)
+	}
+	if config.Ollama.VisionModel != "llama3.2-vision" {
+		t.Errorf("Expected vision model 'llama3.2-vision', got %q", config.Ollama.VisionModel)
+	}
+	if config.Ollama.TimeoutSeconds != 30 {
+		t.Errorf("Expected timeout 30s, got %d", config.Ollama.TimeoutSeconds)
+	}
+	if config.Ollama.ImageMaxSize != 1120 {
+		t.Errorf("Expected image max size 1120, got %d", config.Ollama.ImageMaxSize)
+	}
+}
+
+func TestChunkConfig_OptimalValues(t *testing.T) {
+	config := Default()
+
+	// Verify 2024 research-based optimal chunking values
+	if config.Chunking.MaxTokens != 1024 {
+		t.Errorf("Expected max tokens 1024 (optimal based on 2024 research), got %d", config.Chunking.MaxTokens)
+	}
+	if config.Chunking.Overlap != 128 {
+		t.Errorf("Expected overlap 128 (12.5%% ratio, optimal for context preservation), got %d", config.Chunking.Overlap)
+	}
+
+	// Verify overlap ratio is 12.5%
+	overlapRatio := float64(config.Chunking.Overlap) / float64(config.Chunking.MaxTokens)
+	expectedRatio := 0.125 // 12.5%
+	if overlapRatio != expectedRatio {
+		t.Errorf("Expected overlap ratio %.1f%%, got %.1f%%", expectedRatio*100, overlapRatio*100)
 	}
 }

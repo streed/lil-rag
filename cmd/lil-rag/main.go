@@ -149,7 +149,26 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [id] <text|file|-> or just: lil-rag index <text|file|->")
+	}
+
+	// Parse flags
+	var chunkingMethod string
+	var filteredArgs []string
+
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--chunking-method=") {
+			chunkingMethod = strings.TrimPrefix(arg, "--chunking-method=")
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	// Update args to filtered version
+	args = filteredArgs
+
+	if len(args) == 0 {
+		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
 	var id string
@@ -173,8 +192,15 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			// Generate ID automatically
 			id = lilrag.GenerateDocumentID()
 			fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
-			if err := rag.Index(ctx, text, id); err != nil {
-				return fmt.Errorf("failed to index: %w", err)
+			if chunkingMethod != "" {
+				fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+				if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
+					return fmt.Errorf("failed to index: %w", err)
+				}
+			} else {
+				if err := rag.Index(ctx, text, id); err != nil {
+					return fmt.Errorf("failed to index: %w", err)
+				}
 			}
 
 			fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
@@ -200,8 +226,15 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 
 		id = lilrag.GenerateDocumentID()
 		fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
-		if err := rag.Index(ctx, text, id); err != nil {
-			return fmt.Errorf("failed to index: %w", err)
+		if chunkingMethod != "" {
+			fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+			if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+		} else {
+			if err := rag.Index(ctx, text, id); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
 		}
 
 		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
@@ -224,8 +257,15 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		fmt.Printf("Indexing text with ID '%s'...\n", id)
-		if err := rag.Index(ctx, text, id); err != nil {
-			return fmt.Errorf("failed to index: %w", err)
+		if chunkingMethod != "" {
+			fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+			if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+		} else {
+			if err := rag.Index(ctx, text, id); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
 		}
 
 		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
@@ -249,8 +289,15 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	}
 
 	fmt.Printf("Indexing text with ID '%s'...\n", id)
-	if err := rag.Index(ctx, text, id); err != nil {
-		return fmt.Errorf("failed to index: %w", err)
+	if chunkingMethod != "" {
+		fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+		if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
+			return fmt.Errorf("failed to index: %w", err)
+		}
+	} else {
+		if err := rag.Index(ctx, text, id); err != nil {
+			return fmt.Errorf("failed to index: %w", err)
+		}
 	}
 
 	fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
@@ -1050,7 +1097,7 @@ func printUsage() {
 	fmt.Println("  lil-rag [flags] <command> [args]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  index [id] <text|file|->     Index text, file, or stdin (ID optional, auto-generated if not provided)")
+	fmt.Println("  index [--chunking-method=<method>] [id] <text|file|->  Index text, file, or stdin (ID optional, auto-generated if not provided)")
 	fmt.Println("  search <query> [limit]       Search for similar text (default limit: 10)")
 	fmt.Println("  chat [flags] <message> [limit]  Interactive chat with RAG context (default limit: 5)")
 	fmt.Println("      --session-id <id>        Resume existing chat session")
@@ -1096,6 +1143,12 @@ func printUsage() {
 	fmt.Println("  chunking.max-tokens             Maximum tokens per chunk")
 	fmt.Println("  chunking.overlap                Token overlap between chunks")
 	fmt.Println("")
+	fmt.Println("Chunking Methods:")
+	fmt.Println("  simple                          Token-based chunking with overlap")
+	fmt.Println("  recursive                       Hierarchical splitting with semantic boundaries")
+	fmt.Println("  semantic                        Embedding-based semantic similarity chunking")
+	fmt.Println("  auto                            Automatically choose best method based on content")
+	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  lil-rag config init")
 	fmt.Println("  lil-rag config set ollama.endpoint http://localhost:11434")
@@ -1103,6 +1156,9 @@ func printUsage() {
 	fmt.Println("  lil-rag config set ollama.chat-model llama3.2")
 	fmt.Println("  lil-rag index \"Hello world\"               # Auto-generated ID")
 	fmt.Println("  lil-rag index doc1 \"Hello world\"         # Explicit ID")
+	fmt.Println("  lil-rag index --chunking-method=simple \"Hello world\"  # Simple chunking")
+	fmt.Println("  lil-rag index --chunking-method=recursive doc1 \"text\"  # Recursive chunking")
+	fmt.Println("  lil-rag index --chunking-method=semantic \"long document\"  # Semantic chunking")
 	fmt.Println("  lil-rag index document.pdf                # Auto-generated ID")
 	fmt.Println("  lil-rag index doc2 document.txt           # Explicit ID")
 	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin")

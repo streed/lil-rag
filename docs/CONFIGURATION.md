@@ -35,8 +35,8 @@ LilRag uses a profile-based configuration system that stores settings in `~/.lil
     "trusted_proxies": []
   },
   "chunking": {
-    "max_tokens": 1800,
-    "overlap": 200
+    "max_tokens": 1024,
+    "overlap": 128
   }
 }
 ```
@@ -331,46 +331,73 @@ Controls HTTP server behavior, authentication, timeouts, and security settings.
 
 ### Chunking Configuration (`chunking`)
 
-Controls how documents are split into searchable chunks.
+Controls how documents are split into searchable chunks using 2024 research-based optimizations.
 
 #### `max_tokens`
 - **Type**: Integer
-- **Default**: `256` (optimized for 2025 RAG best practices)
-- **Description**: Maximum tokens per chunk
+- **Default**: `1024` (optimal based on 2024 embedding research)
+- **Description**: Maximum tokens per chunk using tiktoken (cl100k_base) counting
+- **Token Estimation**: Uses tiktoken for accurate LLM-compatible token counting
 - **Recommendations**:
-  - `128-256`: Precise search results, good for Q&A
-  - `512-1024`: More context per result, good for summarization  
-  - `1800+`: Legacy mode, preserves large context blocks
+  - `512`: Precise search results, good for Q&A and fact retrieval
+  - `1024`: Optimal balance for most use cases (recommended default)
+  - `1536`: Larger context for complex reasoning (advanced models)
+- **Research Basis**: 2024 studies show 1024 tokens provide best embedding performance
 - **Examples**:
   ```bash
-  # Optimize for precise search
-  lil-rag config set chunking.max-tokens 128
-  
-  # Optimize for context preservation
+  # Optimize for precision (smaller chunks)
   lil-rag config set chunking.max-tokens 512
-  
-  # Legacy chunking (pre-2025)
-  lil-rag config set chunking.max-tokens 1800
+
+  # Research-optimal balance (default)
+  lil-rag config set chunking.max-tokens 1024
+
+  # Large context for advanced models
+  lil-rag config set chunking.max-tokens 1536
   ```
 
 #### `overlap`
 - **Type**: Integer
-- **Default**: `38` (15% of max_tokens)
-- **Description**: Token overlap between adjacent chunks
-- **Purpose**: Prevents context loss at chunk boundaries
-- **Recommendations**: 10-20% of max_tokens
+- **Default**: `128` (12.5% of max_tokens)
+- **Description**: Token overlap between adjacent chunks for context preservation
+- **Purpose**: Maintains semantic continuity across chunk boundaries
+- **Optimal Ratio**: 12.5% provides best balance between context and efficiency
 - **Examples**:
   ```bash
-  # Calculate overlap for different chunk sizes
-  # For 128 tokens: 128 * 0.15 = 19
-  lil-rag config set chunking.overlap 19
-  
-  # For 512 tokens: 512 * 0.15 = 76  
-  lil-rag config set chunking.overlap 76
-  
-  # For 1800 tokens: 1800 * 0.11 = 200
-  lil-rag config set chunking.overlap 200
+  # Calculate optimal overlap for different chunk sizes
+  # For 512 tokens: 512 * 0.125 = 64
+  lil-rag config set chunking.overlap 64
+
+  # For 1024 tokens: 1024 * 0.125 = 128 (default)
+  lil-rag config set chunking.overlap 128
+
+  # For 1536 tokens: 1536 * 0.125 = 192
+  lil-rag config set chunking.overlap 192
   ```
+
+#### Chunking Methods
+LilRag supports multiple chunking strategies via CLI and API:
+
+- **simple**: Token-based chunking with overlap (fast, efficient)
+- **recursive**: Hierarchical splitting at semantic boundaries (preserves structure)
+- **semantic**: Embedding-based similarity chunking (optimal for complex content)
+- **auto**: Intelligent method selection based on content analysis (default)
+
+**CLI Examples**:
+```bash
+# Use specific chunking methods
+lil-rag index --chunking-method=simple "content"
+lil-rag index --chunking-method=recursive doc1 "structured content"
+lil-rag index --chunking-method=semantic "academic paper"
+lil-rag index --chunking-method=auto "auto-detect best method"
+```
+
+**API Examples**:
+```bash
+# HTTP API with chunking method
+curl -X POST http://localhost:12121/api/index \
+  -H "Content-Type: application/json" \
+  -d '{"text": "content", "chunking_method": "semantic"}'
+```
 
 ## Command Line Overrides
 

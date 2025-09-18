@@ -72,8 +72,8 @@ func Default() *Config {
 			TrustedProxies: []string{},
 		},
 		Chunking: Chunk{
-			MaxTokens: 800, // Optimal size based on 2024 research (200-800 range)
-			Overlap:   100, // 12.5% overlap ratio, optimal for context preservation
+			MaxTokens: 1024, // Optimal size based on 2024 research (512-1024 range, 1024 shows best balance)
+			Overlap:   128,  // 12.5% overlap ratio, optimal for context preservation and retrieval accuracy
 		},
 	}
 }

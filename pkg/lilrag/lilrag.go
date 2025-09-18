@@ -153,8 +153,8 @@ func (m *LilRag) Initialize() error {
 	}
 	m.embedder = embedder
 
-	// Initialize text chunker
-	m.chunker = NewTextChunker(m.config.MaxTokens, m.config.Overlap)
+	// Initialize text chunker with embedder for semantic chunking support
+	m.chunker = NewTextChunkerWithEmbedder(m.config.MaxTokens, m.config.Overlap, m.embedder)
 
 	// Initialize PDF parser (keep for backward compatibility)
 	m.pdfParser = NewPDFParser()
@@ -202,6 +202,67 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 	}
 
 	fmt.Printf("Splitting text into %d chunks for document '%s'\n", len(chunks), id)
+
+	// Record document tokens processed
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += chunk.TokenCount
+	}
+	metrics.RecordDocumentTokens("text", totalTokens)
+
+	// Create embeddings for each chunk
+	embeddings := make([][]float32, len(chunks))
+	for i, chunk := range chunks {
+		fmt.Printf("Creating embedding for chunk %d/%d (tokens: %d)\n", i+1, len(chunks), chunk.TokenCount)
+		embedding, err := m.embedder.Embed(ctx, chunk.Text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
+		}
+		embeddings[i] = embedding
+	}
+
+	// Store document with chunks
+	return m.storage.IndexChunks(ctx, id, text, chunks, embeddings)
+}
+
+// IndexWithChunkingMethod indexes text with a specific chunking method
+func (m *LilRag) IndexWithChunkingMethod(ctx context.Context, text, id, chunkingMethod string) error {
+	if text == "" {
+		return fmt.Errorf("text cannot be empty")
+	}
+	if id == "" {
+		return fmt.Errorf("id cannot be empty")
+	}
+	if m.chunker == nil || m.embedder == nil || m.storage == nil {
+		return fmt.Errorf("LilRag not properly initialized")
+	}
+
+	// Create a temporary chunker with the specified method
+	tempChunker := &TextChunker{
+		MaxTokens: m.chunker.MaxTokens,
+		Overlap:   m.chunker.Overlap,
+		Method:    chunkingMethod,
+		Tokenizer: m.chunker.Tokenizer,
+		Embedder:  m.embedder,
+	}
+
+	// Check if text needs chunking
+	if !tempChunker.IsLongText(text) {
+		// Simple case: text fits in one chunk
+		embedding, err := m.embedder.Embed(ctx, text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding: %w", err)
+		}
+		return m.storage.Index(ctx, id, text, embedding)
+	}
+
+	// Complex case: text needs to be chunked with specified method
+	chunks := tempChunker.ChunkText(text)
+	if len(chunks) == 0 {
+		return fmt.Errorf("failed to create chunks from text")
+	}
+
+	fmt.Printf("Splitting text into %d chunks for document '%s' using %s method\n", len(chunks), id, chunkingMethod)
 
 	// Record document tokens processed
 	totalTokens := 0
@@ -849,8 +910,8 @@ func (m *LilRag) initializeLegacyComponents() error {
 	}
 	m.embedder = embedder
 
-	// Initialize text chunker
-	m.chunker = NewTextChunker(m.config.MaxTokens, m.config.Overlap)
+	// Initialize text chunker with embedder for semantic chunking support
+	m.chunker = NewTextChunkerWithEmbedder(m.config.MaxTokens, m.config.Overlap, m.embedder)
 
 	// Initialize PDF parser (keep for backward compatibility)
 	m.pdfParser = NewPDFParser()

@@ -1,11 +1,16 @@
 package lilrag
 
 import (
+	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/tiktoken-go/tokenizer"
 )
 
 // Content type constants
@@ -13,6 +18,14 @@ const (
 	ContentTypeCode       = "code"
 	ContentTypeProse      = "prose"
 	ContentTypeStructured = "structured"
+)
+
+// Chunking method constants
+const (
+	ChunkingMethodRecursive = "recursive" // Hierarchical splitting with semantic boundaries
+	ChunkingMethodSimple    = "simple"    // Simple token-based chunking with overlap
+	ChunkingMethodSemantic  = "semantic"  // Embedding-based semantic similarity chunking
+	ChunkingMethodAuto      = "auto"      // Automatically choose best method based on content
 )
 
 // Chunk type constants
@@ -25,6 +38,9 @@ type TextChunker struct {
 	MaxTokens  int
 	Overlap    int
 	TokenRegex *regexp.Regexp
+	Method     string                     // Chunking method to use
+	Tokenizer  tokenizer.Codec           // tiktoken tokenizer for accurate token counting
+	Embedder   Embedder                  // embedder for semantic chunking (optional)
 }
 
 type Chunk struct {
@@ -38,18 +54,88 @@ type Chunk struct {
 }
 
 func NewTextChunker(maxTokens, overlap int) *TextChunker {
-	// Simple tokenization regex - splits on whitespace
+	// Simple tokenization regex - splits on whitespace (fallback)
 	tokenRegex := regexp.MustCompile(`\S+`)
+
+	// Initialize tiktoken tokenizer for accurate token counting
+	// Using cl100k_base which is used by GPT-4 and GPT-3.5-turbo
+	enc, err := tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		// If tokenizer fails to initialize, we'll fall back to regex estimation
+		enc = nil
+	}
 
 	return &TextChunker{
 		MaxTokens:  maxTokens,
 		Overlap:    overlap,
 		TokenRegex: tokenRegex,
+		Method:     ChunkingMethodAuto, // Default to auto method selection
+		Tokenizer:  enc,
+		Embedder:   nil, // Embedder will be set when semantic chunking is needed
 	}
 }
 
+// NewTextChunkerWithEmbedder creates a TextChunker with an embedder for semantic chunking
+func NewTextChunkerWithEmbedder(maxTokens, overlap int, embedder Embedder) *TextChunker {
+	chunker := NewTextChunker(maxTokens, overlap)
+	chunker.Embedder = embedder
+	return chunker
+}
+
+// NewTextChunkerWithMethod creates a TextChunker with specific chunking method
+func NewTextChunkerWithMethod(maxTokens, overlap int, method string) *TextChunker {
+	chunker := NewTextChunker(maxTokens, overlap)
+	chunker.Method = method
+	return chunker
+}
+
+// EstimateTokenCount provides accurate token estimation using tiktoken
 func (tc *TextChunker) EstimateTokenCount(text string) int {
-	return len(tc.TokenRegex.FindAllString(text, -1))
+	if text == "" {
+		return 0
+	}
+
+	// Use tiktoken tokenizer for accurate token counting if available
+	if tc.Tokenizer != nil {
+		tokens, _, err := tc.Tokenizer.Encode(text)
+		if err == nil {
+			return len(tokens)
+		}
+		// If encoding fails, fall back to regex estimation
+	}
+
+	// Fallback to regex-based estimation if tiktoken is not available
+	text = strings.TrimSpace(text)
+	words := tc.TokenRegex.FindAllString(text, -1)
+	tokenCount := len(words)
+
+	// Add tokens for punctuation and special characters
+	punctuationCount := strings.Count(text, ".") + strings.Count(text, ",") +
+		strings.Count(text, "!") + strings.Count(text, "?") + strings.Count(text, ";") +
+		strings.Count(text, ":") + strings.Count(text, "'") + strings.Count(text, "\"") +
+		strings.Count(text, "(") + strings.Count(text, ")") + strings.Count(text, "[") +
+		strings.Count(text, "]") + strings.Count(text, "{") + strings.Count(text, "}")
+
+	// Add tokens for newlines (each newline is roughly 1 token)
+	newlineCount := strings.Count(text, "\n")
+
+	// Apply multiplier for longer words (they often get split into multiple tokens)
+	longWordMultiplier := 0
+	for _, word := range words {
+		if len(word) > 6 { // Words longer than 6 chars often become multiple tokens
+			longWordMultiplier += (len(word) - 6) / 4 // Rough estimation
+		}
+	}
+
+	// More accurate estimation: 1.3 tokens per word on average for natural text
+	estimatedTokens := int(float64(tokenCount)*1.3) + punctuationCount + newlineCount + longWordMultiplier
+
+	// Apply minimum of original count to avoid under-estimation
+	if estimatedTokens < tokenCount {
+		estimatedTokens = tokenCount
+	}
+
+	return estimatedTokens
 }
 
 func (tc *TextChunker) ChunkText(text string) []Chunk {
@@ -75,18 +161,21 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 		}
 	}
 
-	// Apply semantic chunking for ALL documents to get optimal boundaries
-	// Even small documents benefit from content-type aware processing
-	semanticChunks := tc.adaptiveChunk(text, contentType)
-
-	// If semantic chunking produces only one chunk that fits in token limit,
-	// we still benefit from the content-type detection and boundary analysis
-	if len(semanticChunks) == 1 && semanticChunks[0].TokenCount <= tc.MaxTokens {
-		return semanticChunks
+	// Choose chunking method based on configuration
+	switch tc.Method {
+	case ChunkingMethodSimple:
+		return tc.simpleChunk(text, contentType)
+	case ChunkingMethodRecursive:
+		return tc.adaptiveChunk(text, contentType)
+	case ChunkingMethodSemantic:
+		return tc.semanticChunk(text, contentType)
+	case ChunkingMethodAuto:
+		// Auto-select based on content and size
+		return tc.autoChunk(text, contentType, tokenCount)
+	default:
+		// Default to recursive for backward compatibility
+		return tc.adaptiveChunk(text, contentType)
 	}
-
-	// For larger documents or multiple semantic chunks, apply full processing
-	return semanticChunks
 }
 
 // detectContentType analyzes text to determine optimal chunking strategy
@@ -666,4 +755,440 @@ func GenerateDocumentID() string {
 	milliseconds := now.Nanosecond() / 1000000 % 1000
 
 	return fmt.Sprintf("%s-%s-%s%03d", adjective, noun, timestamp, milliseconds)
+}
+
+// simpleChunk implements straightforward token-based chunking with proper overlap
+func (tc *TextChunker) simpleChunk(text, contentType string) []Chunk {
+	if text == "" {
+		return nil
+	}
+
+	// Split text into words to allow for precise token tracking
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var chunks []Chunk
+	var currentChunk strings.Builder
+	var currentTokens int
+	chunkIndex := 0
+
+	// Reserve space for overlap
+	effectiveMaxTokens := tc.MaxTokens - tc.Overlap
+
+	for i, word := range words {
+		// Estimate tokens for current word (including space)
+		wordWithSpace := word
+		if currentChunk.Len() > 0 {
+			wordWithSpace = " " + word
+		}
+		wordTokens := tc.EstimateTokenCount(wordWithSpace)
+
+		// Check if adding this word would exceed our limit
+		if currentTokens > 0 && currentTokens+wordTokens > effectiveMaxTokens {
+			// Finalize current chunk
+			chunkText := strings.TrimSpace(currentChunk.String())
+			if chunkText != "" {
+				chunk := Chunk{
+					Text:       chunkText,
+					Index:      chunkIndex,
+					StartPos:   0,
+					EndPos:     len(chunkText),
+					TokenCount: tc.EstimateTokenCount(chunkText), // Accurate count for final chunk
+					ChunkType:  contentType,
+				}
+				chunks = append(chunks, chunk)
+				chunkIndex++
+			}
+
+			// Start new chunk with overlap from previous chunk
+			currentChunk.Reset()
+			currentTokens = 0
+
+			// Add overlap words from the end of the previous chunk
+			if tc.Overlap > 0 && len(chunks) > 0 {
+				overlapWords := tc.getOverlapWords(words, i, tc.Overlap)
+				if len(overlapWords) > 0 {
+					currentChunk.WriteString(strings.Join(overlapWords, " "))
+					currentTokens = tc.EstimateTokenCount(currentChunk.String())
+				}
+			}
+		}
+
+		// Add current word to chunk
+		if currentChunk.Len() > 0 {
+			currentChunk.WriteString(" ")
+		}
+		currentChunk.WriteString(word)
+		currentTokens = tc.EstimateTokenCount(currentChunk.String())
+	}
+
+	// Add final chunk if there's content
+	if currentChunk.Len() > 0 {
+		chunkText := strings.TrimSpace(currentChunk.String())
+		if chunkText != "" {
+			chunk := Chunk{
+				Text:       chunkText,
+				Index:      chunkIndex,
+				StartPos:   0,
+				EndPos:     len(chunkText),
+				TokenCount: tc.EstimateTokenCount(chunkText),
+				ChunkType:  contentType,
+			}
+			chunks = append(chunks, chunk)
+		}
+	}
+
+	return chunks
+}
+
+// getOverlapWords gets the last N tokens worth of words for overlap
+func (tc *TextChunker) getOverlapWords(words []string, currentIndex, overlapTokens int) []string {
+	if overlapTokens <= 0 || currentIndex <= 0 {
+		return nil
+	}
+
+	var overlapWords []string
+	tokensCollected := 0
+
+	// Go backwards from current position to collect overlap words
+	for i := currentIndex - 1; i >= 0 && tokensCollected < overlapTokens; i-- {
+		word := words[i]
+		wordTokens := tc.EstimateTokenCount(word + " ") // Include space
+
+		if tokensCollected+wordTokens <= overlapTokens {
+			overlapWords = append([]string{word}, overlapWords...) // Prepend to maintain order
+			tokensCollected += wordTokens
+		} else {
+			break
+		}
+	}
+
+	return overlapWords
+}
+
+// autoChunk automatically selects the best chunking method based on content analysis
+func (tc *TextChunker) autoChunk(text, contentType string, tokenCount int) []Chunk {
+	// Decision factors for choosing chunking method:
+	// 1. Content type and structure
+	// 2. Document size
+	// 3. Presence of natural boundaries
+	// 4. Availability of embedder for semantic chunking
+
+	// For small documents (< 2x max tokens), use simple chunking
+	if tokenCount < tc.MaxTokens*2 {
+		return tc.simpleChunk(text, contentType)
+	}
+
+	// For code content, prefer recursive to preserve function/class boundaries
+	if contentType == ContentTypeCode {
+		return tc.adaptiveChunk(text, contentType)
+	}
+
+	// For highly structured content with clear hierarchies, use recursive
+	structureIndicators := []string{"# ", "## ", "### ", "#### ", "1. ", "2. ", "3. ", "- ", "* "}
+	structureCount := 0
+	for _, indicator := range structureIndicators {
+		structureCount += strings.Count(text, indicator)
+	}
+
+	// If document has lots of structure (>10 structural elements), use recursive
+	if structureCount > 10 {
+		return tc.adaptiveChunk(text, contentType)
+	}
+
+	// For medium to large prose documents, prefer semantic chunking if embedder is available
+	if tc.Embedder != nil && contentType == ContentTypeProse && tokenCount > tc.MaxTokens*3 {
+		return tc.semanticChunk(text, contentType)
+	}
+
+	// For plain prose or lightly structured content, use simple chunking for better context preservation
+	return tc.simpleChunk(text, contentType)
+}
+
+// semanticChunk implements embedding-based semantic similarity chunking
+func (tc *TextChunker) semanticChunk(text, contentType string) []Chunk {
+	if text == "" {
+		return nil
+	}
+
+	// If embedder is not available, fall back to recursive chunking
+	if tc.Embedder == nil {
+		return tc.adaptiveChunk(text, contentType)
+	}
+
+	// Split text into sentences for semantic analysis
+	sentences := tc.splitIntoSentences(text)
+	if len(sentences) <= 1 {
+		// Single sentence, return as one chunk
+		tokenCount := tc.EstimateTokenCount(text)
+		return []Chunk{
+			{
+				Text:       text,
+				Index:      0,
+				StartPos:   0,
+				EndPos:     len(text),
+				TokenCount: tokenCount,
+				ChunkType:  contentType,
+			},
+		}
+	}
+
+	// Generate embeddings for each sentence
+	ctx := context.Background()
+	embeddings, err := tc.generateSentenceEmbeddings(ctx, sentences)
+	if err != nil {
+		// If embedding fails, fall back to recursive chunking
+		return tc.adaptiveChunk(text, contentType)
+	}
+
+	// Calculate semantic boundaries using cosine similarity
+	boundaries := tc.findSemanticBoundaries(embeddings, sentences)
+
+	// Group sentences into chunks based on semantic boundaries
+	chunks := tc.groupSentencesSemanically(sentences, boundaries, text, contentType)
+
+	// Ensure chunks respect token limits and add overlaps
+	return tc.optimizeSemanticChunks(chunks, contentType)
+}
+
+// generateSentenceEmbeddings creates embeddings for each sentence
+func (tc *TextChunker) generateSentenceEmbeddings(ctx context.Context, sentences []string) ([][]float32, error) {
+	embeddings := make([][]float32, len(sentences))
+
+	for i, sentence := range sentences {
+		if strings.TrimSpace(sentence) == "" {
+			continue
+		}
+
+		embedding, err := tc.Embedder.Embed(ctx, sentence)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate embedding for sentence %d: %w", i, err)
+		}
+		embeddings[i] = embedding
+	}
+
+	return embeddings, nil
+}
+
+// findSemanticBoundaries identifies chunk boundaries using cosine similarity
+func (tc *TextChunker) findSemanticBoundaries(embeddings [][]float32, sentences []string) []int {
+	if len(embeddings) <= 1 {
+		return []int{0, len(sentences)}
+	}
+
+	// Calculate cosine distances between consecutive sentences
+	distances := make([]float64, len(embeddings)-1)
+	for i := 0; i < len(embeddings)-1; i++ {
+		distances[i] = tc.cosineSimilarity(embeddings[i], embeddings[i+1])
+	}
+
+	// Find breakpoints using percentile threshold (95th percentile)
+	sortedDistances := make([]float64, len(distances))
+	copy(sortedDistances, distances)
+	sort.Float64s(sortedDistances)
+
+	// Use 95th percentile as threshold for semantic boundaries
+	percentileIndex := int(float64(len(sortedDistances)) * 0.05) // 5th percentile (low similarity = boundary)
+	if percentileIndex >= len(sortedDistances) {
+		percentileIndex = len(sortedDistances) - 1
+	}
+	threshold := sortedDistances[percentileIndex]
+
+	// Identify boundaries where similarity is below threshold
+	boundaries := []int{0} // Always start with first sentence
+	for i, distance := range distances {
+		if distance <= threshold {
+			boundaries = append(boundaries, i+1)
+		}
+	}
+	boundaries = append(boundaries, len(sentences)) // Always end with last sentence
+
+	// Remove duplicate boundaries and ensure proper ordering
+	uniqueBoundaries := tc.removeDuplicateBoundaries(boundaries)
+
+	return uniqueBoundaries
+}
+
+// cosineSimilarity calculates cosine similarity between two vectors
+func (tc *TextChunker) cosineSimilarity(a, b []float32) float64 {
+	if len(a) != len(b) {
+		return 0.0
+	}
+
+	var dotProduct, normA, normB float64
+	for i := 0; i < len(a); i++ {
+		dotProduct += float64(a[i]) * float64(b[i])
+		normA += float64(a[i]) * float64(a[i])
+		normB += float64(b[i]) * float64(b[i])
+	}
+
+	if normA == 0.0 || normB == 0.0 {
+		return 0.0
+	}
+
+	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+// removeDuplicateBoundaries removes duplicate indices and ensures proper ordering
+func (tc *TextChunker) removeDuplicateBoundaries(boundaries []int) []int {
+	if len(boundaries) <= 1 {
+		return boundaries
+	}
+
+	seen := make(map[int]bool)
+	var unique []int
+
+	for _, boundary := range boundaries {
+		if !seen[boundary] {
+			seen[boundary] = true
+			unique = append(unique, boundary)
+		}
+	}
+
+	sort.Ints(unique)
+	return unique
+}
+
+// groupSentencesSemanically creates chunks from sentences based on boundaries
+func (tc *TextChunker) groupSentencesSemanically(sentences []string, boundaries []int, originalText, contentType string) []Chunk {
+	var chunks []Chunk
+
+	for i := 0; i < len(boundaries)-1; i++ {
+		start := boundaries[i]
+		end := boundaries[i+1]
+
+		if start >= end || start >= len(sentences) {
+			continue
+		}
+
+		// Ensure we don't go beyond the sentences array
+		if end > len(sentences) {
+			end = len(sentences)
+		}
+
+		// Join sentences for this chunk
+		chunkSentences := sentences[start:end]
+		chunkText := strings.Join(chunkSentences, " ")
+		chunkText = strings.TrimSpace(chunkText)
+
+		if chunkText == "" {
+			continue
+		}
+
+		// Calculate token count and positions
+		tokenCount := tc.EstimateTokenCount(chunkText)
+		startPos := tc.findStartPosition(originalText, chunkSentences[0])
+		endPos := startPos + len(chunkText)
+
+		chunks = append(chunks, Chunk{
+			Text:       chunkText,
+			Index:      len(chunks),
+			StartPos:   startPos,
+			EndPos:     endPos,
+			TokenCount: tokenCount,
+			ChunkType:  contentType,
+		})
+	}
+
+	return chunks
+}
+
+// optimizeSemanticChunks ensures chunks respect token limits and adds appropriate overlaps
+func (tc *TextChunker) optimizeSemanticChunks(chunks []Chunk, contentType string) []Chunk {
+	if len(chunks) == 0 {
+		return chunks
+	}
+
+	var optimized []Chunk
+
+	for i, chunk := range chunks {
+		// If chunk exceeds token limit, split it further
+		if chunk.TokenCount > tc.MaxTokens {
+			// Split oversized chunk using simple token-based splitting
+			subChunks := tc.splitOversizedSemanticChunk(chunk)
+			optimized = append(optimized, subChunks...)
+		} else {
+			// Add overlap with previous chunk if not the first chunk
+			if i > 0 && tc.Overlap > 0 {
+				chunk = tc.addSemanticOverlap(chunk, optimized[len(optimized)-1])
+			}
+			optimized = append(optimized, chunk)
+		}
+	}
+
+	// Re-index chunks
+	for i := range optimized {
+		optimized[i].Index = i
+	}
+
+	return optimized
+}
+
+// splitOversizedSemanticChunk splits a chunk that exceeds token limits
+func (tc *TextChunker) splitOversizedSemanticChunk(chunk Chunk) []Chunk {
+	// Use simple word-based splitting for oversized semantic chunks
+	words := strings.Fields(chunk.Text)
+	if len(words) <= tc.MaxTokens {
+		return []Chunk{chunk}
+	}
+
+	var subChunks []Chunk
+	effectiveMaxTokens := tc.MaxTokens - tc.Overlap
+	if effectiveMaxTokens <= 0 {
+		effectiveMaxTokens = tc.MaxTokens
+	}
+
+	for i := 0; i < len(words); i += effectiveMaxTokens {
+		end := i + tc.MaxTokens
+		if end > len(words) {
+			end = len(words)
+		}
+
+		chunkWords := words[i:end]
+		chunkText := strings.Join(chunkWords, " ")
+		tokenCount := tc.EstimateTokenCount(chunkText)
+
+		subChunks = append(subChunks, Chunk{
+			Text:       chunkText,
+			Index:      len(subChunks),
+			StartPos:   chunk.StartPos,
+			EndPos:     chunk.StartPos + len(chunkText),
+			TokenCount: tokenCount,
+			ChunkType:  chunk.ChunkType,
+		})
+	}
+
+	return subChunks
+}
+
+// addSemanticOverlap adds contextual overlap between semantic chunks
+func (tc *TextChunker) addSemanticOverlap(currentChunk, previousChunk Chunk) Chunk {
+	if tc.Overlap <= 0 {
+		return currentChunk
+	}
+
+	// Take last few words from previous chunk as overlap
+	prevWords := strings.Fields(previousChunk.Text)
+	overlapWords := tc.Overlap / 4 // Estimate 4 tokens per word for overlap
+	if overlapWords > len(prevWords) {
+		overlapWords = len(prevWords)
+	}
+	if overlapWords <= 0 {
+		return currentChunk
+	}
+
+	overlap := strings.Join(prevWords[len(prevWords)-overlapWords:], " ")
+	newText := overlap + " " + currentChunk.Text
+	newTokenCount := tc.EstimateTokenCount(newText)
+
+	return Chunk{
+		Text:       newText,
+		Index:      currentChunk.Index,
+		StartPos:   currentChunk.StartPos,
+		EndPos:     currentChunk.EndPos,
+		TokenCount: newTokenCount,
+		ChunkType:  currentChunk.ChunkType,
+	}
 }

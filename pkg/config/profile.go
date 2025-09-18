@@ -74,8 +74,8 @@ func DefaultProfile() *ProfileConfig {
 			TrustedProxies: []string{}, // Empty by default
 		},
 		Chunking: ChunkConfig{
-			MaxTokens: 256, // Optimized for 2025 RAG best practices (128-512 range)
-			Overlap:   38,  // 15% overlap ratio for optimal context preservation
+			MaxTokens: 1024, // Optimal size based on 2024 research (512-1024 range, 1024 shows best balance)
+			Overlap:   128,  // 12.5% overlap ratio, optimal for context preservation and retrieval accuracy
 		},
 	}
 }

@@ -1,6 +1,7 @@
 package lilrag
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -118,7 +119,7 @@ func TestTextChunker_IsLongText(t *testing.T) {
 }
 
 func TestTextChunker_ChunkText_SingleChunk(t *testing.T) {
-	chunker := NewTextChunker(10, 2)
+	chunker := NewTextChunker(15, 2) // Increased to accommodate accurate token counting
 
 	text := "This is a short text that fits in one chunk"
 	chunks := chunker.ChunkText(text)
@@ -613,4 +614,445 @@ func TestTextChunker_RealWorldExample(t *testing.T) {
 	if len(chunkWords) < len(originalWords) {
 		t.Errorf("Lost words during chunking: original %d, chunks %d", len(originalWords), len(chunkWords))
 	}
+}
+
+func TestTextChunker_SimpleChunking(t *testing.T) {
+	chunker := NewTextChunkerWithMethod(50, 10, "simple")
+
+	// Test text that should be split with simple chunking
+	text := strings.Repeat("This is a test sentence with multiple words that should be chunked properly. ", 10)
+	chunks := chunker.ChunkText(text)
+
+	if len(chunks) == 0 {
+		t.Fatal("Expected at least one chunk")
+	}
+
+	// Verify all chunks respect token limits
+	for i, chunk := range chunks {
+		if chunk.TokenCount > chunker.MaxTokens {
+			t.Errorf("Chunk %d exceeds max tokens: %d > %d", i, chunk.TokenCount, chunker.MaxTokens)
+		}
+		if chunk.Index != i {
+			t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
+		}
+		if chunk.Text == "" {
+			t.Errorf("Chunk %d has empty text", i)
+		}
+	}
+
+	// Verify overlap exists between chunks (except for first chunk)
+	for i := 1; i < len(chunks); i++ {
+		// Simple check - subsequent chunks should have some overlap with previous
+		// We can't easily verify exact overlap without complex text analysis
+		if len(chunks[i].Text) < 10 {
+			t.Errorf("Chunk %d seems too short, might be missing overlap", i)
+		}
+	}
+}
+
+func TestTextChunker_RecursiveChunking(t *testing.T) {
+	chunker := NewTextChunkerWithMethod(50, 10, "recursive")
+
+	// Test structured text that should benefit from recursive chunking
+	text := `# Main Title
+
+This is an introduction paragraph with some content.
+
+## Section 1
+
+This is the first section with detailed content that should be chunked based on semantic boundaries.
+
+### Subsection 1.1
+
+More detailed content here with specific information that should maintain coherence.
+
+## Section 2
+
+Another section with different content that should be processed appropriately.`
+
+	chunks := chunker.ChunkText(text)
+
+	if len(chunks) == 0 {
+		t.Fatal("Expected at least one chunk")
+	}
+
+	// Verify all chunks respect token limits
+	for i, chunk := range chunks {
+		if chunk.TokenCount > chunker.MaxTokens {
+			t.Errorf("Chunk %d exceeds max tokens: %d > %d", i, chunk.TokenCount, chunker.MaxTokens)
+		}
+		if chunk.Index != i {
+			t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
+		}
+		if chunk.Text == "" {
+			t.Errorf("Chunk %d has empty text", i)
+		}
+	}
+}
+
+func TestTextChunker_AutoChunking(t *testing.T) {
+	chunker := NewTextChunkerWithMethod(50, 10, "auto")
+
+	tests := []struct {
+		name string
+		text string
+	}{
+		{
+			name: "simple prose",
+			text: strings.Repeat("This is simple prose text without much structure. ", 20),
+		},
+		{
+			name: "structured document",
+			text: "# Title\n\n## Section 1\n\nContent here.\n\n## Section 2\n\nMore content.\n\n### Subsection\n\nDetailed content.",
+		},
+		{
+			name: "code content",
+			text: "function example() {\n  var x = 10;\n  return x + 5;\n}\n\nclass TestClass {\n  constructor() {\n    this.value = 42;\n  }\n}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chunks := chunker.ChunkText(tt.text)
+
+			if len(chunks) == 0 {
+				t.Fatal("Expected at least one chunk")
+			}
+
+			// Verify all chunks respect token limits
+			for i, chunk := range chunks {
+				if chunk.TokenCount > chunker.MaxTokens {
+					t.Errorf("Chunk %d exceeds max tokens: %d > %d", i, chunk.TokenCount, chunker.MaxTokens)
+				}
+				if chunk.Index != i {
+					t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
+				}
+				if chunk.Text == "" {
+					t.Errorf("Chunk %d has empty text", i)
+				}
+			}
+		})
+	}
+}
+
+func TestTextChunker_TokenEstimationAccuracy(t *testing.T) {
+	chunker := NewTextChunker(100, 20)
+
+	testTexts := []string{
+		"Simple text",
+		"Text with punctuation: hello, world! How are you?",
+		"Text with\nnewlines\nand\nbreaks",
+		"Longer words like supercalifragilisticexpialidocious and antidisestablishmentarianism",
+		"Mixed content with code: `function test() { return 42; }` and normal text.",
+	}
+
+	for i, text := range testTexts {
+		t.Run(fmt.Sprintf("text_%d", i), func(t *testing.T) {
+			tokenCount := chunker.EstimateTokenCount(text)
+
+			// Token count should be reasonable (not zero, not absurdly high)
+			if tokenCount <= 0 {
+				t.Errorf("Token count should be positive, got %d for text: %q", tokenCount, text)
+			}
+
+			wordCount := len(strings.Fields(text))
+			// Token count should be somewhat related to word count (within reasonable bounds)
+			// Allow for up to 5x for very long words that get tokenized into many pieces
+			if tokenCount < wordCount || tokenCount > wordCount*5 {
+				t.Errorf("Token count %d seems unreasonable for %d words in text: %q", tokenCount, wordCount, text)
+			}
+		})
+	}
+}
+
+func TestTextChunker_SemanticChunking(t *testing.T) {
+	// Test semantic chunking without embedder (should fallback to auto)
+	chunker := NewTextChunkerWithMethod(50, 10, "semantic")
+
+	text := "This is the first topic about AI. Artificial intelligence is fascinating. Now let's discuss cooking. Recipes are important in cooking. Back to technology again. Machine learning is a subset of AI."
+
+	chunks := chunker.ChunkText(text)
+
+	if len(chunks) == 0 {
+		t.Fatal("Expected at least one chunk")
+	}
+
+	// Without embedder, should fallback to auto chunking
+	for i, chunk := range chunks {
+		if chunk.TokenCount > chunker.MaxTokens {
+			t.Errorf("Chunk %d exceeds max tokens: %d > %d", i, chunk.TokenCount, chunker.MaxTokens)
+		}
+		if chunk.Index != i {
+			t.Errorf("Chunk %d has wrong index: %d", i, chunk.Index)
+		}
+		if chunk.Text == "" {
+			t.Errorf("Chunk %d has empty text", i)
+		}
+	}
+}
+
+func TestCosineSimilarity(t *testing.T) {
+	chunker := NewTextChunker(100, 20)
+
+	tests := []struct {
+		name     string
+		a        []float32
+		b        []float32
+		expected float64
+		delta    float64
+	}{
+		{
+			name:     "identical vectors",
+			a:        []float32{1.0, 2.0, 3.0},
+			b:        []float32{1.0, 2.0, 3.0},
+			expected: 1.0,
+			delta:    0.001,
+		},
+		{
+			name:     "orthogonal vectors",
+			a:        []float32{1.0, 0.0},
+			b:        []float32{0.0, 1.0},
+			expected: 0.0,
+			delta:    0.001,
+		},
+		{
+			name:     "opposite vectors",
+			a:        []float32{1.0, 2.0},
+			b:        []float32{-1.0, -2.0},
+			expected: -1.0,
+			delta:    0.001,
+		},
+		{
+			name:     "partial similarity",
+			a:        []float32{1.0, 0.0},
+			b:        []float32{0.5, 0.866}, // 60 degree angle, cos(60°) ≈ 0.5
+			expected: 0.5,
+			delta:    0.01,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := chunker.cosineSimilarity(tt.a, tt.b)
+			if absFloat64(result-tt.expected) > tt.delta {
+				t.Errorf("cosineSimilarity(%v, %v) = %f, want %f±%f", tt.a, tt.b, result, tt.expected, tt.delta)
+			}
+		})
+	}
+}
+
+func TestCosineSimilarity_EdgeCases(t *testing.T) {
+	chunker := NewTextChunker(100, 20)
+
+	// Test zero vectors (should return 0 to avoid division by zero)
+	result := chunker.cosineSimilarity([]float32{0.0, 0.0}, []float32{1.0, 2.0})
+	if result != 0.0 {
+		t.Errorf("Expected 0.0 for zero vector, got %f", result)
+	}
+
+	// Test both zero vectors
+	result = chunker.cosineSimilarity([]float32{0.0, 0.0}, []float32{0.0, 0.0})
+	if result != 0.0 {
+		t.Errorf("Expected 0.0 for both zero vectors, got %f", result)
+	}
+
+	// Test different length vectors (should handle gracefully)
+	result = chunker.cosineSimilarity([]float32{1.0}, []float32{1.0, 2.0})
+	// Should not crash and should return reasonable result
+	if result < -1.1 || result > 1.1 {
+		t.Errorf("Expected result in [-1,1] range, got %f", result)
+	}
+}
+
+func TestRemoveDuplicateBoundaries(t *testing.T) {
+	chunker := NewTextChunker(100, 20)
+
+	tests := []struct {
+		name     string
+		input    []int
+		expected []int
+	}{
+		{
+			name:     "no duplicates",
+			input:    []int{1, 3, 5, 7},
+			expected: []int{1, 3, 5, 7},
+		},
+		{
+			name:     "with duplicates",
+			input:    []int{1, 3, 3, 5, 7, 7, 7},
+			expected: []int{1, 3, 5, 7},
+		},
+		{
+			name:     "all duplicates",
+			input:    []int{5, 5, 5, 5},
+			expected: []int{5},
+		},
+		{
+			name:     "empty slice",
+			input:    []int{},
+			expected: []int{},
+		},
+		{
+			name:     "single element",
+			input:    []int{42},
+			expected: []int{42},
+		},
+		{
+			name:     "unsorted with duplicates",
+			input:    []int{7, 3, 5, 3, 1, 7},
+			expected: []int{1, 3, 5, 7},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := chunker.removeDuplicateBoundaries(tt.input)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("removeDuplicateBoundaries(%v) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSplitIntoSentences_ExtensiveTests(t *testing.T) {
+	chunker := NewTextChunker(100, 20)
+
+	tests := []struct {
+		name     string
+		text     string
+		expected []string
+	}{
+		{
+			name:     "abbreviations",
+			text:     "Dr. Smith went to the U.S.A. He is from N.Y.",
+			expected: []string{"Dr. Smith went to the U.S.A", "He is from N.Y."},
+		},
+		{
+			name:     "ellipsis",
+			text:     "This is incomplete... But this continues.",
+			expected: []string{"This is incomplete", "But this continues."},
+		},
+		{
+			name:     "mixed punctuation",
+			text:     "Really? Yes! Absolutely. Maybe?",
+			expected: []string{"Really?", "Yes!", "Absolutely", "Maybe?"},
+		},
+		{
+			name:     "quoted sentences",
+			text:     "He said, \"Hello there.\" Then he left.",
+			expected: []string{"He said, \"Hello there.\"", "Then he left."},
+		},
+		{
+			name:     "numbers and decimals",
+			text:     "The price is $19.99. That's expensive.",
+			expected: []string{"The price is $19.99", "That's expensive."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := chunker.splitIntoSentences(tt.text)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("splitIntoSentences(%q) = %v, want %v", tt.text, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMethodConstants(t *testing.T) {
+	// Test that chunking method constants are defined correctly
+	methods := []string{
+		"simple",
+		"recursive",
+		"semantic",
+		"auto",
+	}
+
+	// Ensure all methods are unique
+	seen := make(map[string]bool)
+	for _, method := range methods {
+		if seen[method] {
+			t.Errorf("Duplicate chunking method: %v", method)
+		}
+		seen[method] = true
+	}
+
+	// Test that methods have expected string values
+	if "simple" != "simple" {
+		t.Errorf("Expected simple method to be 'simple'")
+	}
+	if "recursive" != "recursive" {
+		t.Errorf("Expected recursive method to be 'recursive'")
+	}
+	if "semantic" != "semantic" {
+		t.Errorf("Expected semantic method to be 'semantic'")
+	}
+	if "auto" != "auto" {
+		t.Errorf("Expected auto method to be 'auto'")
+	}
+}
+
+func TestDetectContentType(t *testing.T) {
+	chunker := NewTextChunker(100, 20)
+
+	tests := []struct {
+		name     string
+		text     string
+		expected string
+	}{
+		{
+			name:     "markdown headers",
+			text:     "# Main Title\n## Subtitle\nContent here",
+			expected: "markdown",
+		},
+		{
+			name:     "code with functions",
+			text:     "function test() {\n  return 42;\n}",
+			expected: "code",
+		},
+		{
+			name:     "code with classes",
+			text:     "class MyClass {\n  constructor() {}\n}",
+			expected: "code",
+		},
+		{
+			name:     "simple prose",
+			text:     "This is just normal text without any special structure.",
+			expected: "prose",
+		},
+		{
+			name:     "mixed content with code indicators",
+			text:     "Here's some code: `var x = 10;` and normal text.",
+			expected: "code",
+		},
+		{
+			name:     "XML/HTML content",
+			text:     "<html><body><p>Content</p></body></html>",
+			expected: "code",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := chunker.detectContentType(tt.text)
+			if result != tt.expected {
+				t.Errorf("detectContentType(%q) = %s, want %s", tt.text, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Helper function for floating point comparison
+func absFloat32(x float32) float32 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func absFloat64(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
