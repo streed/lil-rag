@@ -778,10 +778,9 @@ func (m *LilRag) reindexWithChunks(ctx context.Context, doc *DocumentInfo, chunk
 			ctx, doc.ID, combinedText.String(), chunks, embeddings,
 			doc.SourcePath, doc.DocType,
 		)
-	} else {
-		// Use basic version for text-only documents
-		return m.storage.IndexChunks(ctx, doc.ID, combinedText.String(), chunks, embeddings)
 	}
+	// Use basic version for text-only documents
+	return m.storage.IndexChunks(ctx, doc.ID, combinedText.String(), chunks, embeddings)
 }
 
 // Services returns the modern service interfaces

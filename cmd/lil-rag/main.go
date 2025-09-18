@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	helpFlag = "--help"
+	helpFlag  = "--help"
+	forceFlag = "--force"
+	yesAnswer = "yes"
 )
 
 // version is set during build time via ldflags
@@ -467,7 +469,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 	// Check if --force flag is provided
 	force := false
 	for _, arg := range args {
-		if arg == "--force" {
+		if arg == forceFlag {
 			force = true
 			break
 		}
@@ -502,7 +504,7 @@ func handleReset(profileConfig *config.ProfileConfig, args []string) error {
 		}
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if response != "y" && response != "yes" {
+		if response != "y" && response != yesAnswer {
 			fmt.Println("Operation canceled.")
 			return nil
 		}
@@ -676,7 +678,7 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 	// Check if --force flag is provided
 	force := false
 	for _, arg := range args[1:] {
-		if arg == "--force" {
+		if arg == forceFlag {
 			force = true
 			break
 		}
@@ -691,7 +693,7 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 		}
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if response != "y" && response != "yes" {
+		if response != "y" && response != yesAnswer {
 			fmt.Println("Operation canceled.")
 			return nil
 		}
@@ -730,7 +732,7 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 	// Check if --force flag is provided
 	force := false
 	for _, arg := range args {
-		if arg == "--force" {
+		if arg == forceFlag {
 			force = true
 			break
 		}
@@ -764,7 +766,7 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 		}
 
 		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
-		if response != "y" && response != "yes" {
+		if response != "y" && response != yesAnswer {
 			fmt.Println("Operation canceled.")
 			return nil
 		}
