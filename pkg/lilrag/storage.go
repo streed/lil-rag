@@ -255,7 +255,7 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 	chunks []Chunk,
 	embeddings [][]float32,
 	originalFilePath, docType, namespace string,
-	chunkingMethod ...string,
+	_ ...string, // chunkingMethod unused in this signature
 ) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
@@ -317,9 +317,9 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 		originalChunkText := text[chunk.StartPos:chunk.EndPos]
 
 		// Compress original chunk text for storage
-		compressedChunkText, err := CompressText(originalChunkText)
-		if err != nil {
-			return fmt.Errorf("failed to compress chunk %d text: %w", i, err)
+		compressedChunkText, compressErr := CompressText(originalChunkText)
+		if compressErr != nil {
+			return fmt.Errorf("failed to compress chunk %d text: %w", i, compressErr)
 		}
 
 		// Insert chunk
@@ -731,7 +731,7 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 		doc.Namespace = namespace.String
 		doc.ChunkingMethod = chunkingMethod.String
 		if doc.ChunkingMethod == "" {
-			doc.ChunkingMethod = "auto" // Default for old documents
+			doc.ChunkingMethod = ChunkingMethodAuto // Default for old documents
 		}
 		doc.IsImage = docType.String == "image"
 

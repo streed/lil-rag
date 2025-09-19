@@ -648,7 +648,7 @@ func (c *OllamaChatClient) preprocessUserQuery(userQuery string) string {
 }
 
 // replaceCaseInsensitive performs case-insensitive string replacement
-func replaceCaseInsensitive(text, old, new string) string {
+func replaceCaseInsensitive(text, old, replacement string) string {
 	// Find all occurrences and replace them preserving original case in non-matching parts
 	result := text
 	for {
@@ -660,7 +660,7 @@ func replaceCaseInsensitive(text, old, new string) string {
 		// Replace the found occurrence
 		before := result[:index]
 		after := result[index+len(old):]
-		result = before + new + after
+		result = before + replacement + after
 	}
 
 	return result

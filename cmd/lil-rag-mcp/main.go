@@ -365,7 +365,7 @@ func (s *LilRagMCPServer) handleIndex(id interface{}, args map[string]interface{
 		docID = lilrag.GenerateDocumentID()
 	}
 
-	chunkingMethod, _ := args["chunking_method"].(string)
+	chunkingMethod, _ := args["chunking_method"].(string) // nolint:errcheck // Type assertion ok pattern
 
 	// Index the content
 	ctx := context.Background()
@@ -417,7 +417,7 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 		docID = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	}
 
-	chunkingMethod, _ := args["chunking_method"].(string)
+	chunkingMethod, _ := args["chunking_method"].(string) // nolint:errcheck // Type assertion ok pattern
 
 	// Index the file (Note: IndexFile uses default chunking method for complex file types like PDF)
 	ctx := context.Background()

@@ -531,9 +531,9 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 			fmt.Printf("   ⚡ Processing chunk %d/%d (%.1f%%, %d tokens)\n", i+1, len(chunks), percentage, chunk.TokenCount)
 		}
 
-		embedding, err := m.embedder.Embed(ctx, chunk.Text)
-		if err != nil {
-			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
+		embedding, embedErr := m.embedder.Embed(ctx, chunk.Text)
+		if embedErr != nil {
+			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, embedErr)
 		}
 		embeddings[i] = embedding
 

@@ -149,7 +149,8 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [--namespace=<namespace>] " +
+			"[id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
 	// Parse flags
@@ -171,7 +172,8 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	args = filteredArgs
 
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [--namespace=<namespace>] " +
+			"[id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
 	var id string

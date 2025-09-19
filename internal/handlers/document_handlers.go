@@ -61,7 +61,7 @@ func (h *Handler) ViewDocument() http.HandlerFunc {
 		}
 
 		// For backward compatibility, if only one highlight chunk, use it as both highlight and navigate target
-		var highlightChunk int = -1
+		highlightChunk := -1
 		if len(highlightChunks) == 1 && navigateToChunk == -1 {
 			highlightChunk = highlightChunks[0]
 			navigateToChunk = highlightChunks[0]

@@ -1157,7 +1157,7 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildContextualMessage returns only the current message without any chat history context
-func (h *Handler) buildContextualMessage(currentMessage string, chatContext *chathistory.ChatContext) string {
+func (h *Handler) buildContextualMessage(currentMessage string, _ *chathistory.ChatContext) string {
 	// Return only the current message, no chat history context
 	return currentMessage
 }

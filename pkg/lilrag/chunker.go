@@ -627,7 +627,7 @@ func (tc *TextChunker) splitBySentences(text string) []string {
 	if len(boundaries) == 0 {
 		// No sentence boundaries found, restore abbreviations and return as single sentence
 		for placeholder, original := range abbrevReplacements {
-			tempText = strings.Replace(tempText, placeholder, original, -1)
+			tempText = strings.ReplaceAll(tempText, placeholder, original)
 		}
 		cleaned := strings.TrimSpace(tempText)
 		if cleaned != "" {
@@ -648,7 +648,7 @@ func (tc *TextChunker) splitBySentences(text string) []string {
 		if sentence != "" {
 			// Restore abbreviations in this sentence
 			for placeholder, original := range abbrevReplacements {
-				sentence = strings.Replace(sentence, placeholder, original, -1)
+				sentence = strings.ReplaceAll(sentence, placeholder, original)
 			}
 			sentences = append(sentences, sentence)
 		}
@@ -1001,7 +1001,6 @@ func (tc *TextChunker) simpleChunk(text, contentType string) []Chunk {
 
 			// Start new chunk with overlap from previous chunk
 			currentChunk.Reset()
-			currentTokens = 0
 
 			// Add overlap words from the end of the previous chunk
 			if tc.Overlap > 0 && len(chunks) > 0 {
@@ -1009,7 +1008,11 @@ func (tc *TextChunker) simpleChunk(text, contentType string) []Chunk {
 				if len(overlapWords) > 0 {
 					currentChunk.WriteString(strings.Join(overlapWords, " "))
 					currentTokens = tc.EstimateTokenCount(currentChunk.String())
+				} else {
+					currentTokens = 0
 				}
+			} else {
+				currentTokens = 0
 			}
 		}
 
@@ -1277,7 +1280,7 @@ func (tc *TextChunker) groupSentencesSemanically(sentences []string, boundaries 
 }
 
 // optimizeSemanticChunks ensures chunks respect token limits and adds appropriate overlaps
-func (tc *TextChunker) optimizeSemanticChunks(chunks []Chunk, contentType string) []Chunk {
+func (tc *TextChunker) optimizeSemanticChunks(chunks []Chunk, _ string) []Chunk {
 	if len(chunks) == 0 {
 		return chunks
 	}

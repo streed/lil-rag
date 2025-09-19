@@ -103,8 +103,8 @@ func LoadProfile() (*ProfileConfig, error) {
 	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
 		// Return default profile WITHOUT saving it automatically
 		config := DefaultProfile()
-		if err := config.ensureDirectories(); err != nil {
-			return nil, err
+		if ensureErr := config.ensureDirectories(); ensureErr != nil {
+			return nil, ensureErr
 		}
 		return config, nil
 	}
