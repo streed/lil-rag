@@ -220,7 +220,8 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"chunking_method": map[string]interface{}{
 						"type":        "string",
-						"description": "Optional chunking method: 'simple' (token-based), 'recursive' (semantic boundaries), 'semantic' (embedding-based), or 'auto' (intelligent selection). Defaults to 'auto'",
+						"description": "Optional chunking method: 'simple' (token-based), 'recursive' " +
+							"(semantic boundaries), 'semantic' (embedding-based), or 'auto' (intelligent selection). Defaults to 'auto'",
 						"enum":        []string{"simple", "recursive", "semantic", "auto"},
 					},
 				},
@@ -243,7 +244,8 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"chunking_method": map[string]interface{}{
 						"type":        "string",
-						"description": "Optional chunking method: 'simple' (token-based), 'recursive' (semantic boundaries), 'semantic' (embedding-based), or 'auto' (intelligent selection). Defaults to 'auto'",
+						"description": "Optional chunking method: 'simple' (token-based), 'recursive' " +
+							"(semantic boundaries), 'semantic' (embedding-based), or 'auto' (intelligent selection). Defaults to 'auto'",
 						"enum":        []string{"simple", "recursive", "semantic", "auto"},
 					},
 				},
@@ -427,7 +429,8 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 
 	resultMessage := fmt.Sprintf("Successfully indexed file '%s' with ID: %s", filePath, docID)
 	if chunkingMethod != "" {
-		resultMessage += fmt.Sprintf(" (Note: chunking method '%s' specified but IndexFile uses appropriate default method for file type)", chunkingMethod)
+		resultMessage += fmt.Sprintf(" (Note: chunking method '%s' specified but IndexFile uses "+
+			"appropriate default method for file type)", chunkingMethod)
 	}
 
 	return &MCPMessage{

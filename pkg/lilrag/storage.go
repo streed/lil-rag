@@ -336,9 +336,9 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 		}
 
 		// Insert embedding
-		embeddingJSON, err := json.Marshal(embeddings[i])
-		if err != nil {
-			return fmt.Errorf("failed to marshal embedding for chunk %d: %w", i, err)
+		embeddingJSON, marshalErr := json.Marshal(embeddings[i])
+		if marshalErr != nil {
+			return fmt.Errorf("failed to marshal embedding for chunk %d: %w", i, marshalErr)
 		}
 
 		_, err = tx.ExecContext(ctx, `

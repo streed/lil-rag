@@ -159,11 +159,12 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	var filteredArgs []string
 
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "--chunking-method=") {
+		switch {
+		case strings.HasPrefix(arg, "--chunking-method="):
 			chunkingMethod = strings.TrimPrefix(arg, "--chunking-method=")
-		} else if strings.HasPrefix(arg, "--namespace=") {
+		case strings.HasPrefix(arg, "--namespace="):
 			namespace = strings.TrimPrefix(arg, "--namespace=")
-		} else {
+		default:
 			filteredArgs = append(filteredArgs, arg)
 		}
 	}
@@ -205,19 +206,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			}
 
 			// Choose indexing method based on flags
-			if namespace != "" && chunkingMethod != "" {
+			switch {
+			case namespace != "" && chunkingMethod != "":
 				if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
 					return fmt.Errorf("failed to index: %w", err)
 				}
-			} else if namespace != "" {
+			case namespace != "":
 				if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 					return fmt.Errorf("failed to index: %w", err)
 				}
-			} else if chunkingMethod != "" {
+			case chunkingMethod != "":
 				if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 					return fmt.Errorf("failed to index: %w", err)
 				}
-			} else {
+			default:
 				if err := rag.Index(ctx, text, id); err != nil {
 					return fmt.Errorf("failed to index: %w", err)
 				}
@@ -239,19 +241,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			}
 
 			// Choose indexing method based on flags
-			if namespace != "" && chunkingMethod != "" {
+			switch {
+			case namespace != "" && chunkingMethod != "":
 				if err := rag.IndexFileWithNamespaceAndChunkingMethod(ctx, arg, id, chunkingMethod, namespace); err != nil {
 					return fmt.Errorf("failed to index file: %w", err)
 				}
-			} else if namespace != "" {
+			case namespace != "":
 				if err := rag.IndexFileWithNamespace(ctx, arg, id, namespace); err != nil {
 					return fmt.Errorf("failed to index file: %w", err)
 				}
-			} else if chunkingMethod != "" {
+			case chunkingMethod != "":
 				if err := rag.IndexFileWithChunkingMethod(ctx, arg, id, chunkingMethod); err != nil {
 					return fmt.Errorf("failed to index file: %w", err)
 				}
-			} else {
+			default:
 				if err := rag.IndexFile(ctx, arg, id); err != nil {
 					return fmt.Errorf("failed to index file: %w", err)
 				}
@@ -277,19 +280,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		// Choose indexing method based on flags
-		if namespace != "" && chunkingMethod != "" {
+		switch {
+		case namespace != "" && chunkingMethod != "":
 			if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
-		} else if namespace != "" {
+		case namespace != "":
 			if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
-		} else if chunkingMethod != "" {
+		case chunkingMethod != "":
 			if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
-		} else {
+		default:
 			if err := rag.Index(ctx, text, id); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
@@ -323,19 +327,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		// Choose indexing method based on flags
-		if namespace != "" && chunkingMethod != "" {
+		switch {
+		case namespace != "" && chunkingMethod != "":
 			if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
-		} else if namespace != "" {
+		case namespace != "":
 			if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
-		} else if chunkingMethod != "" {
+		case chunkingMethod != "":
 			if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
-		} else {
+		default:
 			if err := rag.Index(ctx, text, id); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
@@ -356,19 +361,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		// Choose indexing method based on flags
-		if namespace != "" && chunkingMethod != "" {
+		switch {
+		case namespace != "" && chunkingMethod != "":
 			if err := rag.IndexFileWithNamespaceAndChunkingMethod(ctx, input, id, chunkingMethod, namespace); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
-		} else if namespace != "" {
+		case namespace != "":
 			if err := rag.IndexFileWithNamespace(ctx, input, id, namespace); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
-		} else if chunkingMethod != "" {
+		case chunkingMethod != "":
 			if err := rag.IndexFileWithChunkingMethod(ctx, input, id, chunkingMethod); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
-		} else {
+		default:
 			if err := rag.IndexFile(ctx, input, id); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
@@ -393,19 +399,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	}
 
 	// Choose indexing method based on flags
-	if namespace != "" && chunkingMethod != "" {
+	switch {
+	case namespace != "" && chunkingMethod != "":
 		if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
-	} else if namespace != "" {
+	case namespace != "":
 		if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
-	} else if chunkingMethod != "" {
+	case chunkingMethod != "":
 		if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
-	} else {
+	default:
 		if err := rag.Index(ctx, text, id); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
@@ -1216,7 +1223,8 @@ func printUsage() {
 	fmt.Println("  lil-rag [flags] <command> [args]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|->  Index text, file, or stdin (ID optional, auto-generated if not provided)")
+	fmt.Println("  index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|->")
+	fmt.Println("        Index text, file, or stdin (ID optional, auto-generated if not provided)")
 	fmt.Println("  search <query> [limit]       Search for similar text (default limit: 10)")
 	fmt.Println("  chat [flags] <message> [limit]  Interactive chat with RAG context (default limit: 5)")
 	fmt.Println("      --session-id <id>        Resume existing chat session")

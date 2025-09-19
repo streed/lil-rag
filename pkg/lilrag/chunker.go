@@ -1007,12 +1007,7 @@ func (tc *TextChunker) simpleChunk(text, contentType string) []Chunk {
 				overlapWords := tc.getOverlapWords(words, i, tc.Overlap)
 				if len(overlapWords) > 0 {
 					currentChunk.WriteString(strings.Join(overlapWords, " "))
-					currentTokens = tc.EstimateTokenCount(currentChunk.String())
-				} else {
-					currentTokens = 0
 				}
-			} else {
-				currentTokens = 0
 			}
 		}
 
