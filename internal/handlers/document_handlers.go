@@ -400,12 +400,12 @@ func (h *Handler) serveDocumentContent(
 			Version:  h.version,
 			PageName: "documents", // For navigation highlighting
 			Data: map[string]interface{}{
-				"DocumentInfo":       docInfo,
-				"DocumentID":         docInfo.ID,
-				"HighlightChunk":     highlightChunk,      // Legacy single chunk support
-				"HighlightChunks":    highlightChunks,     // New multiple chunks support
+				"DocumentInfo":        docInfo,
+				"DocumentID":          docInfo.ID,
+				"HighlightChunk":      highlightChunk,                 // Legacy single chunk support
+				"HighlightChunks":     highlightChunks,                // New multiple chunks support
 				"HighlightChunksJSON": marshalToJSON(highlightChunks), // JSON-encoded for JavaScript
-				"NavigateToChunk":    navigateToChunk,     // Navigation target
+				"NavigateToChunk":     navigateToChunk,                // Navigation target
 			},
 		}
 
@@ -777,12 +777,12 @@ func (h *Handler) serveImageDocument(
 	// Check if template renderer is available
 	if h.renderer != nil {
 		pageData := map[string]interface{}{
-			"DocumentID":         docInfo.ID,
-			"DocumentInfo":       docInfo,
-			"HighlightChunk":     highlightChunk,      // Legacy single chunk support
-			"HighlightChunks":    highlightChunks,     // New multiple chunks support
+			"DocumentID":          docInfo.ID,
+			"DocumentInfo":        docInfo,
+			"HighlightChunk":      highlightChunk,                 // Legacy single chunk support
+			"HighlightChunks":     highlightChunks,                // New multiple chunks support
 			"HighlightChunksJSON": marshalToJSON(highlightChunks), // JSON-encoded for JavaScript
-			"NavigateToChunk":    navigateToChunk,     // Navigation target
+			"NavigateToChunk":     navigateToChunk,                // Navigation target
 		}
 
 		templateData := &theme.TemplateData{

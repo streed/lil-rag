@@ -697,7 +697,7 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 		{
 			Text:       "It covers machine learning algorithms and their applications in various domains.",
 			Index:      1,
-			StartPos:   64, // Skip the space after period
+			StartPos:   64,  // Skip the space after period
 			EndPos:     144, // Include full text to the end
 			TokenCount: 12,
 			ChunkType:  "text",

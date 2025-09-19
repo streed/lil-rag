@@ -634,12 +634,12 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 
 		// Add metadata about the matching chunk and document
 		metadata := map[string]interface{}{
-			"chunk_index":    chunkIndex,
-			"chunk_type":     chunkType,
-			"is_chunk":       true,
-			"document_id":    originalDocumentID, // Original document ID
-			"original_text":  originalText,
-			"chunk_content":  chunkText,
+			"chunk_index":   chunkIndex,
+			"chunk_type":    chunkType,
+			"is_chunk":      true,
+			"document_id":   originalDocumentID, // Original document ID
+			"original_text": originalText,
+			"chunk_content": chunkText,
 		}
 
 		// Add page number if available

@@ -38,9 +38,9 @@ type TextChunker struct {
 	MaxTokens  int
 	Overlap    int
 	TokenRegex *regexp.Regexp
-	Method     string                     // Chunking method to use
-	Tokenizer  tokenizer.Codec           // tiktoken tokenizer for accurate token counting
-	Embedder   Embedder                  // embedder for semantic chunking (optional)
+	Method     string          // Chunking method to use
+	Tokenizer  tokenizer.Codec // tiktoken tokenizer for accurate token counting
+	Embedder   Embedder        // embedder for semantic chunking (optional)
 }
 
 type Chunk struct {
@@ -911,7 +911,7 @@ func (tc *TextChunker) getOverlapSentences(sentences []string, currentIndex, ove
 	// Work backwards from current index to get overlap sentences
 	for i := currentIndex - 1; i >= 0; i-- {
 		sentenceTokens := tc.EstimateTokenCount(sentences[i])
-		if tokens + sentenceTokens > overlapTokens {
+		if tokens+sentenceTokens > overlapTokens {
 			break
 		}
 		overlapSentences = append([]string{sentences[i]}, overlapSentences...)

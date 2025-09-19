@@ -82,8 +82,8 @@ type Embedder interface {
 
 type SearchResult struct {
 	ID          string
-	Text        string  // Full chunk text (including overlap)
-	ContentText string  // Non-overlapping content text (preferred for display)
+	Text        string // Full chunk text (including overlap)
+	ContentText string // Non-overlapping content text (preferred for display)
 	Score       float64
 	Metadata    map[string]interface{}
 }

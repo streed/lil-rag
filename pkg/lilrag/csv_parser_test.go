@@ -275,7 +275,7 @@ func TestCSVParser_ParseWithChunks(t *testing.T) {
 				}
 				return records
 			}(),
-			expectedChunks: 10, // Should create multiple chunks due to size (adjusted for actual chunking)
+			expectedChunks: 14, // Should create multiple chunks due to size (adjusted for tiktoken accurate counting)
 			checkHeader:    true,
 			checkRows:      true,
 		},

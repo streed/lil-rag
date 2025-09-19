@@ -541,16 +541,16 @@ func (c *OllamaChatClient) localQueryOptimization(userQuery string) string {
 
 	// 3. Extract key terms and add synonyms for common technical concepts
 	synonymMap := map[string][]string{
-		"ai":                {"artificial intelligence", "machine learning", "ML"},
-		"ml":                {"machine learning", "artificial intelligence", "AI"},
-		"database":          {"DB", "data storage", "DBMS"},
-		"api":               {"REST", "endpoint", "web service"},
-		"authentication":    {"auth", "login", "security", "access control"},
-		"configuration":     {"config", "setup", "settings"},
-		"performance":       {"optimization", "speed", "efficiency"},
-		"troubleshooting":   {"debugging", "problem solving", "error resolution"},
-		"implementation":    {"development", "coding", "programming"},
-		"best practices":    {"recommendations", "guidelines", "standards"},
+		"ai":              {"artificial intelligence", "machine learning", "ML"},
+		"ml":              {"machine learning", "artificial intelligence", "AI"},
+		"database":        {"DB", "data storage", "DBMS"},
+		"api":             {"REST", "endpoint", "web service"},
+		"authentication":  {"auth", "login", "security", "access control"},
+		"configuration":   {"config", "setup", "settings"},
+		"performance":     {"optimization", "speed", "efficiency"},
+		"troubleshooting": {"debugging", "problem solving", "error resolution"},
+		"implementation":  {"development", "coding", "programming"},
+		"best practices":  {"recommendations", "guidelines", "standards"},
 	}
 
 	// Add relevant synonyms
