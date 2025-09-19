@@ -369,6 +369,13 @@ func (c *OllamaChatClient) OptimizeQuery(ctx context.Context, userQuery string) 
 		return userQuery, nil
 	}
 
+	// Preprocess the query to remove obvious chat history references
+	preprocessedQuery := c.preprocessUserQuery(userQuery)
+	if preprocessedQuery == "" {
+		// If preprocessing removed everything, fall back to local optimization
+		return c.localQueryOptimization(userQuery), nil
+	}
+
 	optimizationStart := time.Now()
 
 	systemPrompt := `You are an expert at identifying the core subject matter in user queries for 
@@ -377,27 +384,44 @@ semantic search optimization.
 Your task is to extract ONLY the main subject, topic, or thing the user is asking about. Ignore all 
 directive language and focus solely on what the query is actually about.
 
-Key principles:
-1. Identify the primary SUBJECT or TOPIC the user wants information about
-2. Extract the core NOUN PHRASES that represent the subject matter
-3. Include relevant CONTEXT or MODIFIERS that specify the subject
-4. Remove ALL directive words (what, how, can you, please, tell me, etc.)
-5. Focus on the THING being discussed, not the action being requested
+OPTIMIZATION STRATEGIES:
+1. EXTRACT CORE CONCEPTS: Identify the main subjects, topics, and entities
+2. EXPAND KEY TERMS: Include synonyms, alternative phrases, and related concepts
+3. ADD CONTEXT: Include domain-specific terminology and technical terms
+4. REMOVE NOISE: Strip out conversational elements, directive words, and filler
+5. STRUCTURE FOR SEARCH: Organize terms for optimal semantic matching
 
-Examples:
-- "Can you please tell me about machine learning?" → "machine learning"
-- "How do I set up a Docker container?" → "Docker container setup"
-- "What are the benefits of using microservices architecture?" → "microservices architecture benefits"
-- "Please explain how authentication works in web applications" → "authentication web applications"
-- "I need help with configuring SSL certificates" → "SSL certificates configuration"
-- "Show me examples of React hooks implementation" → "React hooks implementation examples"
+TRANSFORMATION RULES:
+- Convert questions into declarative search terms
+- Include both broad concepts and specific details
+- Add relevant synonyms and alternative terminology
+- Preserve technical terms and proper nouns
+- Remove: "what", "how", "can you", "please", "tell me", "explain", "show me", "you said", "mentioned", "earlier", "before", "previous"
+- Remove: references to prior conversations, responses, or chat history
+- Keep: domain terms, technical concepts, specific entities, actionable contexts
 
-Extract the subject matter only. Respond with ONLY the subject-focused query terms.`
+EXAMPLES:
+Input: "Can you please tell me about machine learning algorithms?"
+Output: "machine learning algorithms artificial intelligence ML neural networks supervised unsupervised deep learning"
+
+Input: "How do I configure SSL certificates for web servers?"
+Output: "SSL certificates configuration web servers HTTPS TLS certificate installation setup security"
+
+Input: "What are the best practices for React component testing?"
+Output: "React component testing best practices unit tests Jest testing library enzyme component testing patterns"
+
+Input: "You mentioned database indexing earlier, can you explain performance optimization?"
+Output: "database indexing performance optimization B-tree indexes query optimization database performance tuning"
+
+Input: "Following up on your previous response about APIs, how do I handle authentication?"
+Output: "API authentication authorization OAuth JWT token security access control"
+
+Respond with ONLY the optimized search terms, separated by spaces. Include 8-15 relevant terms that cover the core concept plus related terminology.`
 
 	// Record input tokens for query optimization system prompt
 	metrics.RecordChatInputTokens(c.model, systemPrompt)
 
-	// Build chat messages for query optimization
+	// Build chat messages for query optimization using preprocessed query
 	messages := []ChatMessage{
 		{
 			Role:    "system",
@@ -405,7 +429,7 @@ Extract the subject matter only. Respond with ONLY the subject-focused query ter
 		},
 		{
 			Role:    "user",
-			Content: userQuery,
+			Content: preprocessedQuery,
 		},
 	}
 
@@ -473,14 +497,171 @@ Extract the subject matter only. Respond with ONLY the subject-focused query ter
 	if optimizedQuery == "" {
 		optimizationDuration := time.Since(optimizationStart)
 		metrics.RecordQueryOptimization(optimizationDuration, false)
-		return userQuery, nil // Fall back to original query if optimization failed
+		// Fall back to local optimization with preprocessed query if available, otherwise original
+		fallbackQuery := preprocessedQuery
+		if fallbackQuery == "" {
+			fallbackQuery = userQuery
+		}
+		return c.localQueryOptimization(fallbackQuery), nil
 	}
 
 	// Record token usage for query optimization
-	metrics.RecordQueryOptimizationTokens(c.model, userQuery, optimizedQuery)
+	metrics.RecordQueryOptimizationTokens(c.model, preprocessedQuery, optimizedQuery)
 
 	optimizationDuration := time.Since(optimizationStart)
 	metrics.RecordQueryOptimization(optimizationDuration, true)
 
 	return optimizedQuery, nil
+}
+
+// localQueryOptimization provides a fallback query optimization when LLM optimization fails
+func (c *OllamaChatClient) localQueryOptimization(userQuery string) string {
+	if userQuery == "" {
+		return userQuery
+	}
+
+	// Apply basic query optimization techniques
+	optimized := userQuery
+
+	// 1. Remove common stop words, directive phrases, and chat history references
+	stopPhrases := []string{
+		"can you", "please", "tell me", "explain", "show me", "how do", "what is", "what are",
+		"help me", "i need", "i want", "could you", "would you", "can you please",
+		"you said", "you mentioned", "earlier", "before", "previous", "previously",
+		"in your response", "your answer", "last time", "just now", "above",
+		"following up", "based on", "regarding your", "about what you",
+	}
+
+	for _, phrase := range stopPhrases {
+		optimized = strings.ReplaceAll(strings.ToLower(optimized), phrase, "")
+	}
+
+	// 2. Clean up extra whitespace
+	optimized = strings.Join(strings.Fields(optimized), " ")
+
+	// 3. Extract key terms and add synonyms for common technical concepts
+	synonymMap := map[string][]string{
+		"ai":                {"artificial intelligence", "machine learning", "ML"},
+		"ml":                {"machine learning", "artificial intelligence", "AI"},
+		"database":          {"DB", "data storage", "DBMS"},
+		"api":               {"REST", "endpoint", "web service"},
+		"authentication":    {"auth", "login", "security", "access control"},
+		"configuration":     {"config", "setup", "settings"},
+		"performance":       {"optimization", "speed", "efficiency"},
+		"troubleshooting":   {"debugging", "problem solving", "error resolution"},
+		"implementation":    {"development", "coding", "programming"},
+		"best practices":    {"recommendations", "guidelines", "standards"},
+	}
+
+	// Add relevant synonyms
+	words := strings.Fields(strings.ToLower(optimized))
+	var expandedTerms []string
+	expandedTerms = append(expandedTerms, words...)
+
+	for _, word := range words {
+		if synonyms, exists := synonymMap[word]; exists {
+			expandedTerms = append(expandedTerms, synonyms...)
+		}
+	}
+
+	// 4. Remove duplicates and join
+	seen := make(map[string]bool)
+	var uniqueTerms []string
+	for _, term := range expandedTerms {
+		if term != "" && !seen[term] && len(term) > 1 {
+			seen[term] = true
+			uniqueTerms = append(uniqueTerms, term)
+		}
+	}
+
+	result := strings.Join(uniqueTerms, " ")
+
+	// Return original if optimization made it too short
+	if len(result) < len(userQuery)/2 {
+		return userQuery
+	}
+
+	return result
+}
+
+// preprocessUserQuery removes obvious chat history references before optimization
+func (c *OllamaChatClient) preprocessUserQuery(userQuery string) string {
+	if userQuery == "" {
+		return userQuery
+	}
+
+	query := strings.TrimSpace(userQuery)
+
+	// Remove chat history references using simple string replacements for performance
+	cleanQuery := query
+
+	// Remove phrases that indicate references to previous conversation
+	referencePatterns := []struct {
+		pattern string
+		replace string
+	}{
+		{"you said", ""},
+		{"you mentioned", ""},
+		{"you told me", ""},
+		{"you explained", ""},
+		{"you answered", ""},
+		{"earlier", ""},
+		{"before", ""},
+		{"previously", ""},
+		{"above", ""},
+		{"last time", ""},
+		{"just now", ""},
+		{"in your response", ""},
+		{"in your answer", ""},
+		{"in your reply", ""},
+		{"following up on your previous response", ""},
+		{"following up on", ""},
+		{"following up", ""},
+		{"based on what you said", ""},
+		{"based on what you mentioned", ""},
+		{"based on", ""},
+		{"regarding your", ""},
+		{"what you said", ""},
+		{"what you mentioned", ""},
+		{"what you told", ""},
+		{"about what you", ""},
+	}
+
+	// Apply replacements in a case-insensitive manner
+	for _, pattern := range referencePatterns {
+		cleanQuery = replaceCaseInsensitive(cleanQuery, pattern.pattern, pattern.replace)
+	}
+
+	// Clean up starting conjunctions that often follow removed content
+	startingWords := []string{"and ", "also ", "additionally ", "furthermore ", "but ", "however "}
+	for _, word := range startingWords {
+		if strings.HasPrefix(strings.ToLower(cleanQuery), word) {
+			cleanQuery = strings.TrimSpace(cleanQuery[len(word):])
+		}
+	}
+
+	// Clean up extra whitespace and punctuation
+	cleanQuery = strings.Join(strings.Fields(cleanQuery), " ")
+	cleanQuery = strings.Trim(cleanQuery, " .,!?;:")
+
+	return cleanQuery
+}
+
+// replaceCaseInsensitive performs case-insensitive string replacement
+func replaceCaseInsensitive(text, old, new string) string {
+	// Find all occurrences and replace them preserving original case in non-matching parts
+	result := text
+	for {
+		index := strings.Index(strings.ToLower(result), strings.ToLower(old))
+		if index == -1 {
+			break
+		}
+
+		// Replace the found occurrence
+		before := result[:index]
+		after := result[index+len(old):]
+		result = before + new + after
+	}
+
+	return result
 }

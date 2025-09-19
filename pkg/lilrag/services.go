@@ -241,15 +241,8 @@ func (s *DefaultChatService) Chat(ctx context.Context, message string, limit int
 		limit = 5 // Default context limit
 	}
 
-	// Optimize query for better search
-	optimizedQuery, err := s.chatClient.OptimizeQuery(ctx, message)
-	if err != nil {
-		// Log warning but continue with original message
-		optimizedQuery = message
-	}
-
-	// Search for relevant context
-	searchResults, err := s.searchService.Search(ctx, optimizedQuery, limit)
+	// Search for relevant context using the original user message
+	searchResults, err := s.searchService.Search(ctx, message, limit)
 	if err != nil {
 		return "", nil, NewSearchError("failed to search for context", err).WithOperation("Chat")
 	}
@@ -407,8 +400,8 @@ func (f *ServiceFactory) CreateServices(_ context.Context) (*Services, error) {
 		return nil, NewEmbeddingError("failed to create embedder", err)
 	}
 
-	// Initialize text chunker
-	chunker := NewTextChunker(f.config.MaxTokens, f.config.Overlap)
+	// Initialize text chunker with embedder for semantic chunking support
+	chunker := NewTextChunkerWithEmbedder(f.config.MaxTokens, f.config.Overlap, embedder)
 
 	// Initialize parsing service
 	parsingService, err := NewDocumentParsingServiceWithVision(chunker, f.config.OllamaURL,

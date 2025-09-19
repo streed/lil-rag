@@ -331,7 +331,7 @@ Controls HTTP server behavior, authentication, timeouts, and security settings.
 
 ### Chunking Configuration (`chunking`)
 
-Controls how documents are split into searchable chunks using 2024 research-based optimizations.
+Controls how documents are split into searchable chunks using 2024 research-based optimizations with enhanced text preservation.
 
 #### `max_tokens`
 - **Type**: Integer
@@ -374,13 +374,22 @@ Controls how documents are split into searchable chunks using 2024 research-base
   lil-rag config set chunking.overlap 192
   ```
 
+#### Text Preservation Features
+
+LilRag includes advanced text preservation features to maintain document integrity:
+
+- **Original Formatting**: Chunks preserve exact spacing, punctuation, and case from source documents
+- **Position-Aware Chunking**: Accurate text extraction using start/end positions in original content
+- **Enhanced Auto-Selection**: Prioritizes chunking methods that maintain formatting integrity
+- **Improved Display Quality**: Search results and chat responses show text exactly as it appeared in source
+
 #### Chunking Methods
 LilRag supports multiple chunking strategies via CLI and API:
 
-- **simple**: Token-based chunking with overlap (fast, efficient)
+- **simple**: Sentence-aware chunking with overlap (fast, preserves formatting)
 - **recursive**: Hierarchical splitting at semantic boundaries (preserves structure)
 - **semantic**: Embedding-based similarity chunking (optimal for complex content)
-- **auto**: Intelligent method selection based on content analysis (default)
+- **auto**: Intelligent method selection prioritizing formatting preservation (default)
 
 **CLI Examples**:
 ```bash

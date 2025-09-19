@@ -525,14 +525,14 @@ func TestSQLiteStorage_Search(t *testing.T) {
 			queryEmbedding:  []float32{0.9, 0.05, 0.05}, // Close to doc1
 			limit:           2,
 			expectedResults: 2,
-			expectedFirstID: "doc1",
+			expectedFirstID: "doc1-chunk-0", // Now returns chunk-specific ID
 		},
 		{
 			name:            "search for NLP content",
 			queryEmbedding:  []float32{0.05, 0.9, 0.05}, // Close to doc2
 			limit:           1,
 			expectedResults: 1,
-			expectedFirstID: "doc2",
+			expectedFirstID: "doc2-chunk-0", // Now returns chunk-specific ID
 		},
 		{
 			name:            "search all documents",
@@ -690,15 +690,15 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 			Text:       "This is a comprehensive document about artificial intelligence.",
 			Index:      0,
 			StartPos:   0,
-			EndPos:     62,
+			EndPos:     63, // Include the period
 			TokenCount: 10,
 			ChunkType:  "text",
 		},
 		{
 			Text:       "It covers machine learning algorithms and their applications in various domains.",
 			Index:      1,
-			StartPos:   63,
-			EndPos:     141,
+			StartPos:   64, // Skip the space after period
+			EndPos:     144, // Include full text to the end
 			TokenCount: 12,
 			ChunkType:  "text",
 		},
@@ -726,12 +726,16 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 	}
 
 	result := results[0]
-	if result.ID != documentID {
-		t.Errorf("Expected result ID %s, got %s", documentID, result.ID)
+	// With new chunk-based search, expect chunk-specific ID
+	expectedChunkID := documentID + "-chunk-0" // First chunk should match AI query better
+	if result.ID != expectedChunkID {
+		t.Errorf("Expected result ID %s, got %s", expectedChunkID, result.ID)
 	}
 
-	if result.Text != originalText {
-		t.Errorf("Expected full document text, got: %q", result.Text)
+	// With new chunk-based search, expect chunk text (not full document)
+	expectedChunkText := "This is a comprehensive document about artificial intelligence."
+	if result.Text != expectedChunkText {
+		t.Errorf("Expected chunk text %q, got: %q", expectedChunkText, result.Text)
 	}
 
 	// Verify metadata
@@ -763,10 +767,17 @@ func TestSQLiteStorage_FullWorkflow(t *testing.T) {
 		t.Error("Expected at least one search result for ML query")
 	}
 
-	// Should still return the same document but highlight the ML chunk
+	// Should return the ML-focused chunk
 	result = results[0]
-	if result.ID != documentID {
-		t.Errorf("Expected result ID %s, got %s", documentID, result.ID)
+	expectedMLChunkID := documentID + "-chunk-1" // Second chunk should match ML query better
+	if result.ID != expectedMLChunkID {
+		t.Errorf("Expected result ID %s, got %s", expectedMLChunkID, result.ID)
+	}
+
+	// Should return the ML chunk text
+	expectedMLChunkText := "It covers machine learning algorithms and their applications in various domains."
+	if result.Text != expectedMLChunkText {
+		t.Errorf("Expected ML chunk text %q, got: %q", expectedMLChunkText, result.Text)
 	}
 
 	// Step 4: Update the document (re-index)

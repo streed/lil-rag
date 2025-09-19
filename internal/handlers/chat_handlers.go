@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"lil-rag/internal/theme"
@@ -761,42 +760,111 @@ func (h *Handler) fallbackChatPage(w http.ResponseWriter, _ *http.Request) {
             if (type === 'assistant') {
                 // Create clickable links to document viewer with chunk highlighting
                 html = html.replace(/\\[([a-zA-Z0-9_-]+)\\]/g, function(match, docId) {
-                    // Find the source with this document ID to get chunk information
+                    // Find sources that match this document ID (could be chunk-based IDs)
                     let chunkParam = '';
                     if (sources) {
-                        const source = sources.find(s => s.ID === docId);
-                        if (source && source.Metadata && source.Metadata.chunk_index !== undefined) {
-                            chunkParam = '?highlight=' + source.Metadata.chunk_index;
+                        // Group all chunks from sources that reference this document
+                        const relevantChunks = [];
+                        sources.forEach(source => {
+                            // Check if this source references the document (either directly or as original doc)
+                            const sourceDocId = source.Metadata && source.Metadata.document_id ?
+                                source.Metadata.document_id :
+                                (source.ID.includes('-chunk-') ? source.ID.split('-chunk-')[0] : source.ID);
+
+                            if (sourceDocId === docId || source.ID === docId) {
+                                const chunkIndex = source.Metadata && source.Metadata.chunk_index !== undefined ?
+                                    source.Metadata.chunk_index : 0;
+                                relevantChunks.push(chunkIndex);
+                            }
+                        });
+
+                        if (relevantChunks.length > 0) {
+                            const uniqueChunks = [...new Set(relevantChunks)].sort((a, b) => a - b);
+                            chunkParam = '?highlight=' + uniqueChunks.join(',');
                         }
                     }
-                    return '<a href="/view/' + docId + chunkParam + 
+                    return '<a href="/view/' + docId + chunkParam +
                         '" class="doc-ref-link" target="_blank">[' + docId + ']</a>';
                 });
             }
             
             if (sources && sources.length > 0) {
+                // Group sources by document ID and collect all chunk indices
+                const documentGroups = {};
+                sources.forEach(source => {
+                    // Extract original document ID from chunk-based ID (e.g., "doc1-chunk-2" -> "doc1")
+                    const originalDocId = source.Metadata && source.Metadata.document_id ?
+                        source.Metadata.document_id :
+                        (source.ID.includes('-chunk-') ? source.ID.split('-chunk-')[0] : source.ID);
+
+                    if (!documentGroups[originalDocId]) {
+                        documentGroups[originalDocId] = {
+                            chunks: [],
+                            sources: []
+                        };
+                    }
+
+                    const chunkIndex = source.Metadata && source.Metadata.chunk_index !== undefined ?
+                        source.Metadata.chunk_index : 0;
+
+                    documentGroups[originalDocId].chunks.push(chunkIndex);
+                    documentGroups[originalDocId].sources.push(source);
+                });
+
                 html += '<div class="sources-section">';
                 html += '<div class="sources-header">📚 Sources (' + sources.length + '):</div>';
                 html += '<div class="sources-compact">';
+
                 sources.forEach((source, index) => {
                     const sourceId = 'source-' + Date.now() + '-' + index;
+
+                    // Extract original document ID and chunk info for display
+                    const originalDocId = source.Metadata && source.Metadata.document_id ?
+                        source.Metadata.document_id :
+                        (source.ID.includes('-chunk-') ? source.ID.split('-chunk-')[0] : source.ID);
+
+                    const currentChunkIndex = source.Metadata && source.Metadata.chunk_index !== undefined ?
+                        source.Metadata.chunk_index : 0;
+
+                    // Display original document ID with chunk number
+                    const displayName = originalDocId + ' (chunk ' + currentChunkIndex + ')';
+
                     html += '<button class="source-button" onclick="toggleSource(\\'' + sourceId + '\\'))">';
-                    html += source.ID + ' (' + (source.Score * 100).toFixed(1) + '%)';
+                    html += displayName + ' (' + (source.Score * 100).toFixed(1) + '%)';
                     html += '</button>';
                 });
                 html += '</div>';
-                
+
                 sources.forEach((source, index) => {
                     const sourceId = 'source-' + Date.now() + '-' + index;
                     html += '<div id="' + sourceId + '" class="source-expandable" style="display: none;">';
                     html += '<div class="source-content">';
                     html += '<div class="source-header">';
-                    html += '<span class="source-id">' + source.ID + '</span>';
+
+                    // Get original document ID and all chunks for this document
+                    const originalDocId = source.Metadata && source.Metadata.document_id ?
+                        source.Metadata.document_id :
+                        (source.ID.includes('-chunk-') ? source.ID.split('-chunk-')[0] : source.ID);
+
+                    const currentChunkIndex = source.Metadata && source.Metadata.chunk_index !== undefined ?
+                        source.Metadata.chunk_index : 0;
+
+                    // Display original document ID with chunk number
+                    const displayName = originalDocId + ' (chunk ' + currentChunkIndex + ')';
+
+                    html += '<span class="source-id">' + displayName + '</span>';
                     html += '<span class="source-score">' + (source.Score * 100).toFixed(1) + '% relevance</span>';
-                    const chunkParam = source.Metadata && source.Metadata.chunk_index !== undefined ? 
-                        '?highlight=' + source.Metadata.chunk_index : '';
-                    html += '<a href="/view/' + source.ID + chunkParam + 
-                        '" class="view-document-link" target="_blank">📄 View Document</a>';
+
+                    // Get all chunk indices for this document
+                    const allChunksForDoc = documentGroups[originalDocId] ? documentGroups[originalDocId].chunks : [currentChunkIndex];
+                    const uniqueChunks = [...new Set(allChunksForDoc)].sort((a, b) => a - b);
+
+                    // Create URL that highlights all chunks and navigates to the specific chunk
+                    const highlightParam = 'highlight=' + uniqueChunks.join(',');
+                    const navigateParam = 'chunk=' + currentChunkIndex;
+                    const fullUrl = '/view/' + originalDocId + '?' + highlightParam + '&' + navigateParam;
+
+                    html += '<a href="' + fullUrl + '" class="view-document-link" target="_blank">📄 View Chunk</a>';
                     html += '</div>';
                     html += '<div class="source-text">' + source.Text + '</div>';
                     html += '</div>';
@@ -1087,37 +1155,10 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// buildContextualMessage combines the current message with previous chat context
+// buildContextualMessage returns only the current message without any chat history context
 func (h *Handler) buildContextualMessage(currentMessage string, chatContext *chathistory.ChatContext) string {
-	if chatContext == nil || len(chatContext.Messages) == 0 {
-		return currentMessage
-	}
-
-	var contextParts []string
-
-	// Add compacted history if available
-	if chatContext.CompactedHistory != nil {
-		contextParts = append(contextParts, "Previous conversation summary: "+chatContext.CompactedHistory.CompactedContent)
-	}
-
-	// Add recent message history
-	recentMessages := chatContext.Messages
-	if len(recentMessages) > 6 { // Limit to last 6 messages (3 exchanges)
-		recentMessages = recentMessages[len(recentMessages)-6:]
-	}
-
-	for _, msg := range recentMessages {
-		role := "User"
-		if msg.Role == "assistant" {
-			role = "Assistant"
-		}
-		contextParts = append(contextParts, fmt.Sprintf("%s: %s", role, msg.Content))
-	}
-
-	// Add current message
-	contextParts = append(contextParts, "User: "+currentMessage)
-
-	return strings.Join(contextParts, "\n\n")
+	// Return only the current message, no chat history context
+	return currentMessage
 }
 
 // compactChatHistory compacts chat history when it gets too long

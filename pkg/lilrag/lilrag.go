@@ -55,7 +55,15 @@ type Storage interface {
 	) error
 	IndexChunksWithNamespace(
 		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
-		originalFilePath, docType, namespace string,
+		originalFilePath, docType, namespace string, chunkingMethod ...string,
+	) error
+	IndexChunksWithNamespaceAndMethod(
+		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
+		originalFilePath, docType, namespace, chunkingMethod string,
+	) error
+	IndexChunksWithMethod(
+		ctx context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32,
+		originalFilePath, docType, chunkingMethod string,
 	) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
@@ -73,22 +81,24 @@ type Embedder interface {
 }
 
 type SearchResult struct {
-	ID       string
-	Text     string
-	Score    float64
-	Metadata map[string]interface{}
+	ID          string
+	Text        string  // Full chunk text (including overlap)
+	ContentText string  // Non-overlapping content text (preferred for display)
+	Score       float64
+	Metadata    map[string]interface{}
 }
 
 type DocumentInfo struct {
-	ID         string    `json:"id"`
-	Text       string    `json:"text"`
-	ChunkCount int       `json:"chunk_count"`
-	SourcePath string    `json:"source_path"`
-	DocType    string    `json:"doc_type"`
-	IsImage    bool      `json:"is_image"`
-	Namespace  string    `json:"namespace"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID             string    `json:"id"`
+	Text           string    `json:"text"`
+	ChunkCount     int       `json:"chunk_count"`
+	SourcePath     string    `json:"source_path"`
+	DocType        string    `json:"doc_type"`
+	IsImage        bool      `json:"is_image"`
+	Namespace      string    `json:"namespace"`
+	ChunkingMethod string    `json:"chunking_method"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // ChunkInfo represents a chunk with database metadata for API responses
@@ -221,12 +231,12 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 		embeddings[i] = embedding
 	}
 
-	// Store document with chunks
-	return m.storage.IndexChunks(ctx, id, text, chunks, embeddings)
+	// Store document with chunks and chunking method
+	return m.storage.IndexChunksWithMethod(ctx, id, text, chunks, embeddings, "", "text", ChunkingMethodAuto)
 }
 
-// IndexWithChunkingMethod indexes text with a specific chunking method
-func (m *LilRag) IndexWithChunkingMethod(ctx context.Context, text, id, chunkingMethod string) error {
+// IndexWithNamespaceAndChunkingMethod indexes text with a specific chunking method and namespace
+func (m *LilRag) IndexWithNamespaceAndChunkingMethod(ctx context.Context, text, id, chunkingMethod, namespace string) error {
 	if text == "" {
 		return fmt.Errorf("text cannot be empty")
 	}
@@ -253,16 +263,91 @@ func (m *LilRag) IndexWithChunkingMethod(ctx context.Context, text, id, chunking
 		if err != nil {
 			return fmt.Errorf("failed to create embedding: %w", err)
 		}
-		return m.storage.Index(ctx, id, text, embedding)
+
+		// For simple text, create a chunk and use IndexChunksWithNamespace for consistency
+		chunk := Chunk{
+			Text:       text,
+			Index:      0,
+			StartPos:   0,
+			EndPos:     len(text),
+			TokenCount: tempChunker.EstimateTokenCount(text),
+			ChunkType:  ChunkTypeText,
+		}
+		return m.storage.IndexChunksWithNamespace(ctx, id, text, []Chunk{chunk}, [][]float32{embedding}, "", "text", namespace, chunkingMethod)
+	}
+
+	// Long text: chunk it and index with embeddings
+	chunks := tempChunker.ChunkText(text)
+	if len(chunks) == 0 {
+		return fmt.Errorf("no chunks generated from text")
+	}
+
+	// Generate embeddings for all chunks
+	embeddings := make([][]float32, len(chunks))
+	for i, chunk := range chunks {
+		embedding, err := m.embedder.Embed(ctx, chunk.Text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
+		}
+		embeddings[i] = embedding
+	}
+
+	return m.storage.IndexChunksWithNamespace(ctx, id, text, chunks, embeddings, "", "text", namespace, chunkingMethod)
+}
+
+// IndexWithNamespace indexes text with a namespace using auto chunking method
+func (m *LilRag) IndexWithNamespace(ctx context.Context, text, id, namespace string) error {
+	return m.IndexWithNamespaceAndChunkingMethod(ctx, text, id, ChunkingMethodAuto, namespace)
+}
+
+// IndexWithChunkingMethod indexes text with a specific chunking method
+func (m *LilRag) IndexWithChunkingMethod(ctx context.Context, text, id, chunkingMethod string) error {
+	if text == "" {
+		return fmt.Errorf("text cannot be empty")
+	}
+	if id == "" {
+		return fmt.Errorf("id cannot be empty")
+	}
+	if m.chunker == nil || m.embedder == nil || m.storage == nil {
+		return fmt.Errorf("LilRag not properly initialized")
+	}
+
+	startTime := time.Now()
+
+	// Create a temporary chunker with the specified method
+	tempChunker := &TextChunker{
+		MaxTokens: m.chunker.MaxTokens,
+		Overlap:   m.chunker.Overlap,
+		Method:    chunkingMethod,
+		Tokenizer: m.chunker.Tokenizer,
+		Embedder:  m.embedder,
+	}
+
+	// Check if text needs chunking
+	if !tempChunker.IsLongText(text) {
+		// Simple case: text fits in one chunk
+		embedding, err := m.embedder.Embed(ctx, text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding: %w", err)
+		}
+		// Create a chunk for consistency
+		chunk := Chunk{
+			Text:       text,
+			Index:      0,
+			StartPos:   0,
+			EndPos:     len(text),
+			TokenCount: tempChunker.EstimateTokenCount(text),
+			ChunkType:  ChunkTypeText,
+		}
+		return m.storage.IndexChunksWithMethod(ctx, id, text, []Chunk{chunk}, [][]float32{embedding}, "", "text", chunkingMethod)
 	}
 
 	// Complex case: text needs to be chunked with specified method
+	fmt.Printf("📄 Analyzing text for chunking (estimated tokens: %d)...\n", tempChunker.EstimateTokenCount(text))
 	chunks := tempChunker.ChunkText(text)
 	if len(chunks) == 0 {
 		return fmt.Errorf("failed to create chunks from text")
 	}
-
-	fmt.Printf("Splitting text into %d chunks for document '%s' using %s method\n", len(chunks), id, chunkingMethod)
 
 	// Record document tokens processed
 	totalTokens := 0
@@ -271,10 +356,32 @@ func (m *LilRag) IndexWithChunkingMethod(ctx context.Context, text, id, chunking
 	}
 	metrics.RecordDocumentTokens("text", totalTokens)
 
-	// Create embeddings for each chunk
+	fmt.Printf("✂️  Split into %d chunks using %s method (total tokens: %d)\n", len(chunks), chunkingMethod, totalTokens)
+
+	// Show chunk size distribution for user insight
+	if len(chunks) > 1 {
+		minTokens, maxTokens := chunks[0].TokenCount, chunks[0].TokenCount
+		for _, chunk := range chunks {
+			if chunk.TokenCount < minTokens {
+				minTokens = chunk.TokenCount
+			}
+			if chunk.TokenCount > maxTokens {
+				maxTokens = chunk.TokenCount
+			}
+		}
+		fmt.Printf("📊 Chunk sizes: %d-%d tokens (average: %d)\n", minTokens, maxTokens, totalTokens/len(chunks))
+	}
+
+	// Create embeddings for each chunk with progress
+	fmt.Printf("🔮 Creating embeddings for %d chunks...\n", len(chunks))
 	embeddings := make([][]float32, len(chunks))
 	for i, chunk := range chunks {
-		fmt.Printf("Creating embedding for chunk %d/%d (tokens: %d)\n", i+1, len(chunks), chunk.TokenCount)
+		// Show progress every 5 chunks or for small sets show all
+		if len(chunks) <= 10 || (i+1)%5 == 0 || i == len(chunks)-1 {
+			percentage := float64(i+1) / float64(len(chunks)) * 100
+			fmt.Printf("   ⚡ Processing chunk %d/%d (%.1f%%, %d tokens)\n", i+1, len(chunks), percentage, chunk.TokenCount)
+		}
+
 		embedding, err := m.embedder.Embed(ctx, chunk.Text)
 		if err != nil {
 			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
@@ -282,8 +389,17 @@ func (m *LilRag) IndexWithChunkingMethod(ctx context.Context, text, id, chunking
 		embeddings[i] = embedding
 	}
 
-	// Store document with chunks
-	return m.storage.IndexChunks(ctx, id, text, chunks, embeddings)
+	fmt.Printf("💾 Storing document and chunks in database...\n")
+
+	// Store document with chunks and chunking method
+	err := m.storage.IndexChunksWithMethod(ctx, id, text, chunks, embeddings, "", "text", chunkingMethod)
+	if err != nil {
+		return err
+	}
+
+	duration := time.Since(startTime)
+	fmt.Printf("✅ Successfully indexed document '%s' with %d chunks in %v\n", id, len(chunks), duration.Round(time.Millisecond))
+	return nil
 }
 
 // IndexPDF indexes a PDF file with page-based chunking
@@ -349,6 +465,8 @@ func (m *LilRag) IndexPDF(ctx context.Context, filePath, id string) error {
 
 // IndexFile indexes a file, automatically detecting the format and using appropriate parser
 func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
+	startTime := time.Now()
+
 	if m.documentHandler == nil {
 		// Fallback to legacy behavior if document handler not initialized
 		if IsPDFFile(filePath) {
@@ -367,6 +485,7 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 	}
 
 	// Parse and chunk the document
+	fmt.Printf("📄 Parsing file '%s'...\n", filePath)
 	chunks, err := m.documentHandler.ParseFileWithChunks(filePath, id)
 	if err != nil {
 		return fmt.Errorf("failed to parse document: %w", err)
@@ -384,11 +503,34 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 	docType := m.documentHandler.DetectDocumentType(filePath)
 	metrics.RecordDocumentTokens(string(docType), totalTokens)
 
+	fmt.Printf("📋 Parsed %s file into %d chunks (total tokens: %d)\n", strings.ToUpper(string(docType)), len(chunks), totalTokens)
+
+	// Show chunk size distribution for user insight
+	if len(chunks) > 1 {
+		minTokens, maxTokens := chunks[0].TokenCount, chunks[0].TokenCount
+		for _, chunk := range chunks {
+			if chunk.TokenCount < minTokens {
+				minTokens = chunk.TokenCount
+			}
+			if chunk.TokenCount > maxTokens {
+				maxTokens = chunk.TokenCount
+			}
+		}
+		fmt.Printf("📊 Chunk sizes: %d-%d tokens (average: %d)\n", minTokens, maxTokens, totalTokens/len(chunks))
+	}
+
 	// Generate embeddings for all chunks
+	fmt.Printf("🔮 Creating embeddings for %d chunks...\n", len(chunks))
 	embeddings := make([][]float32, len(chunks))
 	var combinedText strings.Builder
 
 	for i, chunk := range chunks {
+		// Show progress every 5 chunks or for small sets show all
+		if len(chunks) <= 10 || (i+1)%5 == 0 || i == len(chunks)-1 {
+			percentage := float64(i+1) / float64(len(chunks)) * 100
+			fmt.Printf("   ⚡ Processing chunk %d/%d (%.1f%%, %d tokens)\n", i+1, len(chunks), percentage, chunk.TokenCount)
+		}
+
 		embedding, err := m.embedder.Embed(ctx, chunk.Text)
 		if err != nil {
 			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
@@ -402,8 +544,102 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 		combinedText.WriteString(chunk.Text)
 	}
 
+	fmt.Printf("💾 Storing document and chunks in database...\n")
+
 	// Store document with chunks and metadata
-	return m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, string(docType))
+	err = m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, string(docType))
+	if err != nil {
+		return err
+	}
+
+	duration := time.Since(startTime)
+	fmt.Printf("✅ Successfully indexed '%s' with %d chunks in %v\n", filePath, len(chunks), duration.Round(time.Millisecond))
+	return nil
+}
+
+// IndexFileWithChunkingMethod indexes a file with a specific chunking method
+func (m *LilRag) IndexFileWithChunkingMethod(ctx context.Context, filePath, id, chunkingMethod string) error {
+	if m.documentHandler == nil {
+		// Fallback to legacy behavior if document handler not initialized
+		if IsPDFFile(filePath) {
+			// For PDFs, read content and use IndexWithChunkingMethod
+			content, err := m.ParseDocumentFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to parse PDF: %w", err)
+			}
+			return m.IndexWithChunkingMethod(ctx, content, id, chunkingMethod)
+		}
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+		return m.IndexWithChunkingMethod(ctx, string(content), id, chunkingMethod)
+	}
+
+	// Use document handler for all supported formats
+	if !m.documentHandler.IsSupported(filePath) {
+		return fmt.Errorf("unsupported file format: %s", filePath)
+	}
+
+	// Parse document content first
+	fmt.Printf("📄 Parsing file '%s' for %s chunking...\n", filePath, chunkingMethod)
+	content, err := m.documentHandler.ParseFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to parse document: %w", err)
+	}
+
+	if content == "" {
+		return fmt.Errorf("no content found in document")
+	}
+
+	docType := m.documentHandler.DetectDocumentType(filePath)
+	fmt.Printf("📋 Extracted %s content (%d characters) for chunking\n", strings.ToUpper(string(docType)), len(content))
+
+	// Use the text-based chunking method for the parsed content
+	return m.IndexWithChunkingMethod(ctx, content, id, chunkingMethod)
+}
+
+// IndexFileWithNamespace indexes a file with a namespace using auto chunking method
+func (m *LilRag) IndexFileWithNamespace(ctx context.Context, filePath, id, namespace string) error {
+	return m.IndexFileWithNamespaceAndChunkingMethod(ctx, filePath, id, ChunkingMethodAuto, namespace)
+}
+
+// IndexFileWithNamespaceAndChunkingMethod indexes a file with a specific chunking method and namespace
+func (m *LilRag) IndexFileWithNamespaceAndChunkingMethod(ctx context.Context, filePath, id, chunkingMethod, namespace string) error {
+	if m.documentHandler == nil {
+		// Fallback to legacy behavior if document handler not initialized
+		if IsPDFFile(filePath) {
+			// For PDFs, read content and use IndexWithNamespaceAndChunkingMethod
+			content, err := m.ParseDocumentFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to parse PDF: %w", err)
+			}
+			return m.IndexWithNamespaceAndChunkingMethod(ctx, content, id, chunkingMethod, namespace)
+		}
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+		return m.IndexWithNamespaceAndChunkingMethod(ctx, string(content), id, chunkingMethod, namespace)
+	}
+
+	// Use document handler for all supported formats
+	if !m.documentHandler.IsSupported(filePath) {
+		return fmt.Errorf("unsupported file format: %s", filePath)
+	}
+
+	// Parse document content first
+	content, err := m.documentHandler.ParseFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to parse document: %w", err)
+	}
+
+	if content == "" {
+		return fmt.Errorf("no content found in document")
+	}
+
+	// Use the text-based chunking method for the parsed content
+	return m.IndexWithNamespaceAndChunkingMethod(ctx, content, id, chunkingMethod, namespace)
 }
 
 func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {

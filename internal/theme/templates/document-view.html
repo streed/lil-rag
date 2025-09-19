@@ -192,6 +192,7 @@
         <h1 class="document-title">📄 {{(index .Data "DocumentInfo").ID}}</h1>
         <div class="document-meta">
             <div><strong>Type:</strong> {{(index .Data "DocumentInfo").DocType}}</div>
+            <div><strong>Chunking Method:</strong> <code style="background: var(--gray-100); padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">{{or (index .Data "DocumentInfo").ChunkingMethod "auto"}}</code></div>
             <div><strong>Chunks:</strong> {{(index .Data "DocumentInfo").ChunkCount}}</div>
             <div><strong>Source:</strong> {{(index .Data "DocumentInfo").SourcePath}}</div>
             <div><strong>Updated:</strong> {{(index .Data "DocumentInfo").UpdatedAt.Format "2006-01-02 15:04:05"}}</div>
@@ -209,6 +210,8 @@
 {{define "document-view-scripts"}}
 <script>
     const highlightChunk = {{index .Data "HighlightChunk"}};
+    const highlightChunks = {{index .Data "HighlightChunksJSON"}};
+    const navigateToChunk = {{index .Data "NavigateToChunk"}};
     const documentId = '{{index .Data "DocumentID"}}';
     
     // Wait for marked.js to load, then load document chunks and render as markdown
@@ -235,7 +238,12 @@
             chunks.forEach((chunk, index) => {
                 const chunkDiv = document.createElement('div');
                 chunkDiv.className = 'chunk';
-                if (index === highlightChunk) {
+
+                // Check if this chunk should be highlighted (supports both single and multiple highlighting)
+                const shouldHighlight = index === highlightChunk ||
+                    (highlightChunks && highlightChunks.includes && highlightChunks.includes(index));
+
+                if (shouldHighlight) {
                     chunkDiv.className += ' highlighted-chunk';
                 }
                 
@@ -262,12 +270,15 @@
                 contentDiv.appendChild(chunkDiv);
             });
             
-            // Scroll to highlighted chunk if specified
-            if (highlightChunk >= 0 && highlightChunk < chunks.length) {
-                const highlightedChunk = contentDiv.children[highlightChunk];
-                if (highlightedChunk) {
+            // Scroll to target chunk if specified (prefer navigateToChunk, fallback to highlightChunk)
+            const targetChunk = navigateToChunk >= 0 ? navigateToChunk : highlightChunk;
+
+            if (targetChunk >= 0 && targetChunk < chunks.length) {
+                const targetChunkElement = contentDiv.children[targetChunk];
+                if (targetChunkElement) {
                     setTimeout(() => {
-                        highlightedChunk.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        console.log('Scrolling to chunk index:', targetChunk);
+                        targetChunkElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }, 100);
                 }
             }
@@ -299,7 +310,8 @@
     // Add debugging
     console.log('Document view script loaded');
     console.log('Document ID:', documentId);
-    console.log('Highlight chunk:', highlightChunk);
+    console.log('Highlight chunks:', highlightChunks);
+    console.log('Navigate to chunk:', navigateToChunk);
     
     // Start loading content when page loads
     if (document.readyState === 'loading') {

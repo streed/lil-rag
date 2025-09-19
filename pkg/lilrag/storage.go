@@ -79,6 +79,7 @@ func (s *SQLiteStorage) createTables() error {
 			source_path TEXT,
 			doc_type TEXT,
 			namespace TEXT,
+			chunking_method TEXT DEFAULT 'auto',
 			metadata TEXT,
 			chunk_count INTEGER DEFAULT 1,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +95,8 @@ func (s *SQLiteStorage) createTables() error {
 			chunk_text_compressed BLOB,
 			start_pos INTEGER,
 			end_pos INTEGER,
+			content_start INTEGER DEFAULT 0,
+			content_end INTEGER DEFAULT 0,
 			token_count INTEGER,
 			page_number INTEGER,
 			chunk_type TEXT DEFAULT 'text',
@@ -126,6 +129,36 @@ func (s *SQLiteStorage) createTables() error {
 		if !strings.Contains(err.Error(), "duplicate column name") &&
 			!strings.Contains(err.Error(), "already exists") {
 			return fmt.Errorf("failed to add namespace column: %w", err)
+		}
+	}
+
+	// Migration: Add chunking_method column to existing databases
+	_, err = s.db.Exec(`ALTER TABLE documents ADD COLUMN chunking_method TEXT DEFAULT 'auto'`)
+	if err != nil {
+		// Ignore error if column already exists (expected for new databases)
+		if !strings.Contains(err.Error(), "duplicate column name") &&
+			!strings.Contains(err.Error(), "already exists") {
+			return fmt.Errorf("failed to add chunking_method column: %w", err)
+		}
+	}
+
+	// Migration: Add content_start column to existing chunks tables
+	_, err = s.db.Exec(`ALTER TABLE chunks ADD COLUMN content_start INTEGER DEFAULT 0`)
+	if err != nil {
+		// Ignore error if column already exists (expected for new databases)
+		if !strings.Contains(err.Error(), "duplicate column name") &&
+			!strings.Contains(err.Error(), "already exists") {
+			return fmt.Errorf("failed to add content_start column: %w", err)
+		}
+	}
+
+	// Migration: Add content_end column to existing chunks tables
+	_, err = s.db.Exec(`ALTER TABLE chunks ADD COLUMN content_end INTEGER DEFAULT 0`)
+	if err != nil {
+		// Ignore error if column already exists (expected for new databases)
+		if !strings.Contains(err.Error(), "duplicate column name") &&
+			!strings.Contains(err.Error(), "already exists") {
+			return fmt.Errorf("failed to add content_end column: %w", err)
 		}
 	}
 
@@ -165,9 +198,9 @@ func (s *SQLiteStorage) IndexWithNamespace(
 
 	// Insert the document with namespace
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO documents 
-		(id, original_text_compressed, content_hash, file_path, doc_type, namespace, chunk_count, created_at, updated_at) 
-		VALUES (?, ?, ?, ?, 'text', ?, 1, datetime('now'), datetime('now'))
+		INSERT OR REPLACE INTO documents
+		(id, original_text_compressed, content_hash, file_path, doc_type, namespace, chunking_method, chunk_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 'text', ?, 'auto', 1, datetime('now'), datetime('now'))
 	`, id, []byte{}, contentHash, filePath, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to insert document: %w", err)
@@ -176,21 +209,32 @@ func (s *SQLiteStorage) IndexWithNamespace(
 	// Generate a chunk ID for the main content
 	chunkID := fmt.Sprintf("%s_chunk_0", id)
 
+	// Compress text for storage
+	compressedText, err := CompressText(text)
+	if err != nil {
+		return fmt.Errorf("failed to compress text: %w", err)
+	}
+
 	// Insert the chunk
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO chunks 
-		(chunk_id, document_id, chunk_index, chunk_text_compressed, start_pos, end_pos, token_count, chunk_type, created_at) 
-		VALUES (?, ?, 0, ?, 0, ?, ?, 'text', datetime('now'))
-	`, chunkID, id, []byte{}, len(text), len(text))
+		INSERT OR REPLACE INTO chunks
+		(chunk_id, document_id, chunk_index, chunk_text_compressed, start_pos, end_pos, content_start, content_end, token_count, chunk_type, created_at)
+		VALUES (?, ?, 0, ?, 0, ?, 0, ?, ?, 'text', datetime('now'))
+	`, chunkID, id, compressedText, len(text), len(text), len(text))
 	if err != nil {
 		return fmt.Errorf("failed to insert chunk: %w", err)
 	}
 
 	// Insert the embedding
+	embeddingJSON, err := json.Marshal(embedding)
+	if err != nil {
+		return fmt.Errorf("failed to marshal embedding: %w", err)
+	}
+
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR REPLACE INTO embeddings (chunk_id, embedding) 
+		INSERT OR REPLACE INTO embeddings (chunk_id, embedding)
 		VALUES (?, ?)
-	`, chunkID, embedding)
+	`, chunkID, string(embeddingJSON))
 	if err != nil {
 		return fmt.Errorf("failed to insert embedding: %w", err)
 	}
@@ -211,6 +255,7 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 	chunks []Chunk,
 	embeddings [][]float32,
 	originalFilePath, docType, namespace string,
+	chunkingMethod ...string,
 ) error {
 	if s.db == nil {
 		return fmt.Errorf("storage not initialized - call Initialize() first")
@@ -268,24 +313,38 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 	for i, chunk := range chunks {
 		chunkID := fmt.Sprintf("%s_chunk_%d", documentID, i)
 
+		// Extract original text segment to preserve formatting
+		originalChunkText := text[chunk.StartPos:chunk.EndPos]
+
+		// Compress original chunk text for storage
+		compressedChunkText, err := CompressText(originalChunkText)
+		if err != nil {
+			return fmt.Errorf("failed to compress chunk %d text: %w", i, err)
+		}
+
 		// Insert chunk
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO chunks 
-			(chunk_id, document_id, chunk_index, chunk_text_compressed, 
-			 start_pos, end_pos, token_count, page_number, chunk_type, created_at) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-		`, chunkID, documentID, chunk.Index, []byte{},
-			chunk.StartPos, chunk.EndPos, chunk.TokenCount,
+			INSERT INTO chunks
+			(chunk_id, document_id, chunk_index, chunk_text_compressed,
+			 start_pos, end_pos, content_start, content_end, token_count, page_number, chunk_type, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+		`, chunkID, documentID, chunk.Index, compressedChunkText,
+			chunk.StartPos, chunk.EndPos, chunk.ContentStart, chunk.ContentEnd, chunk.TokenCount,
 			chunk.PageNumber, chunk.ChunkType)
 		if err != nil {
 			return fmt.Errorf("failed to insert chunk %d: %w", i, err)
 		}
 
 		// Insert embedding
+		embeddingJSON, err := json.Marshal(embeddings[i])
+		if err != nil {
+			return fmt.Errorf("failed to marshal embedding for chunk %d: %w", i, err)
+		}
+
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO embeddings (chunk_id, embedding) 
+			INSERT INTO embeddings (chunk_id, embedding)
 			VALUES (?, ?)
-		`, chunkID, embeddings[i])
+		`, chunkID, string(embeddingJSON))
 		if err != nil {
 			return fmt.Errorf("failed to insert embedding for chunk %d: %w", i, err)
 		}
@@ -304,6 +363,18 @@ func (s *SQLiteStorage) IndexChunksWithNamespace(
 func (s *SQLiteStorage) IndexChunks(ctx context.Context, documentID, text string,
 	chunks []Chunk, embeddings [][]float32) error {
 	return s.IndexChunksWithMetadata(ctx, documentID, text, chunks, embeddings, "", "")
+}
+
+// IndexChunksWithMethod indexes a document with chunks and chunking method
+func (s *SQLiteStorage) IndexChunksWithMethod(ctx context.Context, documentID, text string,
+	chunks []Chunk, embeddings [][]float32, originalFilePath, docType, chunkingMethod string) error {
+	return s.IndexChunksWithNamespace(ctx, documentID, text, chunks, embeddings, originalFilePath, docType, "", chunkingMethod)
+}
+
+// IndexChunksWithNamespaceAndMethod indexes a document with chunks, namespace, and chunking method
+func (s *SQLiteStorage) IndexChunksWithNamespaceAndMethod(ctx context.Context, documentID, text string,
+	chunks []Chunk, embeddings [][]float32, originalFilePath, docType, namespace, chunkingMethod string) error {
+	return s.IndexChunksWithNamespace(ctx, documentID, text, chunks, embeddings, originalFilePath, docType, namespace, chunkingMethod)
 }
 
 // IndexChunksWithMetadata indexes a document with metadata including original file path
@@ -360,10 +431,10 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 
 	// Insert document (document should not exist at this point since we deleted it if it existed)
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO documents (
-			id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunk_count, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, len(chunks), time.Now().UTC())
+		INSERT OR REPLACE INTO documents (
+			id, original_text_compressed, content_hash, file_path, source_path, doc_type, chunking_method, chunk_count, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, documentID, compressedText, contentHash, filePath, originalFilePath, docType, "auto", len(chunks), time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to insert document: %w", err)
 	}
@@ -388,18 +459,21 @@ func (s *SQLiteStorage) IndexChunksWithMetadata(ctx context.Context, documentID,
 			chunkType = ChunkTypeText
 		}
 
-		// Compress chunk text for storage
-		compressedChunkText, err := CompressText(chunk.Text)
+		// Extract original text segment to preserve formatting
+		originalChunkText := text[chunk.StartPos:chunk.EndPos]
+
+		// Compress original chunk text for storage
+		compressedChunkText, err := CompressText(originalChunkText)
 		if err != nil {
 			return fmt.Errorf("failed to compress chunk %d text: %w", i, err)
 		}
 
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO chunks (chunk_id, document_id, chunk_index, chunk_text_compressed, 
-			                   start_pos, end_pos, token_count, page_number, chunk_type) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO chunks (chunk_id, document_id, chunk_index, chunk_text_compressed,
+			                   start_pos, end_pos, content_start, content_end, token_count, page_number, chunk_type)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, chunkID, documentID, chunk.Index, compressedChunkText, chunk.StartPos, chunk.EndPos,
-			chunk.TokenCount, pageNumber, chunkType)
+			chunk.ContentStart, chunk.ContentEnd, chunk.TokenCount, pageNumber, chunkType)
 		if err != nil {
 			return fmt.Errorf("failed to insert chunk %d: %w", i, err)
 		}
@@ -479,12 +553,14 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 
 	// Search through chunks and return best matches
 	query := `
-		SELECT 
+		SELECT
 			c.document_id,
 			c.chunk_text_compressed,
 			c.chunk_index,
 			c.page_number,
 			c.chunk_type,
+			c.content_start,
+			c.content_end,
 			d.original_text_compressed,
 			d.file_path,
 			d.source_path,
@@ -504,8 +580,8 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		_ = rows.Close() // Ignore close errors in defer
 	}()
 
-	// Use a map to deduplicate results by document ID, keeping the best score per document
-	documentResults := make(map[string]SearchResult)
+	// Process all chunks individually (no deduplication by document)
+	var results []SearchResult
 
 	for rows.Next() {
 		var result SearchResult
@@ -515,47 +591,55 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		var compressedOriginalText []byte
 		var pageNumber sql.NullInt32
 		var chunkType string
+		var contentStart, contentEnd int
 		var filePath sql.NullString
 		var sourcePath sql.NullString
 
 		if err := rows.Scan(&result.ID, &compressedChunkText, &chunkIndex, &pageNumber,
-			&chunkType, &compressedOriginalText, &filePath, &sourcePath, &distance); err != nil {
+			&chunkType, &contentStart, &contentEnd, &compressedOriginalText, &filePath, &sourcePath, &distance); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		score := 1.0 - distance
 
-		// Check if we already have a result for this document
-		if existingResult, exists := documentResults[result.ID]; exists {
-			// Keep the result with the better score
-			if score <= existingResult.Score {
-				continue // Skip this result as we have a better one
-			}
-		}
-
-		// Decompress chunk text (for the matching chunk information)
+		// Decompress chunk text (this is the actual matching content)
 		chunkText, err := DecompressText(compressedChunkText)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decompress chunk text: %w", err)
 		}
 
-		// Decompress original text (this is what we'll show to the user)
+		// Decompress original text (for metadata reference)
 		originalText, err := DecompressText(compressedOriginalText)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decompress original text: %w", err)
 		}
 
-		// Set the result text to the full document content
-		result.Text = originalText
+		// Set the result text to the specific matching chunk (not full document)
+		result.Text = chunkText
 		result.Score = score
+
+		// Calculate ContentText (non-overlapping content)
+		if contentStart >= 0 && contentEnd > contentStart && contentEnd <= len(chunkText) {
+			result.ContentText = chunkText[contentStart:contentEnd]
+		} else {
+			// Fall back to full text if content boundaries are invalid
+			result.ContentText = chunkText
+		}
+
+		// Store original document ID before modifying result.ID
+		originalDocumentID := result.ID
+
+		// Create a unique ID that includes chunk information for all chunks
+		result.ID = fmt.Sprintf("%s-chunk-%d", result.ID, chunkIndex)
 
 		// Add metadata about the matching chunk and document
 		metadata := map[string]interface{}{
 			"chunk_index":    chunkIndex,
 			"chunk_type":     chunkType,
-			"is_chunk":       chunkIndex > 0 || s.hasMultipleChunks(ctx, result.ID),
+			"is_chunk":       true,
+			"document_id":    originalDocumentID, // Original document ID
 			"original_text":  originalText,
-			"matching_chunk": chunkText, // Keep the matching chunk for reference
+			"chunk_content":  chunkText,
 		}
 
 		// Add page number if available
@@ -574,12 +658,6 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		}
 
 		result.Metadata = metadata
-		documentResults[result.ID] = result
-	}
-
-	// Convert map back to slice and sort by score (highest first)
-	var results []SearchResult
-	for _, result := range documentResults {
 		results = append(results, result)
 	}
 
@@ -616,8 +694,8 @@ func (s *SQLiteStorage) hasMultipleChunks(ctx context.Context, documentID string
 
 func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, original_text_compressed, chunk_count, source_path, doc_type, namespace, created_at, updated_at 
-		FROM documents 
+		SELECT id, original_text_compressed, chunk_count, source_path, doc_type, namespace, chunking_method, created_at, updated_at
+		FROM documents
 		ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -634,12 +712,13 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 		var sourcePath sql.NullString
 		var docType sql.NullString
 		var namespace sql.NullString
+		var chunkingMethod sql.NullString
 		var updatedAtStr string
 		var createdAtStr string
 
 		err := rows.Scan(
 			&doc.ID, &compressedText, &doc.ChunkCount,
-			&sourcePath, &docType, &namespace,
+			&sourcePath, &docType, &namespace, &chunkingMethod,
 			&createdAtStr, &updatedAtStr,
 		)
 		if err != nil {
@@ -650,6 +729,10 @@ func (s *SQLiteStorage) ListDocuments(ctx context.Context) ([]DocumentInfo, erro
 		doc.SourcePath = sourcePath.String
 		doc.DocType = docType.String
 		doc.Namespace = namespace.String
+		doc.ChunkingMethod = chunkingMethod.String
+		if doc.ChunkingMethod == "" {
+			doc.ChunkingMethod = "auto" // Default for old documents
+		}
 		doc.IsImage = docType.String == "image"
 
 		// Decompress the text

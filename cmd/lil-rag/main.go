@@ -149,16 +149,19 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
 	// Parse flags
 	var chunkingMethod string
+	var namespace string
 	var filteredArgs []string
 
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--chunking-method=") {
 			chunkingMethod = strings.TrimPrefix(arg, "--chunking-method=")
+		} else if strings.HasPrefix(arg, "--namespace=") {
+			namespace = strings.TrimPrefix(arg, "--namespace=")
 		} else {
 			filteredArgs = append(filteredArgs, arg)
 		}
@@ -168,7 +171,7 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	args = filteredArgs
 
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
 	var id string
@@ -192,8 +195,23 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			// Generate ID automatically
 			id = lilrag.GenerateDocumentID()
 			fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
+			if namespace != "" {
+				fmt.Printf("Using namespace: %s\n", namespace)
+			}
 			if chunkingMethod != "" {
 				fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+			}
+
+			// Choose indexing method based on flags
+			if namespace != "" && chunkingMethod != "" {
+				if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
+					return fmt.Errorf("failed to index: %w", err)
+				}
+			} else if namespace != "" {
+				if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
+					return fmt.Errorf("failed to index: %w", err)
+				}
+			} else if chunkingMethod != "" {
 				if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 					return fmt.Errorf("failed to index: %w", err)
 				}
@@ -211,9 +229,32 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			// File exists, index with auto-generated ID
 			id = lilrag.GenerateDocumentID()
 			fmt.Printf("Indexing file '%s' with auto-generated ID '%s'...\n", arg, id)
-			if err := rag.IndexFile(ctx, arg, id); err != nil {
-				return fmt.Errorf("failed to index file: %w", err)
+			if namespace != "" {
+				fmt.Printf("Using namespace: %s\n", namespace)
 			}
+			if chunkingMethod != "" {
+				fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+			}
+
+			// Choose indexing method based on flags
+			if namespace != "" && chunkingMethod != "" {
+				if err := rag.IndexFileWithNamespaceAndChunkingMethod(ctx, arg, id, chunkingMethod, namespace); err != nil {
+					return fmt.Errorf("failed to index file: %w", err)
+				}
+			} else if namespace != "" {
+				if err := rag.IndexFileWithNamespace(ctx, arg, id, namespace); err != nil {
+					return fmt.Errorf("failed to index file: %w", err)
+				}
+			} else if chunkingMethod != "" {
+				if err := rag.IndexFileWithChunkingMethod(ctx, arg, id, chunkingMethod); err != nil {
+					return fmt.Errorf("failed to index file: %w", err)
+				}
+			} else {
+				if err := rag.IndexFile(ctx, arg, id); err != nil {
+					return fmt.Errorf("failed to index file: %w", err)
+				}
+			}
+
 			fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", arg, id)
 			return nil
 		}
@@ -226,8 +267,23 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 
 		id = lilrag.GenerateDocumentID()
 		fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
+		if namespace != "" {
+			fmt.Printf("Using namespace: %s\n", namespace)
+		}
 		if chunkingMethod != "" {
 			fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+		}
+
+		// Choose indexing method based on flags
+		if namespace != "" && chunkingMethod != "" {
+			if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+		} else if namespace != "" {
+			if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+		} else if chunkingMethod != "" {
 			if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
@@ -257,8 +313,23 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		fmt.Printf("Indexing text with ID '%s'...\n", id)
+		if namespace != "" {
+			fmt.Printf("Using namespace: %s\n", namespace)
+		}
 		if chunkingMethod != "" {
 			fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+		}
+
+		// Choose indexing method based on flags
+		if namespace != "" && chunkingMethod != "" {
+			if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+		} else if namespace != "" {
+			if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
+				return fmt.Errorf("failed to index: %w", err)
+			}
+		} else if chunkingMethod != "" {
 			if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
@@ -275,9 +346,32 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if fileExists(input) {
 		// Handle file using the document handler (supports PDF, DOCX, XLSX, HTML, CSV, etc.)
 		fmt.Printf("Indexing file '%s' with ID '%s'...\n", input, id)
-		if err := rag.IndexFile(ctx, input, id); err != nil {
-			return fmt.Errorf("failed to index file: %w", err)
+		if namespace != "" {
+			fmt.Printf("Using namespace: %s\n", namespace)
 		}
+		if chunkingMethod != "" {
+			fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+		}
+
+		// Choose indexing method based on flags
+		if namespace != "" && chunkingMethod != "" {
+			if err := rag.IndexFileWithNamespaceAndChunkingMethod(ctx, input, id, chunkingMethod, namespace); err != nil {
+				return fmt.Errorf("failed to index file: %w", err)
+			}
+		} else if namespace != "" {
+			if err := rag.IndexFileWithNamespace(ctx, input, id, namespace); err != nil {
+				return fmt.Errorf("failed to index file: %w", err)
+			}
+		} else if chunkingMethod != "" {
+			if err := rag.IndexFileWithChunkingMethod(ctx, input, id, chunkingMethod); err != nil {
+				return fmt.Errorf("failed to index file: %w", err)
+			}
+		} else {
+			if err := rag.IndexFile(ctx, input, id); err != nil {
+				return fmt.Errorf("failed to index file: %w", err)
+			}
+		}
+
 		fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", input, id)
 		return nil
 	}
@@ -289,8 +383,23 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	}
 
 	fmt.Printf("Indexing text with ID '%s'...\n", id)
+	if namespace != "" {
+		fmt.Printf("Using namespace: %s\n", namespace)
+	}
 	if chunkingMethod != "" {
 		fmt.Printf("Using chunking method: %s\n", chunkingMethod)
+	}
+
+	// Choose indexing method based on flags
+	if namespace != "" && chunkingMethod != "" {
+		if err := rag.IndexWithNamespaceAndChunkingMethod(ctx, text, id, chunkingMethod, namespace); err != nil {
+			return fmt.Errorf("failed to index: %w", err)
+		}
+	} else if namespace != "" {
+		if err := rag.IndexWithNamespace(ctx, text, id, namespace); err != nil {
+			return fmt.Errorf("failed to index: %w", err)
+		}
+	} else if chunkingMethod != "" {
 		if err := rag.IndexWithChunkingMethod(ctx, text, id, chunkingMethod); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
@@ -359,8 +468,12 @@ func handleSearch(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 
 		fmt.Printf("%d. ID: %s%s (Score: %.4f)\n", i+1, result.ID, matchInfo, result.Score)
 
-		// Always show full document content (result.Text now contains the full document)
-		fmt.Printf("   %s\n\n", result.Text)
+		// Show non-overlapping content (preferred for display)
+		displayText := result.ContentText
+		if displayText == "" {
+			displayText = result.Text // Fall back to full text if ContentText is empty
+		}
+		fmt.Printf("   %s\n\n", displayText)
 	}
 
 	return nil
@@ -776,7 +889,11 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 		fmt.Printf("📚 Sources (%d):\n", len(sources))
 		for i, source := range sources {
 			fmt.Printf("%d. %s (Score: %.4f)\n", i+1, source.ID, source.Score)
-			fmt.Printf("   %s\n\n", truncateText(source.Text, 200))
+			displayText := source.ContentText
+			if displayText == "" {
+				displayText = source.Text // Fall back to full text if ContentText is empty
+			}
+			fmt.Printf("   %s\n\n", truncateText(displayText, 200))
 		}
 	}
 
@@ -1097,7 +1214,7 @@ func printUsage() {
 	fmt.Println("  lil-rag [flags] <command> [args]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  index [--chunking-method=<method>] [id] <text|file|->  Index text, file, or stdin (ID optional, auto-generated if not provided)")
+	fmt.Println("  index [--chunking-method=<method>] [--namespace=<namespace>] [id] <text|file|->  Index text, file, or stdin (ID optional, auto-generated if not provided)")
 	fmt.Println("  search <query> [limit]       Search for similar text (default limit: 10)")
 	fmt.Println("  chat [flags] <message> [limit]  Interactive chat with RAG context (default limit: 5)")
 	fmt.Println("      --session-id <id>        Resume existing chat session")
@@ -1159,6 +1276,8 @@ func printUsage() {
 	fmt.Println("  lil-rag index --chunking-method=simple \"Hello world\"  # Simple chunking")
 	fmt.Println("  lil-rag index --chunking-method=recursive doc1 \"text\"  # Recursive chunking")
 	fmt.Println("  lil-rag index --chunking-method=semantic \"long document\"  # Semantic chunking")
+	fmt.Println("  lil-rag index --namespace=projects \"Hello world\"       # With namespace")
+	fmt.Println("  lil-rag index --namespace=docs --chunking-method=semantic doc1 \"text\"  # Namespace + chunking method")
 	fmt.Println("  lil-rag index document.pdf                # Auto-generated ID")
 	fmt.Println("  lil-rag index doc2 document.txt           # Explicit ID")
 	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin")

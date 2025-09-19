@@ -72,7 +72,39 @@ func (m *MockStorage) IndexWithNamespace(_ context.Context, id, text string, emb
 	return nil
 }
 
-func (m *MockStorage) IndexChunksWithNamespace(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType, namespace string) error {
+func (m *MockStorage) IndexChunksWithNamespace(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType, namespace string, chunkingMethod ...string) error {
+	if !m.initialized {
+		return fmt.Errorf("storage not initialized")
+	}
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunks and embeddings count mismatch")
+	}
+	m.documents[documentID] = text
+	m.chunks[documentID] = chunks
+	// Store first embedding for search compatibility
+	if len(embeddings) > 0 {
+		m.embeddings[documentID] = embeddings[0]
+	}
+	return nil
+}
+
+func (m *MockStorage) IndexChunksWithMethod(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType, chunkingMethod string) error {
+	if !m.initialized {
+		return fmt.Errorf("storage not initialized")
+	}
+	if len(chunks) != len(embeddings) {
+		return fmt.Errorf("chunks and embeddings count mismatch")
+	}
+	m.documents[documentID] = text
+	m.chunks[documentID] = chunks
+	// Store first embedding for search compatibility
+	if len(embeddings) > 0 {
+		m.embeddings[documentID] = embeddings[0]
+	}
+	return nil
+}
+
+func (m *MockStorage) IndexChunksWithNamespaceAndMethod(_ context.Context, documentID, text string, chunks []Chunk, embeddings [][]float32, originalFilePath, docType, namespace, chunkingMethod string) error {
 	if !m.initialized {
 		return fmt.Errorf("storage not initialized")
 	}

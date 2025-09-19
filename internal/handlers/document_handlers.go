@@ -16,6 +16,15 @@ import (
 	"lil-rag/pkg/lilrag"
 )
 
+// marshalToJSON converts a value to JSON string for use in templates
+func marshalToJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "null"
+	}
+	return string(b)
+}
+
 // ViewDocument serves a document for web viewing at /view/{id}
 func (h *Handler) ViewDocument() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -32,12 +41,32 @@ func (h *Handler) ViewDocument() http.HandlerFunc {
 			return
 		}
 
-		// Get highlight chunk index from query parameter
-		highlightChunk := -1
+		// Get highlight chunk indices from query parameter (supports comma-separated values)
+		var highlightChunks []int
 		if highlightParam := r.URL.Query().Get("highlight"); highlightParam != "" {
-			if chunkIndex, err := strconv.Atoi(highlightParam); err == nil {
-				highlightChunk = chunkIndex
+			chunkStrs := strings.Split(highlightParam, ",")
+			for _, chunkStr := range chunkStrs {
+				if chunkIndex, err := strconv.Atoi(strings.TrimSpace(chunkStr)); err == nil {
+					highlightChunks = append(highlightChunks, chunkIndex)
+				}
 			}
+		}
+
+		// Get navigation target chunk from query parameter
+		navigateToChunk := -1
+		if chunkParam := r.URL.Query().Get("chunk"); chunkParam != "" {
+			if chunkIndex, err := strconv.Atoi(chunkParam); err == nil {
+				navigateToChunk = chunkIndex
+			}
+		}
+
+		// For backward compatibility, if only one highlight chunk, use it as both highlight and navigate target
+		var highlightChunk int = -1
+		if len(highlightChunks) == 1 && navigateToChunk == -1 {
+			highlightChunk = highlightChunks[0]
+			navigateToChunk = highlightChunks[0]
+		} else if len(highlightChunks) > 0 {
+			highlightChunk = highlightChunks[0] // Use first chunk for legacy compatibility
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -51,7 +80,7 @@ func (h *Handler) ViewDocument() http.HandlerFunc {
 		}
 
 		// Serve the document based on its type
-		h.serveDocumentContent(w, r, docInfo, highlightChunk)
+		h.serveDocumentContent(w, r, docInfo, highlightChunk, highlightChunks, navigateToChunk)
 	}
 }
 
@@ -354,11 +383,11 @@ func (h *Handler) GetChunk() http.HandlerFunc {
 
 // serveDocumentContent serves the document content in a web viewer
 func (h *Handler) serveDocumentContent(
-	w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int,
+	w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int, highlightChunks []int, navigateToChunk int,
 ) {
 	// Check if this is an image document
 	if docInfo.IsImage && docInfo.SourcePath != "" {
-		h.serveImageDocument(w, r, docInfo, highlightChunk)
+		h.serveImageDocument(w, r, docInfo, highlightChunk, highlightChunks, navigateToChunk)
 		return
 	}
 
@@ -371,9 +400,12 @@ func (h *Handler) serveDocumentContent(
 			Version:  h.version,
 			PageName: "documents", // For navigation highlighting
 			Data: map[string]interface{}{
-				"DocumentInfo":   docInfo,
-				"DocumentID":     docInfo.ID,
-				"HighlightChunk": highlightChunk,
+				"DocumentInfo":       docInfo,
+				"DocumentID":         docInfo.ID,
+				"HighlightChunk":     highlightChunk,      // Legacy single chunk support
+				"HighlightChunks":    highlightChunks,     // New multiple chunks support
+				"HighlightChunksJSON": marshalToJSON(highlightChunks), // JSON-encoded for JavaScript
+				"NavigateToChunk":    navigateToChunk,     // Navigation target
 			},
 		}
 
@@ -740,14 +772,17 @@ func (h *Handler) fallbackDocumentView(
 
 // serveImageDocument serves the image document with its visual content and OCR text
 func (h *Handler) serveImageDocument(
-	w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int,
+	w http.ResponseWriter, r *http.Request, docInfo *lilrag.DocumentInfo, highlightChunk int, highlightChunks []int, navigateToChunk int,
 ) {
 	// Check if template renderer is available
 	if h.renderer != nil {
 		pageData := map[string]interface{}{
-			"DocumentID":     docInfo.ID,
-			"DocumentInfo":   docInfo,
-			"HighlightChunk": highlightChunk,
+			"DocumentID":         docInfo.ID,
+			"DocumentInfo":       docInfo,
+			"HighlightChunk":     highlightChunk,      // Legacy single chunk support
+			"HighlightChunks":    highlightChunks,     // New multiple chunks support
+			"HighlightChunksJSON": marshalToJSON(highlightChunks), // JSON-encoded for JavaScript
+			"NavigateToChunk":    navigateToChunk,     // Navigation target
 		}
 
 		templateData := &theme.TemplateData{

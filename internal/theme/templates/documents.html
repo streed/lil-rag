@@ -14,6 +14,7 @@
                         <th>ID</th>
                         <th>Type</th>
                         <th>Namespace</th>
+                        <th>Chunking Method</th>
                         <th>Chunks</th>
                         <th>Actions</th>
                     </tr>
@@ -70,9 +71,10 @@
                 <td><a href="/view/${escapeHtml(doc.id)}" style="font-family: 'Courier New', monospace; color: var(--primary-color); font-weight: 500; text-decoration: none;">${escapeHtml(doc.id)}</a></td>
                 <td>${escapeHtml(doc.doc_type || 'text')}</td>
                 <td>${doc.namespace ? escapeHtml(doc.namespace) : ''}</td>
+                <td><span style="font-family: 'Courier New', monospace; background: var(--gray-100); padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">${escapeHtml(doc.chunking_method || 'auto')}</span></td>
                 <td>${doc.chunk_count || 0}</td>
                 <td>
-                    <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85em;" 
+                    <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.85em;"
                             onclick="deleteDocument('${escapeHtml(doc.id)}')">Delete</button>
                 </td>
             `;

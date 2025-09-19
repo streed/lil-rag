@@ -44,13 +44,15 @@ type TextChunker struct {
 }
 
 type Chunk struct {
-	Text       string
-	Index      int
-	StartPos   int
-	EndPos     int
-	TokenCount int
-	PageNumber *int   // Optional page number for PDF chunks
-	ChunkType  string // Type of chunk: "text", "pdf_page"
+	Text         string
+	Index        int
+	StartPos     int // Start position in the original text (including overlap)
+	EndPos       int // End position in the original text (including overlap)
+	ContentStart int // Start position of non-overlapping content within this chunk
+	ContentEnd   int // End position of non-overlapping content within this chunk
+	TokenCount   int
+	PageNumber   *int   // Optional page number for PDF chunks
+	ChunkType    string // Type of chunk: "text", "pdf_page"
 }
 
 func NewTextChunker(maxTokens, overlap int) *TextChunker {
@@ -164,7 +166,7 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 	// Choose chunking method based on configuration
 	switch tc.Method {
 	case ChunkingMethodSimple:
-		return tc.simpleChunk(text, contentType)
+		return tc.sentenceBoundaryChunk(text, contentType)
 	case ChunkingMethodRecursive:
 		return tc.adaptiveChunk(text, contentType)
 	case ChunkingMethodSemantic:
@@ -394,8 +396,10 @@ func (tc *TextChunker) applyOverlapAndReindex(chunks []Chunk, contentType string
 		}
 
 		chunk.Index = i
-		chunk.StartPos = 0
-		chunk.EndPos = len(chunk.Text)
+		// Don't overwrite position information - the recursive chunker should not be used
+		// for storing chunks with original text positions. Remove these problematic lines:
+		// chunk.StartPos = 0
+		// chunk.EndPos = len(chunk.Text)
 		result = append(result, chunk)
 	}
 
@@ -592,14 +596,40 @@ func (tc *TextChunker) splitByParagraphs(text string) []string {
 
 // splitBySentences uses improved sentence detection patterns
 func (tc *TextChunker) splitBySentences(text string) []string {
-	// Enhanced sentence patterns including abbreviations awareness
-	sentenceRegex := regexp.MustCompile(`[.!?](?:\s+|$)`)
+	// Enhanced sentence boundary detection with better abbreviation handling
 
-	// Find all sentence boundaries
-	matches := sentenceRegex.FindAllStringIndex(text, -1)
-	if len(matches) == 0 {
-		// No sentence boundaries found
-		cleaned := strings.TrimSpace(text)
+	// Common abbreviations that shouldn't end sentences
+	abbreviations := []string{
+		"Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Sr.", "Jr.", "Inc.", "Corp.", "Ltd.", "Co.",
+		"vs.", "etc.", "i.e.", "e.g.", "cf.", "Fig.", "fig.", "Table", "table", "Vol.", "vol.",
+		"No.", "no.", "p.", "pp.", "ch.", "Ch.", "sec.", "Sec.", "govt.", "Govt.",
+	}
+
+	// Create abbreviation regex pattern
+	abbrevPattern := strings.Join(abbreviations, "|")
+	abbrevRegex := regexp.MustCompile(`(?i)\b(?:` + regexp.QuoteMeta(abbrevPattern) + `)\s`)
+
+	// Replace abbreviations temporarily to avoid false sentence breaks
+	tempText := text
+	abbrevReplacements := make(map[string]string)
+	matches := abbrevRegex.FindAllString(tempText, -1)
+	for i, match := range matches {
+		placeholder := fmt.Sprintf("__ABBREV_%d__", i)
+		abbrevReplacements[placeholder] = match
+		tempText = strings.Replace(tempText, match, placeholder, 1)
+	}
+
+	// Enhanced sentence patterns - more sophisticated boundary detection
+	sentenceRegex := regexp.MustCompile(`[.!?]+(?:\s+|$)`)
+
+	// Find all sentence boundaries in the temp text
+	boundaries := sentenceRegex.FindAllStringIndex(tempText, -1)
+	if len(boundaries) == 0 {
+		// No sentence boundaries found, restore abbreviations and return as single sentence
+		for placeholder, original := range abbrevReplacements {
+			tempText = strings.Replace(tempText, placeholder, original, -1)
+		}
+		cleaned := strings.TrimSpace(tempText)
 		if cleaned != "" {
 			return []string{cleaned}
 		}
@@ -609,23 +639,20 @@ func (tc *TextChunker) splitBySentences(text string) []string {
 	var sentences []string
 	lastEnd := 0
 
-	for i, match := range matches {
-		// Extract sentence including the punctuation for the last sentence
+	for _, boundary := range boundaries {
+		// Extract sentence including the punctuation
 		start := lastEnd
-		var end int
-		if i == len(matches)-1 {
-			// Last sentence - include the punctuation
-			end = match[1]
-		} else {
-			// Middle sentences - exclude the punctuation
-			end = match[0]
-		}
+		end := boundary[1] // Include punctuation
 
-		sentence := strings.TrimSpace(text[start:end])
-		if sentence != "" { // Allow shorter sentences for tests
+		sentence := strings.TrimSpace(tempText[start:end])
+		if sentence != "" {
+			// Restore abbreviations in this sentence
+			for placeholder, original := range abbrevReplacements {
+				sentence = strings.Replace(sentence, placeholder, original, -1)
+			}
 			sentences = append(sentences, sentence)
 		}
-		lastEnd = match[1]
+		lastEnd = boundary[1]
 	}
 
 	return sentences
@@ -728,6 +755,176 @@ func GetChunkID(documentID string, chunkIndex int) string {
 		return documentID
 	}
 	return fmt.Sprintf("%s_chunk_%d", documentID, chunkIndex)
+}
+
+// GetContentText returns the non-overlapping content of the chunk
+func (c *Chunk) GetContentText() string {
+	if c.ContentStart < 0 || c.ContentEnd > len(c.Text) || c.ContentStart >= c.ContentEnd {
+		// If content boundaries are invalid, return the full text
+		return c.Text
+	}
+	return c.Text[c.ContentStart:c.ContentEnd]
+}
+
+// HasOverlap returns whether this chunk has overlapping content
+func (c *Chunk) HasOverlap() bool {
+	return c.ContentStart > 0 || c.ContentEnd < len(c.Text)
+}
+
+// sentenceBoundaryChunk creates chunks that respect sentence boundaries and calculate proper indices
+func (tc *TextChunker) sentenceBoundaryChunk(text, contentType string) []Chunk {
+	if text == "" {
+		return nil
+	}
+
+	sentences := tc.splitIntoSentences(text)
+	if len(sentences) <= 1 {
+		// Single sentence or no sentences, return as one chunk
+		tokenCount := tc.EstimateTokenCount(text)
+		return []Chunk{
+			{
+				Text:         text,
+				Index:        0,
+				StartPos:     0,
+				EndPos:       len(text),
+				ContentStart: 0,
+				ContentEnd:   len(text),
+				TokenCount:   tokenCount,
+				ChunkType:    contentType,
+			},
+		}
+	}
+
+	var chunks []Chunk
+	var currentSentences []string
+	var currentTokens int
+	chunkIndex := 0
+
+	// Build sentence position map
+	sentencePositions := tc.buildSentencePositions(text, sentences)
+
+	// Reserve space for overlap
+	effectiveMaxTokens := tc.MaxTokens - tc.Overlap
+
+	for i, sentence := range sentences {
+		sentenceTokens := tc.EstimateTokenCount(sentence)
+
+		// Check if adding this sentence would exceed our limit
+		if len(currentSentences) > 0 && currentTokens+sentenceTokens > effectiveMaxTokens {
+			// Finalize current chunk
+			chunk := tc.buildChunkWithOverlap(text, currentSentences, sentencePositions, chunkIndex, contentType)
+			chunks = append(chunks, chunk)
+			chunkIndex++
+
+			// Start new chunk with overlap from previous chunk
+			overlapSentences := tc.getOverlapSentences(sentences, i, tc.Overlap)
+			currentSentences = overlapSentences
+			currentTokens = tc.EstimateTokenCount(strings.Join(overlapSentences, " "))
+		}
+
+		// Add current sentence
+		currentSentences = append(currentSentences, sentence)
+		currentTokens += sentenceTokens
+	}
+
+	// Add final chunk if any sentences remain
+	if len(currentSentences) > 0 {
+		chunk := tc.buildChunkWithOverlap(text, currentSentences, sentencePositions, chunkIndex, contentType)
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks
+}
+
+// buildSentencePositions creates a map of sentence positions in the original text
+func (tc *TextChunker) buildSentencePositions(text string, sentences []string) map[string][]int {
+	positions := make(map[string][]int)
+	searchOffset := 0
+
+	for _, sentence := range sentences {
+		// Find this sentence in the text starting from searchOffset
+		index := strings.Index(text[searchOffset:], sentence)
+		if index != -1 {
+			actualIndex := searchOffset + index
+			positions[sentence] = []int{actualIndex, actualIndex + len(sentence)}
+			searchOffset = actualIndex + len(sentence)
+		}
+	}
+
+	return positions
+}
+
+// buildChunkWithOverlap creates a chunk with proper overlap calculation
+func (tc *TextChunker) buildChunkWithOverlap(originalText string, sentences []string, positions map[string][]int, chunkIndex int, contentType string) Chunk {
+	if len(sentences) == 0 {
+		return Chunk{}
+	}
+
+	// Find the start and end positions in the original text
+	firstSentence := sentences[0]
+	lastSentence := sentences[len(sentences)-1]
+
+	var startPos, endPos int
+	if pos, exists := positions[firstSentence]; exists {
+		startPos = pos[0]
+	}
+	if pos, exists := positions[lastSentence]; exists {
+		endPos = pos[1]
+	}
+
+	chunkText := originalText[startPos:endPos]
+
+	// Calculate content boundaries (non-overlapping part)
+	contentStart := 0
+	contentEnd := len(chunkText)
+
+	if chunkIndex > 0 {
+		// For chunks after the first, overlap is at the beginning
+		overlapTokens := tc.Overlap
+		overlapChars := tc.estimateCharactersFromTokens(overlapTokens)
+		if overlapChars < len(chunkText) {
+			contentStart = overlapChars
+		}
+	}
+
+	return Chunk{
+		Text:         chunkText,
+		Index:        chunkIndex,
+		StartPos:     startPos,
+		EndPos:       endPos,
+		ContentStart: contentStart,
+		ContentEnd:   contentEnd,
+		TokenCount:   tc.EstimateTokenCount(chunkText),
+		ChunkType:    contentType,
+	}
+}
+
+// getOverlapSentences gets sentences for overlap from previous chunk
+func (tc *TextChunker) getOverlapSentences(sentences []string, currentIndex, overlapTokens int) []string {
+	if currentIndex == 0 || overlapTokens <= 0 {
+		return []string{}
+	}
+
+	var overlapSentences []string
+	var tokens int
+
+	// Work backwards from current index to get overlap sentences
+	for i := currentIndex - 1; i >= 0; i-- {
+		sentenceTokens := tc.EstimateTokenCount(sentences[i])
+		if tokens + sentenceTokens > overlapTokens {
+			break
+		}
+		overlapSentences = append([]string{sentences[i]}, overlapSentences...)
+		tokens += sentenceTokens
+	}
+
+	return overlapSentences
+}
+
+// estimateCharactersFromTokens estimates character count from token count
+func (tc *TextChunker) estimateCharactersFromTokens(tokens int) int {
+	// Rough estimate: 1 token ≈ 4 characters on average
+	return tokens * 4
 }
 
 // GenerateDocumentID generates a human-readable document ID when none is provided
@@ -881,30 +1078,14 @@ func (tc *TextChunker) autoChunk(text, contentType string, tokenCount int) []Chu
 		return tc.simpleChunk(text, contentType)
 	}
 
-	// For code content, prefer recursive to preserve function/class boundaries
-	if contentType == ContentTypeCode {
-		return tc.adaptiveChunk(text, contentType)
-	}
-
-	// For highly structured content with clear hierarchies, use recursive
-	structureIndicators := []string{"# ", "## ", "### ", "#### ", "1. ", "2. ", "3. ", "- ", "* "}
-	structureCount := 0
-	for _, indicator := range structureIndicators {
-		structureCount += strings.Count(text, indicator)
-	}
-
-	// If document has lots of structure (>10 structural elements), use recursive
-	if structureCount > 10 {
-		return tc.adaptiveChunk(text, contentType)
-	}
-
-	// For medium to large prose documents, prefer semantic chunking if embedder is available
+	// For semantic chunking if embedder is available
 	if tc.Embedder != nil && contentType == ContentTypeProse && tokenCount > tc.MaxTokens*3 {
 		return tc.semanticChunk(text, contentType)
 	}
 
-	// For plain prose or lightly structured content, use simple chunking for better context preservation
-	return tc.simpleChunk(text, contentType)
+	// For all other cases, use sentence boundary chunking to preserve original text positions
+	// This ensures that chunk.StartPos and chunk.EndPos work correctly with originalText[start:end]
+	return tc.sentenceBoundaryChunk(text, contentType)
 }
 
 // semanticChunk implements embedding-based semantic similarity chunking

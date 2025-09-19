@@ -197,10 +197,10 @@ Found 2 results:
 ### Chunking Methods
 
 **Available Methods:**
-- `simple` - Token-based chunking with overlap (fast, efficient)
+- `simple` - Sentence-aware chunking with overlap (fast, preserves formatting)
 - `recursive` - Hierarchical splitting with semantic boundaries (preserves document structure)
 - `semantic` - Embedding-based similarity chunking (optimal for academic/complex content)
-- `auto` - Intelligent method selection based on content analysis (default)
+- `auto` - Intelligent method selection prioritizing formatting preservation (default)
 
 ### Document Management
 
@@ -438,13 +438,13 @@ curl -X POST http://localhost:8080/api/search \
 ```
 
 #### POST /api/chat
-Interactive chat with RAG context and source citations.
+Interactive chat with RAG context and source citations. Automatically limits results to maximum 20 chunks with 0.3 minimum relevance score.
 
 ```bash
 curl -X POST http://localhost:8080/api/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "What is machine learning?", 
+    "message": "What is machine learning?",
     "limit": 5
   }'
 ```
@@ -664,10 +664,10 @@ Optimize text chunking for your use case with 2024 research-based defaults:
 - **Chunking Methods**: Supports simple, recursive, semantic, and auto-selection strategies
 
 **Available Chunking Methods:**
-- `simple`: Token-based chunking with overlap (fast, efficient)
+- `simple`: Sentence-aware chunking with overlap (fast, preserves formatting)
 - `recursive`: Hierarchical splitting with semantic boundaries (preserves structure)
 - `semantic`: Embedding-based similarity chunking (optimal for complex content)
-- `auto`: Intelligent method selection based on content analysis
+- `auto`: Intelligent method selection prioritizing formatting preservation
 
 ```bash
 # Use different chunking strategies
@@ -884,10 +884,10 @@ LilRag implements state-of-the-art text chunking based on 2024 research findings
 #### **Chunking Methods**
 
 **1. Simple Chunking**
-- Token-based splitting with intelligent overlap
-- Optimal for: General purpose, fast processing
-- Performance: ~2 chunks for 1000-token documents
-- Benefits: Efficient, maintains context continuity
+- Sentence-aware splitting with intelligent overlap and formatting preservation
+- Optimal for: General purpose, fast processing, maintaining original text appearance
+- Performance: ~2 chunks for 1000-token documents with preserved formatting
+- Benefits: Efficient, maintains context continuity, preserves punctuation and spacing
 
 **2. Recursive Chunking**
 - Hierarchical splitting at semantic boundaries
@@ -904,10 +904,18 @@ LilRag implements state-of-the-art text chunking based on 2024 research findings
 - Benefits: Maintains topical coherence, improves retrieval accuracy
 
 **4. Auto Selection**
-- Intelligent method selection based on content analysis
-- Factors: Document size, structure, content type
-- Optimal for: Mixed content types, general use
-- Performance: Adapts to content characteristics
+- Intelligent method selection prioritizing formatting preservation
+- Factors: Document size, structure, content type, formatting requirements
+- Optimal for: Mixed content types, general use with preserved text quality
+- Performance: Adapts to content characteristics while maintaining original formatting
+
+#### **Text Preservation Features**
+
+**Original Formatting Preservation**
+- Chunks maintain exact spacing, punctuation, and case from source documents
+- Position-aware chunking ensures accurate text extraction from original content
+- Enhanced auto-selection prioritizes methods that preserve formatting integrity
+- Improved accuracy for search results and chat responses displaying original text
 
 #### **Research-Based Optimizations**
 
@@ -933,17 +941,18 @@ LilRag implements state-of-the-art text chunking based on 2024 research findings
 
 #### **Performance Characteristics**
 
-| Method | Speed | Context Quality | Structure Preservation | Best For |
-|--------|-------|-----------------|----------------------|----------|
-| Simple | ⚡⚡⚡ | ⭐⭐⭐ | ⭐⭐ | General documents |
-| Recursive | ⚡⚡ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Structured content |
-| Semantic | ⚡ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Academic/complex |
-| Auto | ⚡⚡ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Mixed content |
+| Method | Speed | Context Quality | Structure Preservation | Formatting Preservation | Best For |
+|--------|-------|-----------------|----------------------|------------------------|----------|
+| Simple | ⚡⚡⚡ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ | General documents |
+| Recursive | ⚡⚡ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ | Structured content |
+| Semantic | ⚡ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Academic/complex |
+| Auto | ⚡⚡ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Mixed content |
 
 #### **Implementation Benefits**
 - **Accuracy**: tiktoken provides LLM-compatible token counting
 - **Efficiency**: Optimized chunk sizes reduce embedding overhead by 12%
 - **Quality**: Semantic chunking improves retrieval accuracy by 8-15%
+- **Formatting**: Original text preservation maintains document integrity and readability
 - **Flexibility**: Four methods handle diverse content types optimally
 - **Research-Based**: Defaults based on 2024 academic findings
 

@@ -12,6 +12,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
 	github.com/prometheus/client_golang v1.23.1
+	github.com/tiktoken-go/tokenizer v0.7.0
 	github.com/xuri/excelize/v2 v2.9.1
 	golang.org/x/crypto v0.42.0
 	golang.org/x/image v0.30.0
@@ -34,7 +35,6 @@ require (
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/tiendc/go-deepcopy v1.6.0 // indirect
-	github.com/tiktoken-go/tokenizer v0.7.0 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	golang.org/x/sys v0.36.0 // indirect

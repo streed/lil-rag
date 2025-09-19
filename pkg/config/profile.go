@@ -101,9 +101,10 @@ func LoadProfile() (*ProfileConfig, error) {
 	}
 
 	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
+		// Return default profile WITHOUT saving it automatically
 		config := DefaultProfile()
-		if saveErr := config.Save(); saveErr != nil {
-			return nil, fmt.Errorf("failed to create default config: %w", saveErr)
+		if err := config.ensureDirectories(); err != nil {
+			return nil, err
 		}
 		return config, nil
 	}
@@ -123,6 +124,26 @@ func LoadProfile() (*ProfileConfig, error) {
 	}
 
 	return &config, nil
+}
+
+// LoadOrCreateProfile loads an existing profile or creates and saves a default one
+// Use this when you explicitly want to create a config file if it doesn't exist
+func LoadOrCreateProfile() (*ProfileConfig, error) {
+	configPath, err := GetProfileConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
+		config := DefaultProfile()
+		if saveErr := config.Save(); saveErr != nil {
+			return nil, fmt.Errorf("failed to create default config: %w", saveErr)
+		}
+		return config, nil
+	}
+
+	// Config exists, load it normally
+	return LoadProfile()
 }
 
 func (p *ProfileConfig) Save() error {

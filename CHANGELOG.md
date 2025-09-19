@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configurable HTTP Timeouts**: Ollama API timeouts now configurable with intelligent multipliers
 - **Advanced Configuration**: Enhanced configuration system with fine-tuned chunking options
 - **Comprehensive Documentation**: New configuration reference guide with all options explained
+
+### Improved
+- **Text Preservation**: Chunks now preserve original document formatting, spacing, and punctuation
+- **Chunking Position Accuracy**: Fixed chunk position calculation to ensure accurate text extraction
+- **Chat Result Limiting**: Chat methods now return maximum 20 chunks with 0.3 minimum score threshold
+- **Auto-Chunking Strategy**: Improved automatic chunking method selection to prioritize position-preserving methods
 - Initial release of Lil-RAG
 - CLI interface for indexing and searching documents
 - HTTP API server with RESTful endpoints
