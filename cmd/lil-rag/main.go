@@ -840,11 +840,9 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 		fmt.Println("  --chunking=STRATEGY  Chunking strategy to use (default: recursive)")
 		fmt.Println("")
 		fmt.Println("Available chunking strategies:")
-		fmt.Println("  recursive   Adaptive chunking with semantic boundaries (default)")
-		fmt.Println("  fast        Small chunks for precise search (128 tokens, 19 overlap)")
-		fmt.Println("  contextual  Large chunks for context preservation (512 tokens, 76 overlap)")
-		fmt.Println("  legacy      Large chunks for backward compatibility (1800 tokens, 200 overlap)")
-		fmt.Println("  fallback    Simple word-based chunking")
+		fmt.Println("  recursive   Hierarchical text splitting with semantic boundaries (default)")
+		fmt.Println("  semantic    Adaptive chunking focused on semantic coherence")
+		fmt.Println("  simple      Basic word-based chunking")
 		fmt.Println("")
 		fmt.Println("Note: This operation can take several minutes depending on the number")
 		fmt.Println("of documents and their size. The system will remain accessible during")
@@ -864,7 +862,7 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 	}
 
 	// Validate chunking strategy
-	validStrategies := []string{"recursive", "fast", "contextual", "legacy", "fallback"}
+	validStrategies := []string{"recursive", "semantic", "simple"}
 	isValid := false
 	for _, valid := range validStrategies {
 		if chunkingStrategy == valid {
@@ -1140,7 +1138,7 @@ func printUsage() {
 	fmt.Println("  lil-rag delete doc1 --force     # Delete document")
 	fmt.Println("  lil-rag reindex                 # Reindex all documents with recursive chunking (default)")
 	fmt.Println("  lil-rag reindex --force         # Reindex without confirmation")
-	fmt.Println("  lil-rag reindex --chunking=fast # Reindex with fast chunking strategy")
+	fmt.Println("  lil-rag reindex --chunking=simple # Reindex with simple chunking strategy")
 	fmt.Println("  lil-rag health                  # Check system health")
 	fmt.Println("  lil-rag auth add alice password123  # Add user with username and password")
 	fmt.Println("  lil-rag auth list               # List all users")
