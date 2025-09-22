@@ -648,7 +648,6 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 					i++
 				}
 			}
-			break
 		}
 	}
 
@@ -826,17 +825,23 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 
 func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Println("Usage: lil-rag reindex [--force]")
+		fmt.Println("Usage: lil-rag reindex [--force] [--chunking=STRATEGY]")
 		fmt.Println("")
-		fmt.Println("Reprocess all documents with the current recursive chunking configuration.")
+		fmt.Println("Reprocess all documents with the specified chunking configuration.")
 		fmt.Println("This will:")
-		fmt.Println("  • Re-chunk all documents using the latest algorithm")
+		fmt.Println("  • Re-chunk all documents using the specified algorithm")
 		fmt.Println("  • Regenerate embeddings for all chunks")
 		fmt.Println("  • Update chunk boundaries and overlap")
 		fmt.Println("  • Preserve original document content and metadata")
 		fmt.Println("")
 		fmt.Println("Options:")
-		fmt.Println("  --force    Skip confirmation prompt")
+		fmt.Println("  --force              Skip confirmation prompt")
+		fmt.Println("  --chunking=STRATEGY  Chunking strategy to use (default: recursive)")
+		fmt.Println("")
+		fmt.Println("Available chunking strategies:")
+		fmt.Println("  recursive   Hierarchical text splitting with semantic boundaries (default)")
+		fmt.Println("  semantic    Adaptive chunking focused on semantic coherence")
+		fmt.Println("  simple      Basic word-based chunking")
 		fmt.Println("")
 		fmt.Println("Note: This operation can take several minutes depending on the number")
 		fmt.Println("of documents and their size. The system will remain accessible during")
@@ -844,13 +849,29 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 		return nil
 	}
 
-	// Check if --force flag is provided
+	// Parse flags
 	force := false
+	chunkingStrategy := "recursive" // default strategy
 	for _, arg := range args {
 		if arg == forceFlag {
 			force = true
+		} else if strings.HasPrefix(arg, "--chunking=") {
+			chunkingStrategy = strings.TrimPrefix(arg, "--chunking=")
+		}
+	}
+
+	// Validate chunking strategy
+	validStrategies := []string{"recursive", "semantic", "simple"}
+	isValid := false
+	for _, valid := range validStrategies {
+		if chunkingStrategy == valid {
+			isValid = true
 			break
 		}
+	}
+	if !isValid {
+		return fmt.Errorf("invalid chunking strategy '%s'. Valid strategies: %s",
+			chunkingStrategy, strings.Join(validStrategies, ", "))
 	}
 
 	// Get document count for confirmation
@@ -864,9 +885,9 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 		return nil
 	}
 
-	fmt.Printf("This will reindex %d documents with recursive chunking.\n", len(documents))
+	fmt.Printf("This will reindex %d documents with %s chunking.\n", len(documents), chunkingStrategy)
 	fmt.Println("The process will:")
-	fmt.Println("  • Re-chunk all documents using the latest algorithm")
+	fmt.Println("  • Re-chunk all documents using the specified algorithm")
 	fmt.Println("  • Regenerate embeddings for improved search performance")
 	fmt.Println("  • Update chunk boundaries for better semantic coherence")
 	fmt.Printf("\nEstimated time: %d-%d minutes (depending on document size and Ollama performance)\n",
@@ -887,11 +908,11 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 		}
 	}
 
-	fmt.Println("\n🔄 Starting reindex with recursive chunking...")
+	fmt.Printf("\n🔄 Starting reindex with %s chunking...\n", chunkingStrategy)
 	fmt.Println("This may take several minutes. Please do not interrupt the process.")
 
 	startTime := time.Now()
-	err = rag.ReindexAllDocuments(ctx)
+	err = rag.ReindexAllDocumentsWithStrategy(ctx, chunkingStrategy)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -900,7 +921,7 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 	}
 
 	fmt.Printf("\n✅ Reindex completed successfully in %v\n", duration)
-	fmt.Printf("All %d documents have been reprocessed with recursive chunking.\n", len(documents))
+	fmt.Printf("All %d documents have been reprocessed with %s chunking.\n", len(documents), chunkingStrategy)
 	fmt.Println("Your RAG system now uses improved chunk boundaries for better search performance.")
 
 	return nil
@@ -1058,7 +1079,7 @@ func printUsage() {
 	fmt.Println("      --list-sessions         List all chat sessions")
 	fmt.Println("  documents                    List all indexed documents")
 	fmt.Println("  delete <id> [--force]        Delete a document by ID")
-	fmt.Println("  reindex [--force]            Reprocess all documents with recursive chunking")
+	fmt.Println("  reindex [--force] [--chunking=STRATEGY]  Reprocess all documents with specified chunking")
 	fmt.Println("  health                       Check system health status")
 	fmt.Println("  config <init|show|set>       Manage user profile configuration")
 	fmt.Println("  reset [--force]              Delete database and all indexed data")
@@ -1114,8 +1135,9 @@ func printUsage() {
 	fmt.Println("  lil-rag chat --list-sessions             # List all chat sessions")
 	fmt.Println("  lil-rag documents               # List all documents")
 	fmt.Println("  lil-rag delete doc1 --force     # Delete document")
-	fmt.Println("  lil-rag reindex                 # Reindex all documents with recursive chunking")
+	fmt.Println("  lil-rag reindex                 # Reindex all documents with recursive chunking (default)")
 	fmt.Println("  lil-rag reindex --force         # Reindex without confirmation")
+	fmt.Println("  lil-rag reindex --chunking=simple # Reindex with simple chunking strategy")
 	fmt.Println("  lil-rag health                  # Check system health")
 	fmt.Println("  lil-rag auth add alice password123  # Add user with username and password")
 	fmt.Println("  lil-rag auth list               # List all users")

@@ -89,6 +89,30 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 	return semanticChunks
 }
 
+// ChunkTextWithStrategy applies the specified chunking strategy
+func (tc *TextChunker) ChunkTextWithStrategy(text, strategy string) []Chunk {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+
+	contentType := tc.detectContentType(text)
+
+	switch strategy {
+	case "simple":
+		return tc.fallbackChunk(text, contentType)
+	case "semantic":
+		// Semantic chunking focuses on content-aware boundaries
+		return tc.adaptiveChunk(text, contentType)
+	case "recursive":
+		// Default recursive chunking (same as current ChunkText behavior)
+		return tc.ChunkText(text)
+	default:
+		// Default recursive chunking (same as current ChunkText behavior)
+		return tc.ChunkText(text)
+	}
+}
+
 // detectContentType analyzes text to determine optimal chunking strategy
 func (tc *TextChunker) detectContentType(text string) string {
 	codeIndicators := []string{"function", "class", "def ", "```", "import ", "#include", "var ", "let ", "const "}

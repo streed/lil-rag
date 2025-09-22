@@ -740,6 +740,52 @@ func (m *LilRag) ReindexAllDocuments(ctx context.Context) error {
 	return nil
 }
 
+// ReindexAllDocumentsWithStrategy reprocesses all documents with the specified chunking strategy
+func (m *LilRag) ReindexAllDocumentsWithStrategy(ctx context.Context, strategy string) error {
+	if m.storage == nil || m.chunker == nil || m.embedder == nil || m.documentHandler == nil {
+		return fmt.Errorf("LilRag not properly initialized")
+	}
+
+	// Get all documents
+	documents, err := m.storage.ListDocuments(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	if len(documents) == 0 {
+		fmt.Println("No documents found to reindex")
+		return nil
+	}
+
+	fmt.Printf("Starting reindex of %d documents with %s chunking...\n", len(documents), strategy)
+
+	processed := 0
+	failed := 0
+
+	for i, doc := range documents {
+		fmt.Printf("Reindexing document %d/%d: %s\n", i+1, len(documents), doc.ID)
+
+		err := m.reindexDocumentWithStrategy(ctx, &doc, strategy)
+		if err != nil {
+			fmt.Printf("Failed to reindex document %s: %v\n", doc.ID, err)
+			failed++
+			continue
+		}
+
+		processed++
+		if processed%10 == 0 {
+			fmt.Printf("Progress: %d/%d documents processed\n", processed, len(documents))
+		}
+	}
+
+	fmt.Printf("Reindex completed: %d processed, %d failed\n", processed, failed)
+	if failed > 0 {
+		return fmt.Errorf("reindex completed with %d failures", failed)
+	}
+
+	return nil
+}
+
 // reindexDocument reprocesses a single document with current chunking settings
 func (m *LilRag) reindexDocument(ctx context.Context, doc *DocumentInfo) error {
 	// If document has a source path, try to reprocess from the original file
@@ -824,6 +870,63 @@ func (m *LilRag) reindexWithChunks(ctx context.Context, doc *DocumentInfo, chunk
 	}
 	// Use basic version for text-only documents
 	return m.storage.IndexChunks(ctx, doc.ID, combinedText.String(), chunks, embeddings)
+}
+
+// reindexDocumentWithStrategy reprocesses a single document with the specified chunking strategy
+func (m *LilRag) reindexDocumentWithStrategy(ctx context.Context, doc *DocumentInfo, strategy string) error {
+	// If document has a source path, try to reprocess from the original file
+	if doc.SourcePath != "" {
+		// Check if the source file still exists
+		if _, err := os.Stat(doc.SourcePath); err == nil {
+			// File exists, reprocess from original with strategy
+			return m.reindexFromFileWithStrategy(ctx, doc, strategy)
+		}
+		// File doesn't exist, fall back to reprocessing stored text
+		fmt.Printf("Source file %s not found, reprocessing from stored text\n", doc.SourcePath)
+	}
+
+	// Reprocess from stored text content with strategy
+	return m.reindexFromTextWithStrategy(ctx, doc, strategy)
+}
+
+// reindexFromFileWithStrategy reprocesses a document from its original file with the specified strategy
+func (m *LilRag) reindexFromFileWithStrategy(ctx context.Context, doc *DocumentInfo, strategy string) error {
+	if !m.documentHandler.IsSupported(doc.SourcePath) {
+		return fmt.Errorf("unsupported file format: %s", doc.SourcePath)
+	}
+
+	// Parse the file to get text content
+	text, err := m.documentHandler.ParseFile(doc.SourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to parse file %s: %w", doc.SourcePath, err)
+	}
+
+	if text == "" {
+		return fmt.Errorf("no content found in file %s", doc.SourcePath)
+	}
+
+	// Apply the specified chunking strategy
+	chunks := m.chunker.ChunkTextWithStrategy(text, strategy)
+	if len(chunks) == 0 {
+		return fmt.Errorf("failed to create chunks from file %s", doc.SourcePath)
+	}
+
+	return m.reindexWithChunks(ctx, doc, chunks)
+}
+
+// reindexFromTextWithStrategy reprocesses a document from its stored text with the specified strategy
+func (m *LilRag) reindexFromTextWithStrategy(ctx context.Context, doc *DocumentInfo, strategy string) error {
+	if doc.Text == "" {
+		return fmt.Errorf("no text content available for document %s", doc.ID)
+	}
+
+	// Apply the specified chunking strategy
+	chunks := m.chunker.ChunkTextWithStrategy(doc.Text, strategy)
+	if len(chunks) == 0 {
+		return fmt.Errorf("failed to create chunks from text for document %s", doc.ID)
+	}
+
+	return m.reindexWithChunks(ctx, doc, chunks)
 }
 
 // Services returns the modern service interfaces
