@@ -648,7 +648,6 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 					i++
 				}
 			}
-			break
 		}
 	}
 
@@ -871,7 +870,7 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 		}
 	}
 	if !isValid {
-		return fmt.Errorf("invalid chunking strategy '%s'. Valid strategies: %s", 
+		return fmt.Errorf("invalid chunking strategy '%s'. Valid strategies: %s",
 			chunkingStrategy, strings.Join(validStrategies, ", "))
 	}
 
