@@ -90,7 +90,7 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 }
 
 // ChunkTextWithStrategy applies the specified chunking strategy
-func (tc *TextChunker) ChunkTextWithStrategy(text string, strategy string) []Chunk {
+func (tc *TextChunker) ChunkTextWithStrategy(text, strategy string) []Chunk {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
@@ -105,7 +105,8 @@ func (tc *TextChunker) ChunkTextWithStrategy(text string, strategy string) []Chu
 		// Semantic chunking focuses on content-aware boundaries
 		return tc.adaptiveChunk(text, contentType)
 	case "recursive":
-		fallthrough
+		// Default recursive chunking (same as current ChunkText behavior)
+		return tc.ChunkText(text)
 	default:
 		// Default recursive chunking (same as current ChunkText behavior)
 		return tc.ChunkText(text)
