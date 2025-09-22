@@ -89,6 +89,11 @@ func (tc *TextChunker) ChunkText(text string) []Chunk {
 	return semanticChunks
 }
 
+// ChunkTextWithFallback applies simple word-based chunking (for fallback strategy)
+func (tc *TextChunker) ChunkTextWithFallback(text string) []Chunk {
+	return tc.fallbackChunk(text, "text")
+}
+
 // detectContentType analyzes text to determine optimal chunking strategy
 func (tc *TextChunker) detectContentType(text string) string {
 	codeIndicators := []string{"function", "class", "def ", "```", "import ", "#include", "var ", "let ", "const "}

@@ -372,6 +372,77 @@ Controls how documents are split into searchable chunks.
   lil-rag config set chunking.overlap 200
   ```
 
+## Reindexing and Chunking Strategies
+
+The `reindex` command allows you to reprocess all documents with different chunking strategies without losing your original content.
+
+### Using Reindex with Chunking Strategies
+
+```bash
+# Default recursive chunking (uses current configuration)
+lil-rag reindex
+
+# Fast search optimization (small chunks)
+lil-rag reindex --chunking=fast
+
+# Context preservation (large chunks)  
+lil-rag reindex --chunking=contextual
+
+# Legacy compatibility
+lil-rag reindex --chunking=legacy
+
+# Simple word-based chunking
+lil-rag reindex --chunking=fallback
+
+# Skip confirmation prompt
+lil-rag reindex --force --chunking=fast
+```
+
+### Available Chunking Strategies
+
+#### `recursive` (default)
+- **Description**: Adaptive chunking with semantic boundaries
+- **Behavior**: Uses current `chunking.max_tokens` and `chunking.overlap` settings
+- **Best for**: Balanced performance with semantic coherence
+- **Algorithm**: Hierarchical text splitting that respects document structure
+
+#### `fast`
+- **Tokens**: 128 max, 19 overlap
+- **Best for**: Precise search results, Q&A applications
+- **Trade-off**: Less context per chunk, more precise retrieval
+
+#### `contextual`
+- **Tokens**: 512 max, 76 overlap  
+- **Best for**: Summarization, context-heavy applications
+- **Trade-off**: More context per chunk, potentially less precise retrieval
+
+#### `legacy`
+- **Tokens**: 1800 max, 200 overlap
+- **Best for**: Backward compatibility with older configurations
+- **Trade-off**: Large chunks may reduce search precision
+
+#### `fallback`
+- **Description**: Simple word-based chunking
+- **Behavior**: Uses current token settings but applies basic word splitting
+- **Best for**: Troubleshooting or when semantic chunking fails
+
+### Strategy Selection Guidelines
+
+```bash
+# For knowledge bases and FAQs
+lil-rag config set chunking.max-tokens 128
+lil-rag config set chunking.overlap 19
+lil-rag reindex --chunking=fast
+
+# For document summarization
+lil-rag config set chunking.max-tokens 512  
+lil-rag config set chunking.overlap 76
+lil-rag reindex --chunking=contextual
+
+# For existing systems (pre-2025)
+lil-rag reindex --chunking=legacy
+```
+
 ## Command Line Overrides
 
 All configuration options can be overridden with command line flags.
