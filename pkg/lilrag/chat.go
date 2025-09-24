@@ -381,7 +381,8 @@ func (c *OllamaChatClient) OptimizeQuery(ctx context.Context, userQuery string) 
 
 	optimizationStart := time.Now()
 
-	systemPrompt := `Please list the semantic keywords associated with the following user query. Return as a comma-separated list.`
+	systemPrompt := `Please list the semantic keywords associated with the following user query.
+					 Return as a comma-separated list.`
 
 	// Record input tokens for query optimization system prompt
 	metrics.RecordChatInputTokens(c.model, systemPrompt)
