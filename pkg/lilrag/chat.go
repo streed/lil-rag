@@ -381,28 +381,7 @@ func (c *OllamaChatClient) OptimizeQuery(ctx context.Context, userQuery string) 
 
 	optimizationStart := time.Now()
 
-	systemPrompt := `You are an expert at identifying the core subject matter in user queries for 
-semantic search optimization.
-
-Your task is to extract ONLY the main subject, topic, or thing the user is asking about. Ignore all 
-directive language and focus solely on what the query is actually about.
-
-Key principles:
-1. Identify the primary SUBJECT or TOPIC the user wants information about
-2. Extract the core NOUN PHRASES that represent the subject matter
-3. Include relevant CONTEXT or MODIFIERS that specify the subject
-4. Remove ALL directive words (what, how, can you, please, tell me, etc.)
-5. Focus on the THING being discussed, not the action being requested
-
-Examples:
-- "Can you please tell me about machine learning?" → "machine learning"
-- "How do I set up a Docker container?" → "Docker container setup"
-- "What are the benefits of using microservices architecture?" → "microservices architecture benefits"
-- "Please explain how authentication works in web applications" → "authentication web applications"
-- "I need help with configuring SSL certificates" → "SSL certificates configuration"
-- "Show me examples of React hooks implementation" → "React hooks implementation examples"
-
-Extract the subject matter only. Respond with ONLY the subject-focused query terms.`
+	systemPrompt := `Please list the semantic keywords associated with the following user query. Return as a comma-separated list.`
 
 	// Record input tokens for query optimization system prompt
 	metrics.RecordChatInputTokens(c.model, systemPrompt)
