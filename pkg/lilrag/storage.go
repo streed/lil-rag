@@ -483,6 +483,9 @@ func (s *SQLiteStorage) SearchWithOptions(ctx context.Context, embedding []float
 	}
 
 	// Search through chunks and return best matches
+	// This query uses vec_distance_cosine() to calculate the cosine distance between
+	// the query embedding and each chunk's embedding (e.embedding), ensuring that
+	// search scoring is based on the semantic similarity between query and chunk content.
 	query := `
 		SELECT 
 			c.document_id,
@@ -534,6 +537,11 @@ func (s *SQLiteStorage) SearchWithOptions(ctx context.Context, embedding []float
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
+		// Calculate score from cosine distance: score = 1.0 - distance
+		// Cosine distance ranges from 0 (identical) to 2 (opposite), so:
+		// - Distance 0 (identical vectors) → Score 1.0 (highest)
+		// - Distance 1 (orthogonal vectors) → Score 0.0 (neutral)  
+		// - Distance 2 (opposite vectors) → Score -1.0 (lowest)
 		score := 1.0 - distance
 
 		// Handle deduplication based on mode

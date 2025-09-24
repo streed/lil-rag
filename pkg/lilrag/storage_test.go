@@ -1095,3 +1095,136 @@ func TestSQLiteStorage_DocumentReindexing(t *testing.T) {
 		t.Error("Final content not found, metadata re-indexing failed")
 	}
 }
+
+// TestSQLiteStorage_SearchScoring_ChunkEmbeddingDistance validates that search scoring
+// correctly uses the distance between query embedding and chunk embeddings.
+// This test specifically verifies the core search scoring requirement.
+func TestSQLiteStorage_SearchScoring_ChunkEmbeddingDistance(t *testing.T) {
+	storage, tempDir := setupTestStorage(t)
+	defer os.RemoveAll(tempDir)
+
+	err := storage.Initialize()
+	if err != nil {
+		if strings.Contains(err.Error(), "sqlite-vec extension not available") {
+			t.Skip("Skipping test: sqlite-vec extension not available")
+		}
+		t.Fatalf("Failed to initialize storage: %v", err)
+	}
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Index documents with known embeddings for precise distance calculations
+	documents := []struct {
+		id        string
+		text      string
+		embedding []float32
+	}{
+		{
+			id:        "exact_match",
+			text:      "Exact match document",
+			embedding: []float32{1.0, 0.0, 0.0}, // Unit vector
+		},
+		{
+			id:        "close_match",
+			text:      "Close match document", 
+			embedding: []float32{0.9, 0.1, 0.0}, // Close to exact_match
+		},
+		{
+			id:        "orthogonal",
+			text:      "Orthogonal document",
+			embedding: []float32{0.0, 1.0, 0.0}, // Orthogonal to exact_match
+		},
+		{
+			id:        "opposite",
+			text:      "Opposite document",
+			embedding: []float32{-1.0, 0.0, 0.0}, // Opposite to exact_match
+		},
+	}
+
+	for _, doc := range documents {
+		err := storage.Index(ctx, doc.id, doc.text, doc.embedding)
+		if err != nil {
+			t.Fatalf("Failed to index document %s: %v", doc.id, err)
+		}
+	}
+
+	// Test with query embedding identical to exact_match
+	queryEmbedding := []float32{1.0, 0.0, 0.0}
+	
+	results, err := storage.SearchWithOptions(ctx, queryEmbedding, 10, false)
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) < 4 {
+		t.Fatalf("Expected at least 4 results, got %d", len(results))
+	}
+
+	// Verify that exact_match gets the highest score (distance ≈ 0, score ≈ 1.0)
+	if results[0].ID != "exact_match" {
+		t.Errorf("Expected 'exact_match' to be top result, got '%s'", results[0].ID)
+	}
+	
+	// Score should be very close to 1.0 for identical embeddings
+	if results[0].Score < 0.999 {
+		t.Errorf("Expected score ≈ 1.0 for identical embeddings, got %.6f", results[0].Score)
+	}
+
+	// Verify that close_match gets second highest score
+	if results[1].ID != "close_match" {
+		t.Errorf("Expected 'close_match' to be second result, got '%s'", results[1].ID)
+	}
+	
+	// Score should be high but less than exact match
+	if results[1].Score >= results[0].Score {
+		t.Errorf("Expected close_match score (%.6f) < exact_match score (%.6f)", 
+			results[1].Score, results[0].Score)
+	}
+	if results[1].Score < 0.9 {
+		t.Errorf("Expected close_match score > 0.9, got %.6f", results[1].Score)
+	}
+
+	// Verify that orthogonal gets lower score (cosine similarity ≈ 0, score ≈ 0)
+	orthogonalResult := findResultByID(results, "orthogonal")
+	if orthogonalResult == nil {
+		t.Fatal("Could not find orthogonal result")
+	}
+	if orthogonalResult.Score > 0.1 {
+		t.Errorf("Expected orthogonal score ≈ 0, got %.6f", orthogonalResult.Score)
+	}
+
+	// Verify that opposite gets the lowest score (cosine similarity ≈ -1, distance ≈ 2, score ≈ -1)
+	// However, cosine distance is typically clamped to [0, 2], so score could be negative
+	oppositeResult := findResultByID(results, "opposite")
+	if oppositeResult == nil {
+		t.Fatal("Could not find opposite result")
+	}
+	if oppositeResult.Score >= orthogonalResult.Score {
+		t.Errorf("Expected opposite score (%.6f) < orthogonal score (%.6f)", 
+			oppositeResult.Score, orthogonalResult.Score)
+	}
+
+	// Verify results are sorted by score in descending order
+	for i := 1; i < len(results); i++ {
+		if results[i-1].Score < results[i].Score {
+			t.Errorf("Results not sorted by score: result %d score (%.6f) < result %d score (%.6f)",
+				i-1, results[i-1].Score, i, results[i].Score)
+		}
+	}
+
+	t.Logf("Search scoring validation passed:")
+	for i, result := range results {
+		t.Logf("  %d. %s: score=%.6f", i+1, result.ID, result.Score)
+	}
+}
+
+// Helper function to find a result by ID
+func findResultByID(results []SearchResult, id string) *SearchResult {
+	for i := range results {
+		if results[i].ID == id {
+			return &results[i]
+		}
+	}
+	return nil
+}
