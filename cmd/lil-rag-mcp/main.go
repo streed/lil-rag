@@ -18,7 +18,11 @@ import (
 var version = "dev"
 
 type LilRagMCPServer struct {
-	rag *lilrag.LilRag
+	rag                 *lilrag.LilRag
+	defaultSearchLimit  int
+	defaultChatLimit    int
+	maxSearchLimit      int
+	maxChatLimit        int
 }
 
 // MCP Protocol types
@@ -91,27 +95,35 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 	if err != nil {
 		// If profile loading fails, use environment variables or defaults
 		ragConfig = &lilrag.Config{
-			DatabasePath: getEnvOrDefault("LILRAG_DB_PATH", "lilrag.db"),
-			DataDir:      getEnvOrDefault("LILRAG_DATA_DIR", "data"),
-			OllamaURL:    getEnvOrDefault("LILRAG_OLLAMA_URL", "http://localhost:11434"),
-			Model:        getEnvOrDefault("LILRAG_MODEL", "nomic-embed-text"),
-			VectorSize:   getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),
-			MaxTokens:    getEnvIntOrDefault("LILRAG_MAX_TOKENS", 200),
-			Overlap:      getEnvIntOrDefault("LILRAG_OVERLAP", 50),
-			ImageMaxSize: getEnvIntOrDefault("LILRAG_IMAGE_MAX_SIZE", 1120),
+			DatabasePath:        getEnvOrDefault("LILRAG_DB_PATH", "lilrag.db"),
+			DataDir:             getEnvOrDefault("LILRAG_DATA_DIR", "data"),
+			OllamaURL:           getEnvOrDefault("LILRAG_OLLAMA_URL", "http://localhost:11434"),
+			Model:               getEnvOrDefault("LILRAG_MODEL", "nomic-embed-text"),
+			VectorSize:          getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),
+			MaxTokens:           getEnvIntOrDefault("LILRAG_MAX_TOKENS", 200),
+			Overlap:             getEnvIntOrDefault("LILRAG_OVERLAP", 50),
+			ImageMaxSize:        getEnvIntOrDefault("LILRAG_IMAGE_MAX_SIZE", 1120),
+			DefaultLimit:        getEnvIntOrDefault("LILRAG_DEFAULT_LIMIT", 25),
+			DefaultChatLimit:    getEnvIntOrDefault("LILRAG_DEFAULT_CHAT_LIMIT", 15),
+			TruncateDocuments:   getEnvBoolOrDefault("LILRAG_TRUNCATE_DOCUMENTS", false),
+			MaxDocumentLength:   getEnvIntOrDefault("LILRAG_MAX_DOCUMENT_LENGTH", 0),
 		}
 	} else {
 		// Convert profile config to RAG config
 		ragConfig = &lilrag.Config{
-			DatabasePath: profileConfig.StoragePath,
-			DataDir:      profileConfig.DataDir,
-			OllamaURL:    profileConfig.Ollama.Endpoint,
-			Model:        profileConfig.Ollama.EmbeddingModel,
-			ChatModel:    profileConfig.Ollama.ChatModel,
-			VectorSize:   profileConfig.Ollama.VectorSize,
-			MaxTokens:    profileConfig.Chunking.MaxTokens,
-			Overlap:      profileConfig.Chunking.Overlap,
-			ImageMaxSize: profileConfig.Ollama.ImageMaxSize,
+			DatabasePath:        profileConfig.StoragePath,
+			DataDir:             profileConfig.DataDir,
+			OllamaURL:           profileConfig.Ollama.Endpoint,
+			Model:               profileConfig.Ollama.EmbeddingModel,
+			ChatModel:           profileConfig.Ollama.ChatModel,
+			VectorSize:          profileConfig.Ollama.VectorSize,
+			MaxTokens:           profileConfig.Chunking.MaxTokens,
+			Overlap:             profileConfig.Chunking.Overlap,
+			ImageMaxSize:        profileConfig.Ollama.ImageMaxSize,
+			DefaultLimit:        profileConfig.Search.DefaultLimit,
+			DefaultChatLimit:    profileConfig.Search.DefaultChatLimit,
+			TruncateDocuments:   profileConfig.Search.TruncateDocuments,
+			MaxDocumentLength:   profileConfig.Search.MaxDocumentLength,
 		}
 	}
 
@@ -125,7 +137,22 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 		return nil, fmt.Errorf("failed to initialize LilRag: %w", err)
 	}
 
-	return &LilRagMCPServer{rag: rag}, nil
+	// Determine max limits based on configuration source
+	maxSearchLimit := 100 // Default MCP limit
+	maxChatLimit := 50    // Default MCP limit
+
+	if profileConfig != nil {
+		maxSearchLimit = profileConfig.Search.MaxMCPSearchLimit
+		maxChatLimit = profileConfig.Search.MaxMCPChatLimit
+	}
+
+	return &LilRagMCPServer{
+		rag:                rag,
+		defaultSearchLimit: ragConfig.DefaultLimit,
+		defaultChatLimit:   ragConfig.DefaultChatLimit,
+		maxSearchLimit:     maxSearchLimit,
+		maxChatLimit:       maxChatLimit,
+	}, nil
 }
 
 func (s *LilRagMCPServer) Close() {
@@ -218,6 +245,12 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 						"type":        "string",
 						"description": "Optional document ID. If not provided, one will be auto-generated",
 					},
+					"chunking_strategy": map[string]interface{}{
+						"type":        "string",
+						"description": "Chunking strategy: recursive, semantic, simple (default: recursive)",
+						"enum":        []string{"recursive", "semantic", "simple"},
+						"default":     "recursive",
+					},
 				},
 				"required": []string{"text"},
 			},
@@ -236,6 +269,12 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 						"type":        "string",
 						"description": "Optional document ID. If not provided, filename will be used",
 					},
+					"chunking_strategy": map[string]interface{}{
+						"type":        "string",
+						"description": "Chunking strategy: recursive, semantic, simple (default: recursive)",
+						"enum":        []string{"recursive", "semantic", "simple"},
+						"default":     "recursive",
+					},
 				},
 				"required": []string{"file_path"},
 			},
@@ -252,8 +291,13 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
-						"description": "Maximum number of results to return (default: 10, max: 50)",
-						"default":     10,
+						"description": fmt.Sprintf("Maximum number of results to return (default: %d, max: %d)", s.defaultSearchLimit, s.maxSearchLimit),
+						"default":     s.defaultSearchLimit,
+					},
+					"chunks_only": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Return only matching chunks without full document context (default: false)",
+						"default":     false,
 					},
 				},
 				"required": []string{"query"},
@@ -271,8 +315,22 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
-						"description": "Maximum number of source documents to use for context (default: 5, max: 20)",
-						"default":     5,
+						"description": fmt.Sprintf("Maximum number of source documents to use for context (default: %d, max: %d)", s.defaultChatLimit, s.maxChatLimit),
+						"default":     s.defaultChatLimit,
+					},
+					"session_id": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional session ID to maintain conversation context",
+					},
+					"new_session": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Start a new chat session (default: false)",
+						"default":     false,
+					},
+					"show_sources": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Display detailed source information with response (default: false)",
+						"default":     false,
 					},
 				},
 				"required": []string{"message"},
@@ -296,6 +354,11 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					"document_id": map[string]interface{}{
 						"type":        "string",
 						"description": "The ID of the document to delete",
+					},
+					"force": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Skip confirmation prompt (default: false)",
+						"default":     false,
 					},
 				},
 				"required": []string{"document_id"},
@@ -355,9 +418,14 @@ func (s *LilRagMCPServer) handleIndex(id interface{}, args map[string]interface{
 		docID = lilrag.GenerateDocumentID()
 	}
 
-	// Index the content
+	strategy, ok := args["chunking_strategy"].(string)
+	if !ok || strategy == "" {
+		strategy = "recursive" // default
+	}
+
+	// Index the content with strategy
 	ctx := context.Background()
-	if err := s.rag.Index(ctx, text, docID); err != nil {
+	if err := s.rag.IndexWithStrategy(ctx, text, docID, strategy); err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to index content: %v", err))
 	}
 
@@ -370,7 +438,7 @@ func (s *LilRagMCPServer) handleIndex(id interface{}, args map[string]interface{
 				Text string `json:"text"`
 			}{{
 				Type: "text",
-				Text: fmt.Sprintf("Successfully indexed content with ID: %s", docID),
+				Text: fmt.Sprintf("Successfully indexed content with ID: %s using %s chunking", docID, strategy),
 			}},
 		},
 	}
@@ -393,9 +461,14 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 		docID = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	}
 
-	// Index the file
+	strategy, ok := args["chunking_strategy"].(string)
+	if !ok || strategy == "" {
+		strategy = "recursive" // default
+	}
+
+	// Index the file with strategy
 	ctx := context.Background()
-	if err := s.rag.IndexFile(ctx, filePath, docID); err != nil {
+	if err := s.rag.IndexFileWithStrategy(ctx, filePath, docID, strategy); err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Failed to index file: %v", err))
 	}
 
@@ -408,7 +481,7 @@ func (s *LilRagMCPServer) handleIndexFile(id interface{}, args map[string]interf
 				Text string `json:"text"`
 			}{{
 				Type: "text",
-				Text: fmt.Sprintf("Successfully indexed file '%s' with ID: %s", filePath, docID),
+				Text: fmt.Sprintf("Successfully indexed file '%s' with ID: %s using %s chunking", filePath, docID, strategy),
 			}},
 		},
 	}
@@ -421,17 +494,25 @@ func (s *LilRagMCPServer) handleSearch(id interface{}, args map[string]interface
 		return s.errorResponse(id, -32602, "query parameter is required and must be a non-empty string")
 	}
 
-	// Parse limit (default to 10)
-	limit := 10
+	// Parse limit (default to configured value)
+	limit := s.defaultSearchLimit
 	if limitArg, exists := args["limit"]; exists {
 		if limitFloat, ok := limitArg.(float64); ok {
 			limit = int(limitFloat)
 		}
 	}
 
-	// Cap limit at 50
-	if limit > 50 {
-		limit = 50
+	// Cap limit at configured maximum
+	if limit > s.maxSearchLimit {
+		limit = s.maxSearchLimit
+	}
+
+	// Parse chunks_only flag (default: false)
+	chunksOnly := false
+	if chunksOnlyArg, exists := args["chunks_only"]; exists {
+		if chunksOnlyBool, ok := chunksOnlyArg.(bool); ok {
+			chunksOnly = chunksOnlyBool
+		}
 	}
 
 	// Perform search
@@ -439,6 +520,16 @@ func (s *LilRagMCPServer) handleSearch(id interface{}, args map[string]interface
 	results, err := s.rag.Search(ctx, query, limit)
 	if err != nil {
 		return s.errorResponse(id, -32603, fmt.Sprintf("Search failed: %v", err))
+	}
+
+	// Apply chunks-only filtering if flag is set
+	if chunksOnly {
+		for i := range results {
+			if results[i].Metadata == nil {
+				results[i].Metadata = make(map[string]interface{})
+			}
+			results[i].Metadata["chunks_only"] = true
+		}
 	}
 
 	if len(results) == 0 {
@@ -501,18 +592,42 @@ func (s *LilRagMCPServer) handleChat(id interface{}, args map[string]interface{}
 		return s.errorResponse(id, -32602, "message parameter is required and must be a non-empty string")
 	}
 
-	// Parse limit (default to 5)
-	limit := 5
+	// Parse limit (default to configured value)
+	limit := s.defaultChatLimit
 	if limitArg, exists := args["limit"]; exists {
 		if limitFloat, ok := limitArg.(float64); ok {
 			limit = int(limitFloat)
 		}
 	}
 
-	// Cap limit at 20
-	if limit > 20 {
-		limit = 20
+	// Cap limit at configured maximum
+	if limit > s.maxChatLimit {
+		limit = s.maxChatLimit
 	}
+
+	// Parse session parameters (for future implementation)
+	sessionID := ""
+	if sid, ok := args["session_id"].(string); ok {
+		sessionID = sid
+	}
+	newSession := false
+	if newSessionArg, exists := args["new_session"]; exists {
+		if newSessionBool, ok := newSessionArg.(bool); ok {
+			newSession = newSessionBool
+		}
+	}
+
+	// Parse show_sources flag (default: true for backward compatibility)
+	showSources := true
+	if showSourcesArg, exists := args["show_sources"]; exists {
+		if showSourcesBool, ok := showSourcesArg.(bool); ok {
+			showSources = showSourcesBool
+		}
+	}
+
+	// TODO: Implement session management with sessionID and newSession
+	_ = sessionID
+	_ = newSession
 
 	// Perform chat
 	ctx := context.Background()
@@ -521,12 +636,13 @@ func (s *LilRagMCPServer) handleChat(id interface{}, args map[string]interface{}
 		return s.errorResponse(id, -32603, fmt.Sprintf("Chat failed: %v", err))
 	}
 
-	// Format response with sources
+	// Format response
 	var fullResponse strings.Builder
-	fullResponse.WriteString(fmt.Sprintf("**Response:**\n%s\n\n", response))
+	fullResponse.WriteString(fmt.Sprintf("**Response:**\n%s", response))
 
-	if len(sources) > 0 {
-		fullResponse.WriteString(fmt.Sprintf("**Sources (%d):**\n", len(sources)))
+	// Include sources if requested
+	if showSources && len(sources) > 0 {
+		fullResponse.WriteString(fmt.Sprintf("\n\n**Sources (%d):**\n", len(sources)))
 		for i, source := range sources {
 			fullResponse.WriteString(fmt.Sprintf("%d. **%s** (Score: %.4f)\n", i+1, source.ID, source.Score))
 			// Truncate source content for readability
@@ -613,6 +729,15 @@ func (s *LilRagMCPServer) handleDeleteDocument(id interface{}, args map[string]i
 		return s.errorResponse(id, -32602, "document_id parameter is required and must be a non-empty string")
 	}
 
+	// Parse force flag (for API compatibility - no confirmation needed in MCP)
+	force := false
+	if forceArg, exists := args["force"]; exists {
+		if forceBool, ok := forceArg.(bool); ok {
+			force = forceBool
+		}
+	}
+	_ = force // Force parameter acknowledged but not needed for MCP operations
+
 	// Delete the document
 	ctx := context.Background()
 	if err := s.rag.DeleteDocument(ctx, documentID); err != nil {
@@ -646,6 +771,15 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvBoolOrDefault(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue

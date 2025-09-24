@@ -29,21 +29,25 @@ type Handler struct {
 
 // Request and Response types
 type IndexRequest struct {
-	ID        string `json:"id"`
-	Text      string `json:"text"`
-	Namespace string `json:"namespace,omitempty"`
+	ID               string `json:"id"`
+	Text             string `json:"text"`
+	Namespace        string `json:"namespace,omitempty"`
+	ChunkingStrategy string `json:"chunking_strategy,omitempty"` // recursive, semantic, simple (default: recursive)
 }
 
 type SearchRequest struct {
-	Query string `json:"query"`
-	Limit int    `json:"limit,omitempty"`
+	Query      string `json:"query"`
+	Limit      int    `json:"limit,omitempty"`
+	ChunksOnly bool   `json:"chunks_only,omitempty"` // Return only matching chunks without full document context
 }
 
 type ChatRequest struct {
-	Message   string `json:"message"`
-	SessionID string `json:"session_id,omitempty"`
-	Limit     int    `json:"limit,omitempty"`
-	Stream    bool   `json:"stream,omitempty"`
+	Message      string `json:"message"`
+	SessionID    string `json:"session_id,omitempty"`
+	NewSession   bool   `json:"new_session,omitempty"`   // Start a new chat session
+	ShowSources  bool   `json:"show_sources,omitempty"`  // Display detailed source information
+	Limit        int    `json:"limit,omitempty"`
+	Stream       bool   `json:"stream,omitempty"`
 }
 
 type ChatResponse struct {

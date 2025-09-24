@@ -42,17 +42,21 @@ func (b *Builder) WithConfig(cfg *ServiceConfig) *Builder {
 // WithProfileConfig loads configuration from a profile config
 func (b *Builder) WithProfileConfig(profileConfig *config.Config, dataDir string) *Builder {
 	b.config = &ServiceConfig{
-		DatabasePath:   profileConfig.Database.Path,
-		DataDir:        dataDir,
-		OllamaURL:      profileConfig.Ollama.URL,
-		Model:          profileConfig.Ollama.Model,
-		ChatModel:      DefaultChatModel, // Default chat model
-		VisionModel:    profileConfig.Ollama.VisionModel,
-		TimeoutSeconds: profileConfig.Ollama.TimeoutSeconds,
-		VectorSize:     profileConfig.Database.VectorSize,
-		MaxTokens:      profileConfig.Chunking.MaxTokens,
-		Overlap:        profileConfig.Chunking.Overlap,
-		ImageMaxSize:   profileConfig.Ollama.ImageMaxSize,
+		DatabasePath:        profileConfig.Database.Path,
+		DataDir:             dataDir,
+		OllamaURL:           profileConfig.Ollama.URL,
+		Model:               profileConfig.Ollama.Model,
+		ChatModel:           DefaultChatModel, // Default chat model
+		VisionModel:         profileConfig.Ollama.VisionModel,
+		TimeoutSeconds:      profileConfig.Ollama.TimeoutSeconds,
+		VectorSize:          profileConfig.Database.VectorSize,
+		MaxTokens:           profileConfig.Chunking.MaxTokens,
+		Overlap:             profileConfig.Chunking.Overlap,
+		ImageMaxSize:        profileConfig.Ollama.ImageMaxSize,
+		DefaultLimit:        profileConfig.Search.DefaultLimit,
+		DefaultChatLimit:    profileConfig.Search.DefaultChatLimit,
+		TruncateDocuments:   profileConfig.Search.TruncateDocuments,
+		MaxDocumentLength:   profileConfig.Search.MaxDocumentLength,
 	}
 	return b
 }
@@ -146,6 +150,13 @@ func (b *Builder) applyDefaults() {
 	if b.config.ImageMaxSize == 0 {
 		b.config.ImageMaxSize = 1120
 	}
+	if b.config.DefaultLimit == 0 {
+		b.config.DefaultLimit = 25 // Increased default for comprehensive search
+	}
+	if b.config.DefaultChatLimit == 0 {
+		b.config.DefaultChatLimit = 15 // Increased default for richer chat context
+	}
+	// Note: TruncateDocuments and MaxDocumentLength default to false/0 which means no truncation
 }
 
 // Build creates and initializes a new LilRag instance

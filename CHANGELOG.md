@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Enhanced  
 - **Configuration System**: Added `vision_model` and `timeout_seconds` fields to profile configuration
-- **Chunking Defaults**: Updated to 256 tokens with 15% overlap for 2025 RAG best practices
+- **Chunking Defaults**: Updated to character-based chunking with 2000 chars and 200 char overlap for improved consistency
 - **HTTP Clients**: All HTTP clients (embeddings, chat, vision) now respect configurable timeouts
 - **Command Line Flags**: Added `--vision-model` and `--timeout` flags for server and CLI
 

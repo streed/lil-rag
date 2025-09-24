@@ -63,7 +63,13 @@ func (h *Handler) Index() http.HandlerFunc {
 
 		// Record metrics for indexing
 		indexStart := time.Now()
-		err := h.rag.Index(ctx, req.Text, req.ID)
+		// Use chunking strategy if provided, default to recursive
+		strategy := req.ChunkingStrategy
+		if strategy == "" {
+			strategy = "recursive"
+		}
+
+		err := h.rag.IndexWithStrategy(ctx, req.Text, req.ID, strategy)
 		indexDuration := time.Since(indexStart)
 
 		if err != nil {
@@ -128,11 +134,15 @@ func (h *Handler) handleSearchPOST(w http.ResponseWriter, r *http.Request) {
 	if req.Limit <= 0 {
 		req.Limit = 10
 	}
-	log.Printf("Search POST request - query: '%s', limit: %d", req.Query, req.Limit)
-	h.performSearch(w, r, req.Query, req.Limit)
+	log.Printf("Search POST request - query: '%s', limit: %d, chunks_only: %t", req.Query, req.Limit, req.ChunksOnly)
+	h.performSearchWithOptions(w, r, req.Query, req.Limit, req.ChunksOnly)
 }
 
 func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query string, limit int) {
+	h.performSearchWithOptions(w, r, query, limit, false)
+}
+
+func (h *Handler) performSearchWithOptions(w http.ResponseWriter, r *http.Request, query string, limit int, chunksOnly bool) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -148,10 +158,20 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 		return
 	}
 
+	// Apply chunks-only filtering if flag is set
+	if chunksOnly {
+		for i := range results {
+			if results[i].Metadata == nil {
+				results[i].Metadata = make(map[string]interface{})
+			}
+			results[i].Metadata["chunks_only"] = true
+		}
+	}
+
 	metrics.RecordSearchRequest(searchDuration, true, len(results))
 	// Token tracking for search embeddings is handled within the embedder itself
 
-	log.Printf("Search completed - found %d results for query '%s'", len(results), query)
+	log.Printf("Search completed - found %d results for query '%s' (chunks_only: %t)", len(results), query, chunksOnly)
 	response := SearchResponse{Results: results}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -288,6 +308,12 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		id = lilrag.GenerateDocumentID()
 	}
 
+	// Get chunking strategy from form data, default to recursive
+	strategy := r.FormValue("chunking_strategy")
+	if strategy == "" {
+		strategy = "recursive"
+	}
+
 	// Get the uploaded file
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -350,7 +376,7 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Index the file using document handler
-	if err := h.rag.IndexFile(ctx, tempFile.Name(), id); err != nil {
+	if err := h.rag.IndexFileWithStrategy(ctx, tempFile.Name(), id, strategy); err != nil {
 		log.Printf("Failed to index file %s: %v", header.Filename, err)
 
 		// Check if this is a client error (bad input) vs server error

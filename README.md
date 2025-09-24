@@ -4,7 +4,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/streed/lil-rag)
 
-A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides CLI, HTTP API, and MCP server interfaces for indexing documents and performing semantic similarity searches with compression and deduplication.
+A comprehensive and professional RAG (Retrieval Augmented Generation) system built with Go, SQLite, and Ollama. Lil-RAG provides three unified interfaces (CLI, HTTP API, and MCP server) with consistent parameters and comprehensive help documentation for indexing documents, semantic similarity searches, and AI-powered chat with advanced chunking strategies.
 
 ## ✨ Features
 
@@ -15,20 +15,23 @@ A simple yet powerful RAG (Retrieval Augmented Generation) system built with Go,
 - 📚 **Document Management** - Complete CRUD operations for indexed documents
 - 🗜️ **Smart Storage** - Automatic gzip compression and intelligent deduplication
 - 🔄 **Complete Documents** - Returns full document content, not just chunks
+- 🧩 **Advanced Chunking** - Three chunking strategies: recursive, semantic, and simple
 
-### Multiple Interfaces
-- 💻 **CLI Application** - Full-featured command-line interface with all operations
+### Multiple Unified Interfaces
+- 💻 **CLI Application** - Full-featured command-line interface with comprehensive help documentation
 - 🌐 **HTTP API Server** - RESTful API with interactive web interface and authentication
 - 🔌 **MCP Server** - Model Context Protocol for AI assistant integration
 - 📖 **Built-in Documentation** - Comprehensive docs accessible via `/docs` route
+- 🔧 **Consistent Parameters** - All interfaces support identical parameters and options
 
-### Performance & Reliability
+### Professional Features
 - ⚡ **High Performance** - Optimized Go implementation with efficient SQLite storage
-- 🤖 **Ollama Integration** - Configurable embedding and chat models via Ollama
-- 🎛️ **Profile Configuration** - User-friendly configuration management
+- 🤖 **Ollama Integration** - Configurable embedding, chat, and vision models via Ollama
+- 🎛️ **Profile Configuration** - User-friendly configuration management with comprehensive options
 - 💾 **Persistent Storage** - Reliable SQLite database with WAL mode
 - 🔧 **Health Monitoring** - Built-in health checks and metrics endpoints
 - 🔐 **Authentication System** - Optional password protection with secure session management
+- 📝 **Comprehensive Help** - Detailed help documentation for all commands and parameters
 
 ## 📋 Prerequisites
 
@@ -139,30 +142,39 @@ lil-rag config show
 ### 3. Index Documents
 
 ```bash
-# Index direct text
+# Index direct text (ID auto-generated if not provided)
+lil-rag index "This is about machine learning and neural networks."
+
+# Index with explicit ID
 lil-rag index doc1 "This is about machine learning and neural networks."
 
-# Index from a file  
-lil-rag index doc2 document.txt
+# Index from a file with chunking strategy
+lil-rag index --chunking=semantic document.txt
 
-# Index a PDF file
-lil-rag index doc3 research_paper.pdf
+# Index a PDF file with specific ID and chunking
+lil-rag index --chunking=recursive doc3 research_paper.pdf
 
-# Index from stdin
-echo "Content about artificial intelligence" | lil-rag index doc4 -
+# Index from stdin with chunking strategy
+echo "Content about artificial intelligence" | lil-rag index --chunking=simple -
 ```
 
 ### 4. Search Content
 
 ```bash
-# Search with default limit (10)
+# Search with default settings
 lil-rag search "machine learning"
 
 # Search with custom limit
-lil-rag search "neural networks" 3
+lil-rag search --limit=5 "neural networks"
 
-# Get full document content (limit=1 shows complete documents)
-lil-rag search "AI concepts" 1
+# Search returning only matching chunks (no full documents)
+lil-rag search --chunks-only "AI concepts"
+
+# Search with both limit and chunks-only
+lil-rag search --limit=3 --chunks-only "machine learning algorithms"
+
+# Get help for all search options
+lil-rag search --help
 ```
 
 **Example Output:**
@@ -182,48 +194,73 @@ Found 2 results:
 
 ### All Commands
 
-- `index [id] <text|file|->` - Index content (ID optional, auto-generated if not provided)
-- `search <query> [limit]` - Search for similar content  
-- `chat [flags] <message> [limit]` - Interactive chat with RAG context
+- `index [OPTIONS] [id] <text|file|->` - Index content with advanced chunking strategies
+  - `--chunking=STRATEGY` - Choose chunking strategy: recursive, semantic, simple (default: recursive)
+- `search [OPTIONS] <query>` - Search for similar content with flexible options
+  - `--limit=N` - Maximum number of results to return (default: 10)
+  - `--chunks-only` - Return only matching chunks without full document context
+- `chat [OPTIONS] <message> [limit]` - Interactive chat with RAG context
   - `--session-id <id>` - Resume existing chat session
-  - `--new-session` - Start new chat session  
+  - `--new-session` - Start new chat session
   - `--list-sessions` - List all chat sessions
-- `documents` - List all indexed documents
+  - `--show-sources` - Display detailed source information
+- `documents` - List all indexed documents with metadata
 - `delete <id> [--force]` - Delete a document by ID
+- `reindex [OPTIONS]` - Reprocess all documents with new chunking strategy
+  - `--chunking=STRATEGY` - Chunking strategy for reprocessing
+  - `--force` - Skip confirmation prompt
 - `health` - Check system health status
 - `config <init|show|set>` - Manage configuration
+- `auth <add|list|delete|reset-password>` - Manage authentication users
 - `reset [--force]` - Delete database and all data
+
+**💡 Tip**: All commands support `--help` or `-h` for detailed usage information and examples.
 
 ### Document Management
 
 ```bash
-# Index with auto-generated IDs (like HTTP API)
-lil-rag index "Hello world"                        # Direct text, auto ID
-lil-rag index document.pdf                         # PDF file, auto ID
-lil-rag index document.docx                        # Word document, auto ID
-echo "Hello world" | lil-rag index -              # From stdin, auto ID
+# Index with auto-generated IDs and chunking strategies
+lil-rag index "Hello world"                                    # Direct text, auto ID, default chunking
+lil-rag index --chunking=semantic document.pdf                 # PDF with semantic chunking
+lil-rag index --chunking=recursive document.docx               # Word document with recursive chunking
+echo "Hello world" | lil-rag index --chunking=simple -        # From stdin with simple chunking
 
-# Index with explicit IDs
-lil-rag index doc1 "Hello world"                   # Direct text with ID
-lil-rag index doc2 document.pdf                    # PDF file with ID
-echo "Hello world" | lil-rag index doc3 -         # From stdin with ID
+# Index with explicit IDs and chunking strategies
+lil-rag index --chunking=semantic doc1 "Hello world"           # Text with ID and semantic chunking
+lil-rag index --chunking=recursive doc2 document.pdf           # PDF with ID and recursive chunking
+echo "Hello world" | lil-rag index --chunking=simple doc3 -   # Stdin with ID and simple chunking
 
-# List and manage documents
-lil-rag documents                                   # List all documents
-lil-rag delete doc1                                 # Delete with confirmation
-lil-rag delete doc2 --force                        # Delete without confirmation
+# Advanced document operations
+lil-rag documents                                               # List all documents with metadata
+lil-rag delete doc1                                             # Delete with confirmation
+lil-rag delete doc2 --force                                     # Delete without confirmation
+lil-rag reindex --chunking=semantic                             # Reprocess all documents with semantic chunking
+lil-rag reindex --chunking=recursive --force                    # Reprocess without confirmation
+
+# Get help for any command
+lil-rag index --help                                            # Detailed index help with examples
+lil-rag reindex --help                                          # Detailed reindex help
 ```
 
 ### Search & Chat
 
 ```bash
-# Search examples  
-lil-rag search "machine learning" 5                # Search with limit
-lil-rag search "AI concepts"                       # Default limit (10)
+# Search examples with new options
+lil-rag search "machine learning"                          # Default search (limit=10, full documents)
+lil-rag search --limit=5 "machine learning"                # Search with custom limit
+lil-rag search --chunks-only "AI concepts"                 # Return only matching chunks
+lil-rag search --limit=3 --chunks-only "neural networks"   # Combined options
 
-# Chat examples
-lil-rag chat "What is machine learning?" 3         # Chat with context limit
-lil-rag chat "Explain neural networks"             # Default context (5 docs)
+# Chat examples with session management and source control
+lil-rag chat "What is machine learning?"                   # Basic chat with default sources
+lil-rag chat --show-sources "Explain neural networks"      # Chat with explicit source display
+lil-rag chat --new-session "Start a new conversation"      # Force new session
+lil-rag chat --session-id abc123 "Continue our discussion" # Resume specific session
+lil-rag chat --list-sessions                               # List all chat sessions
+
+# Get help for detailed options
+lil-rag search --help                                      # All search options and examples
+lil-rag chat --help                                        # All chat options and examples
 ```
 
 ### Persistent Chat Sessions
@@ -263,16 +300,26 @@ lil-rag chat --session-id abc123-def456-ghi789 "Follow up question" 3
 ### System Operations
 
 ```bash
-# Configuration
+# Configuration management with help
 lil-rag config init                                 # Initialize profile config
 lil-rag config show                                 # Show current config
 lil-rag config set ollama.model nomic-embed-text   # Update embedding model
 lil-rag config set ollama.chat-model llama3.2      # Update chat model
+lil-rag config --help                               # Get detailed config help
 
-# System management
+# Authentication management
+lil-rag auth add username password                  # Add new user
+lil-rag auth list                                   # List all users
+lil-rag auth delete username                        # Delete user
+lil-rag auth reset-password username newpass        # Reset user password
+lil-rag auth --help                                 # Get detailed auth help
+
+# System management with comprehensive help
 lil-rag health                                      # Check system health
+lil-rag health --help                               # Get health check details
 lil-rag reset                                       # Reset database (with confirmation)
 lil-rag reset --force                               # Reset database (skip confirmation)
+lil-rag reset --help                                # Get detailed reset information
 ```
 
 ### Flags
@@ -353,22 +400,24 @@ The HTTP server includes a modern, responsive chat interface for conversing with
 ### API Endpoints
 
 #### POST /api/index
-Index content with a unique document ID.
+Index content with a unique document ID and advanced chunking strategies.
 
-**JSON Request:**
+**JSON Request with Chunking Strategy:**
 ```bash
 curl -X POST http://localhost:8080/api/index \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "doc1", 
-    "text": "This document discusses machine learning algorithms and their applications in modern AI systems."
+    "id": "doc1",
+    "text": "This document discusses machine learning algorithms and their applications in modern AI systems.",
+    "chunking_strategy": "semantic"
   }'
 ```
 
-**File Upload:**
+**File Upload with Chunking Strategy:**
 ```bash
 curl -X POST http://localhost:8080/api/index \
   -F "id=doc2" \
+  -F "chunking_strategy=recursive" \
   -F "file=@document.pdf"
 ```
 
@@ -382,18 +431,19 @@ curl -X POST http://localhost:8080/api/index \
 ```
 
 #### GET /api/search & POST /api/search
-Search using query parameters or JSON body.
+Search using query parameters or JSON body with chunks-only option.
 
 ```bash
-# GET request
-curl "http://localhost:8080/api/search?query=machine%20learning&limit=5"
+# GET request with query parameters
+curl "http://localhost:8080/api/search?query=machine%20learning&limit=5&chunks_only=false"
 
-# POST request (recommended)
+# POST request with all options (recommended)
 curl -X POST http://localhost:8080/api/search \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "artificial intelligence applications", 
-    "limit": 3
+    "query": "artificial intelligence applications",
+    "limit": 3,
+    "chunks_only": true
   }'
 ```
 
@@ -418,13 +468,25 @@ curl -X POST http://localhost:8080/api/search \
 ```
 
 #### POST /api/chat
-Interactive chat with RAG context and source citations.
+Interactive chat with RAG context, session management, and source control.
 
 ```bash
+# Basic chat request
 curl -X POST http://localhost:8080/api/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "What is machine learning?", 
+    "message": "What is machine learning?",
+    "limit": 5
+  }'
+
+# Advanced chat with session management and source control
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Continue our discussion about neural networks",
+    "session_id": "existing-session-123",
+    "new_session": false,
+    "show_sources": true,
     "limit": 5
   }'
 ```
@@ -524,33 +586,41 @@ lil-rag-mcp
 
 ### Available Tools
 
+All MCP tools now support the same parameters as the CLI and HTTP interfaces for complete consistency.
+
 #### lilrag_index
-Index text content into the RAG system.
+Index text content into the RAG system with advanced chunking strategies.
 
 **Parameters:**
 - `text` (required): Text content to index
 - `id` (optional): Document ID (auto-generated if not provided)
+- `chunking_strategy` (optional): Chunking strategy: recursive, semantic, simple (default: recursive)
 
-#### lilrag_index_file  
-Index files (PDF, DOCX, XLSX, HTML, CSV, text).
+#### lilrag_index_file
+Index files (PDF, DOCX, XLSX, HTML, CSV, text) with advanced chunking strategies.
 
 **Parameters:**
 - `file_path` (required): Path to file to index
 - `id` (optional): Document ID (defaults to filename)
+- `chunking_strategy` (optional): Chunking strategy: recursive, semantic, simple (default: recursive)
 
 #### lilrag_search
-Semantic similarity search.
+Semantic similarity search with flexible result options.
 
 **Parameters:**
 - `query` (required): Search query
 - `limit` (optional): Max results (default: 10, max: 50)
+- `chunks_only` (optional): Return only matching chunks without full document context (default: false)
 
 #### lilrag_chat
-Interactive chat with RAG context.
+Interactive chat with RAG context, session management, and source control.
 
 **Parameters:**
-- `message` (required): Question or message  
+- `message` (required): Question or message
 - `limit` (optional): Max context documents (default: 5, max: 20)
+- `session_id` (optional): Session ID to maintain conversation context
+- `new_session` (optional): Start a new chat session (default: false)
+- `show_sources` (optional): Display detailed source information (default: true)
 
 #### lilrag_list_documents
 List all indexed documents with metadata.
@@ -558,14 +628,69 @@ List all indexed documents with metadata.
 **Parameters:** None
 
 #### lilrag_delete_document
-Delete a document and all its chunks.
+Delete a document and all its chunks with optional force mode.
 
 **Parameters:**
 - `document_id` (required): ID of document to delete
+- `force` (optional): Skip confirmation prompt (default: false, note: no effect in MCP as operations are programmatic)
 
 ### Integration Examples
 
 The MCP server can be integrated with various AI tools and assistants that support the Model Context Protocol. The server provides a standard interface for document indexing, searching, and chat functionality.
+
+## 🧩 Chunking Strategies
+
+Lil-RAG supports three advanced chunking strategies across all interfaces (CLI, HTTP, and MCP):
+
+### Recursive Chunking (Default)
+- **Best for**: General-purpose text processing and most documents
+- **Approach**: Hierarchical text splitting with semantic boundaries
+- **Features**:
+  - Respects paragraph and sentence boundaries
+  - Maintains logical document structure
+  - Optimal balance between context and precision
+- **Use when**: You want reliable, consistent chunking for mixed content types
+
+### Semantic Chunking
+- **Best for**: Documents where topic coherence is critical
+- **Approach**: Adaptive chunking focused on semantic similarity between sentences
+- **Features**:
+  - Groups semantically related content together
+  - Dynamically adjusts chunk boundaries based on content similarity
+  - Preserves topical coherence within chunks
+- **Use when**: Working with research papers, technical documentation, or content where maintaining topic boundaries is important
+
+### Simple Chunking
+- **Best for**: Quick processing and straightforward text splitting
+- **Approach**: Basic character-based chunking with word boundaries
+- **Features**:
+  - Fast processing with minimal computational overhead
+  - Predictable chunk sizes
+  - Good for simple text extraction scenarios
+- **Use when**: You need fast processing or working with simple, homogeneous text
+
+### Choosing the Right Strategy
+
+```bash
+# For general documents and mixed content (recommended default)
+lil-rag index --chunking=recursive document.pdf
+
+# For academic papers and technical documents where topic coherence matters
+lil-rag index --chunking=semantic research_paper.pdf
+
+# For quick processing of simple text
+lil-rag index --chunking=simple plain_text.txt
+
+# Reprocess existing documents with a different strategy
+lil-rag reindex --chunking=semantic --force
+```
+
+**💡 Performance Notes:**
+- **Recursive**: Balanced performance and quality
+- **Semantic**: Higher computational cost due to similarity calculations, but better topic coherence
+- **Simple**: Fastest processing, minimal memory usage
+
+All chunking strategies respect the configured `max_chars` and `overlap` settings from your profile configuration.
 
 ## Configuration
 
@@ -608,8 +733,8 @@ Example profile configuration (`~/.lilrag/config.json`):
     "port": 8080
   },
   "chunking": {
-    "max_tokens": 256,
-    "overlap": 38
+    "max_chars": 2000,
+    "overlap": 200
   }
 }
 ```
@@ -632,26 +757,29 @@ Configure HTTP timeouts for Ollama API calls:
 - **Vision/Image processing**: Uses 10x timeout (300s default) for complex OCR
 
 #### Chunking Configuration
-Optimize text chunking for your use case:
+Optimize text chunking for your use case with character-based chunking:
 
-- **max_tokens**: Maximum tokens per chunk (default: 256, optimized for 2025 RAG best practices)
-- **overlap**: Token overlap between chunks (default: 38, 15% overlap ratio)
+- **max_chars**: Maximum characters per chunk (default: 2000, optimized for modern RAG practices)
+- **overlap**: Character overlap between chunks (default: 200, 10% overlap ratio)
+- **chunking strategy**: Choose between recursive, semantic, or simple chunking
 - Smaller chunks provide more precise search results
 - Larger chunks preserve more context per result
 
 ```bash
-# Optimize for speed (smaller chunks)
-lil-rag config set chunking.max-tokens 128
-lil-rag config set chunking.overlap 19
+# Optimize for precision (smaller chunks)
+lil-rag config set chunking.max-chars 1000
+lil-rag config set chunking.overlap 100
 
-# Optimize for context (larger chunks)  
-lil-rag config set chunking.max-tokens 512
-lil-rag config set chunking.overlap 76
+# Optimize for context (larger chunks)
+lil-rag config set chunking.max-chars 4000
+lil-rag config set chunking.overlap 400
 
-# Use legacy chunking settings
-lil-rag config set chunking.max-tokens 1800
-lil-rag config set chunking.overlap 200
+# Use minimal chunking for simple text
+lil-rag config set chunking.max-chars 500
+lil-rag config set chunking.overlap 50
 ```
+
+**Note**: The system has migrated from token-based to character-based chunking for more predictable and consistent results across different text types and languages.
 
 ### Updating Configuration
 
@@ -710,8 +838,8 @@ func main() {
         VisionModel:    "llama3.2-vision",
         TimeoutSeconds: 30,
         VectorSize:     768,
-        MaxTokens:      256,
-        Overlap:        38,
+        MaxChars:       2000,
+        Overlap:        200,
     }
 
     // Initialize LilRag

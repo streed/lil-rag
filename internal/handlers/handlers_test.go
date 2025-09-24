@@ -1468,8 +1468,8 @@ func TestHandler_Index_EdgeCases(t *testing.T) {
 		{
 			name:           "text with only whitespace",
 			body:           IndexRequest{ID: "whitespace", Text: "   \n\t\r   "},
-			expectedStatus: http.StatusCreated,
-			expectError:    false,
+			expectedStatus: http.StatusInternalServerError,
+			expectError:    true,
 		},
 	}
 

@@ -8,17 +8,23 @@ import (
 
 // ServiceConfig contains configuration for all services
 type ServiceConfig struct {
-	DatabasePath   string
-	DataDir        string
-	OllamaURL      string
-	Model          string
-	ChatModel      string
-	VisionModel    string
-	TimeoutSeconds int
-	VectorSize     int
-	MaxTokens      int
-	Overlap        int
-	ImageMaxSize   int
+	DatabasePath             string
+	DataDir                  string
+	OllamaURL                string
+	Model                    string
+	ChatModel                string
+	VisionModel              string
+	TimeoutSeconds           int
+	VectorSize               int
+	MaxTokens                int
+	Overlap                  int
+	ImageMaxSize             int
+	DefaultLimit             int
+	DefaultChatLimit         int
+	TruncateDocuments        bool
+	MaxDocumentLength        int
+	EnableQueryOptimization  bool
+	ReturnMatchingChunksOnly bool
 }
 
 // IndexingService handles document indexing operations
@@ -220,15 +226,24 @@ func (s *DefaultSearchService) SearchWithContext(
 
 // DefaultChatService implements ChatService
 type DefaultChatService struct {
-	searchService SearchService
-	chatClient    *OllamaChatClient
+	searchService           SearchService
+	chatClient              *OllamaChatClient
+	defaultChatLimit        int
+	enableQueryOptimization bool
 }
 
 // NewChatService creates a new chat service
 func NewChatService(searchService SearchService, chatClient *OllamaChatClient) ChatService {
+	return NewChatServiceWithConfig(searchService, chatClient, 15, false) // Use new defaults
+}
+
+// NewChatServiceWithConfig creates a new chat service with configuration
+func NewChatServiceWithConfig(searchService SearchService, chatClient *OllamaChatClient, defaultChatLimit int, enableQueryOptimization bool) ChatService {
 	return &DefaultChatService{
-		searchService: searchService,
-		chatClient:    chatClient,
+		searchService:           searchService,
+		chatClient:              chatClient,
+		defaultChatLimit:        defaultChatLimit,
+		enableQueryOptimization: enableQueryOptimization,
 	}
 }
 
@@ -238,14 +253,18 @@ func (s *DefaultChatService) Chat(ctx context.Context, message string, limit int
 		return "", nil, NewValidationError("message cannot be empty", nil)
 	}
 	if limit <= 0 {
-		limit = 5 // Default context limit
+		limit = s.defaultChatLimit
 	}
 
-	// Optimize query for better search
-	optimizedQuery, err := s.chatClient.OptimizeQuery(ctx, message)
-	if err != nil {
-		// Log warning but continue with original message
-		optimizedQuery = message
+	// Optimize query for better search (only if enabled)
+	optimizedQuery := message
+	if s.enableQueryOptimization {
+		var err error
+		optimizedQuery, err = s.chatClient.OptimizeQuery(ctx, message)
+		if err != nil {
+			// Log warning but continue with original message
+			optimizedQuery = message
+		}
 	}
 
 	// Search for relevant context
@@ -423,7 +442,7 @@ func (f *ServiceFactory) CreateServices(_ context.Context) (*Services, error) {
 	// Create services
 	indexingService := NewIndexingService(storage, embedder, parsingService)
 	searchService := NewSearchService(storage, embedder)
-	chatService := NewChatService(searchService, chatClient)
+	chatService := NewChatServiceWithConfig(searchService, chatClient, f.config.DefaultChatLimit, f.config.EnableQueryOptimization)
 	documentService := NewDocumentService(storage)
 	healthService := NewHealthService(storage, embedder)
 

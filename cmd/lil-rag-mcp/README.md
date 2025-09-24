@@ -1,53 +1,58 @@
 # LilRag MCP Server
 
-An MCP (Model Context Protocol) server implementation for LilRag, allowing AI assistants and other applications to interact with the RAG (Retrieval Augmented Generation) system.
+An MCP (Model Context Protocol) server implementation for LilRag, allowing AI assistants and other applications to interact with the comprehensive RAG (Retrieval Augmented Generation) system. The MCP server provides the same powerful features as the CLI and HTTP interfaces with complete parameter consistency.
 
 ## Features
 
-The LilRag MCP server exposes three main tools:
+The LilRag MCP server exposes six comprehensive tools with advanced features:
 
 ### 1. `lilrag_index`
-Index text content into the RAG system for later retrieval.
+Index text content into the RAG system with advanced chunking strategies.
 
 **Parameters:**
 - `text` (string, required): The text content to index
 - `id` (string, optional): Document ID. Auto-generated if not provided
+- `chunking_strategy` (string, optional): Chunking strategy: "recursive", "semantic", "simple" (default: "recursive")
 
 **Example:**
 ```json
 {
   "name": "lilrag_index",
   "arguments": {
-    "text": "This is some important information about machine learning.",
-    "id": "ml-doc-1"
+    "text": "This is some important information about machine learning algorithms and their applications.",
+    "id": "ml-doc-1",
+    "chunking_strategy": "semantic"
   }
 }
 ```
 
 ### 2. `lilrag_index_file`
-Index a text or PDF file into the RAG system.
+Index files (PDF, DOCX, XLSX, HTML, CSV, text) with advanced chunking strategies.
 
 **Parameters:**
-- `file_path` (string, required): Path to the file to index (supports .txt and .pdf files)
+- `file_path` (string, required): Path to the file to index (supports multiple formats)
 - `id` (string, optional): Document ID. Uses filename if not provided
+- `chunking_strategy` (string, optional): Chunking strategy: "recursive", "semantic", "simple" (default: "recursive")
 
 **Example:**
 ```json
 {
-  "name": "lilrag_index_file", 
+  "name": "lilrag_index_file",
   "arguments": {
-    "file_path": "/path/to/document.pdf",
-    "id": "important-doc"
+    "file_path": "/path/to/research_paper.pdf",
+    "id": "research-paper-2024",
+    "chunking_strategy": "semantic"
   }
 }
 ```
 
 ### 3. `lilrag_search`
-Search for relevant content using semantic similarity.
+Search for relevant content with flexible result options.
 
 **Parameters:**
 - `query` (string, required): The search query
 - `limit` (integer, optional): Maximum results to return (default: 10, max: 50)
+- `chunks_only` (boolean, optional): Return only matching chunks without full document context (default: false)
 
 **Example:**
 ```json
@@ -55,7 +60,61 @@ Search for relevant content using semantic similarity.
   "name": "lilrag_search",
   "arguments": {
     "query": "machine learning algorithms",
-    "limit": 5
+    "limit": 5,
+    "chunks_only": true
+  }
+}
+```
+
+### 4. `lilrag_chat`
+Interactive chat with RAG context, session management, and source control.
+
+**Parameters:**
+- `message` (string, required): Question or message to the AI
+- `limit` (integer, optional): Maximum context documents (default: 5, max: 20)
+- `session_id` (string, optional): Session ID to maintain conversation context
+- `new_session` (boolean, optional): Start a new chat session (default: false)
+- `show_sources` (boolean, optional): Display detailed source information (default: true)
+
+**Example:**
+```json
+{
+  "name": "lilrag_chat",
+  "arguments": {
+    "message": "Explain the machine learning concepts mentioned in the research papers",
+    "limit": 3,
+    "show_sources": true
+  }
+}
+```
+
+### 5. `lilrag_list_documents`
+List all indexed documents with comprehensive metadata.
+
+**Parameters:** None
+
+**Example:**
+```json
+{
+  "name": "lilrag_list_documents",
+  "arguments": {}
+}
+```
+
+### 6. `lilrag_delete_document`
+Delete a document and all its chunks from the RAG system.
+
+**Parameters:**
+- `document_id` (string, required): ID of document to delete
+- `force` (boolean, optional): Skip confirmation prompt (default: false, no effect in MCP)
+
+**Example:**
+```json
+{
+  "name": "lilrag_delete_document",
+  "arguments": {
+    "document_id": "ml-doc-1",
+    "force": true
   }
 }
 ```
@@ -83,12 +142,13 @@ lil-rag configure
 If no profile is found, the server uses environment variables:
 
 - `LILRAG_DB_PATH`: Database file path (default: "lilrag.db")
-- `LILRAG_DATA_DIR`: Data directory (default: "data")  
+- `LILRAG_DATA_DIR`: Data directory (default: "data")
 - `LILRAG_OLLAMA_URL`: Ollama server URL (default: "http://localhost:11434")
 - `LILRAG_MODEL`: Embedding model (default: "nomic-embed-text")
+- `LILRAG_CHAT_MODEL`: Chat model (default: "llama3.2")
 - `LILRAG_VECTOR_SIZE`: Vector dimensions (default: 768)
-- `LILRAG_MAX_TOKENS`: Max tokens per chunk (default: 200)
-- `LILRAG_OVERLAP`: Chunk overlap tokens (default: 50)
+- `LILRAG_MAX_CHARS`: Max characters per chunk (default: 2000)
+- `LILRAG_OVERLAP`: Character overlap between chunks (default: 200)
 
 ## Usage
 

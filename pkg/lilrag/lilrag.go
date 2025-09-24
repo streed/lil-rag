@@ -31,17 +31,26 @@ type LilRag struct {
 }
 
 type Config struct {
-	DatabasePath   string
-	DataDir        string
-	OllamaURL      string
-	Model          string
-	ChatModel      string
-	VisionModel    string
-	TimeoutSeconds int
-	VectorSize     int
-	MaxTokens      int
-	Overlap        int
-	ImageMaxSize   int
+	DatabasePath             string
+	DataDir                  string
+	OllamaURL                string
+	Model                    string
+	ChatModel                string
+	VisionModel              string
+	TimeoutSeconds           int
+	VectorSize               int
+	MaxTokens                int
+	Overlap                  int
+	ImageMaxSize             int
+	DefaultStrategy          string
+	SemanticThreshold        float32
+	ThresholdType            string
+	DefaultLimit             int
+	DefaultChatLimit         int
+	TruncateDocuments        bool
+	MaxDocumentLength        int
+	EnableQueryOptimization  bool
+	ReturnMatchingChunksOnly bool
 }
 
 type Storage interface {
@@ -58,6 +67,7 @@ type Storage interface {
 		originalFilePath, docType, namespace string,
 	) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
+	SearchWithOptions(ctx context.Context, embedding []float32, limit int, returnIndividualChunks bool) ([]SearchResult, error)
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error)
 	GetDocumentChunks(ctx context.Context, documentID string) ([]Chunk, error)
@@ -168,8 +178,14 @@ func (m *LilRag) Initialize() error {
 		m.config.ImageMaxSize,
 	)
 
-	// Initialize chat client
-	m.chatClient = NewOllamaChatClientWithTimeout(m.config.OllamaURL, m.config.ChatModel, m.config.TimeoutSeconds*4)
+	// Initialize chat client with configuration
+	m.chatClient = NewOllamaChatClientWithConfig(
+		m.config.OllamaURL,
+		m.config.ChatModel,
+		m.config.TimeoutSeconds*4,
+		m.config.TruncateDocuments,
+		m.config.MaxDocumentLength,
+	)
 
 	return m.storage.Initialize()
 }
@@ -192,7 +208,12 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create embedding: %w", err)
 		}
-		return m.storage.Index(ctx, id, text, embedding)
+		err = m.storage.Index(ctx, id, text, embedding)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Successfully indexed document '%s' with 1 chunk\n", id)
+		return nil
 	}
 
 	// Complex case: text needs to be chunked
@@ -223,6 +244,62 @@ func (m *LilRag) Index(ctx context.Context, text, id string) error {
 
 	// Store document with chunks
 	return m.storage.IndexChunks(ctx, id, text, chunks, embeddings)
+}
+
+// IndexWithStrategy indexes text using a specific chunking strategy
+func (m *LilRag) IndexWithStrategy(ctx context.Context, text, id, strategy string) error {
+	if text == "" {
+		return fmt.Errorf("text cannot be empty")
+	}
+	if id == "" {
+		return fmt.Errorf("id cannot be empty")
+	}
+	if strategy == "" {
+		strategy = m.config.DefaultStrategy // use config default
+	}
+	if m.chunker == nil || m.embedder == nil || m.storage == nil {
+		return fmt.Errorf("LilRag not properly initialized")
+	}
+
+	// Always apply the specified chunking strategy, regardless of text length
+	var chunks []Chunk
+	if strategy == ChunkingStrategySemantic {
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+	} else {
+		chunks = m.chunker.ChunkTextWithStrategy(text, strategy)
+	}
+	if len(chunks) == 0 {
+		return fmt.Errorf("failed to create chunks from text using %s strategy", strategy)
+	}
+
+	fmt.Printf("Splitting text into %d chunks for document '%s' using %s chunking\n", len(chunks), id, strategy)
+
+	// Record document tokens processed
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += chunk.TokenCount
+	}
+	metrics.RecordDocumentTokens("text", totalTokens)
+
+	// Create embeddings for each chunk
+	embeddings := make([][]float32, len(chunks))
+	for i, chunk := range chunks {
+		fmt.Printf("Creating embedding for chunk %d/%d (tokens: %d)\n", i+1, len(chunks), chunk.TokenCount)
+		embedding, err := m.embedder.Embed(ctx, chunk.Text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
+		}
+		embeddings[i] = embedding
+	}
+
+	// Store document with chunks
+	err := m.storage.IndexChunks(ctx, id, text, chunks, embeddings)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully indexed document '%s' with %d chunks\n", id, len(chunks))
+	return nil
 }
 
 // IndexPDF indexes a PDF file with page-based chunking
@@ -334,9 +411,107 @@ func (m *LilRag) IndexFile(ctx context.Context, filePath, id string) error {
 		}
 		embeddings[i] = embedding
 
-		// Build combined text for storage
+		// Build combined text for storage with preserved formatting
 		if i > 0 {
-			combinedText.WriteString("\n\n")
+			combinedText.WriteString("\n\n" + strings.Repeat("=", 50) + "\n")
+			combinedText.WriteString(fmt.Sprintf("CHUNK %d OF %d", i+1, len(chunks)))
+			combinedText.WriteString("\n" + strings.Repeat("=", 50) + "\n\n")
+		}
+		combinedText.WriteString(chunk.Text)
+	}
+
+	// Store document with chunks and metadata
+	return m.storage.IndexChunksWithMetadata(ctx, id, combinedText.String(), chunks, embeddings, filePath, string(docType))
+}
+
+// IndexFileWithStrategy indexes a file using a specific chunking strategy for text-based content
+func (m *LilRag) IndexFileWithStrategy(ctx context.Context, filePath, id, strategy string) error {
+	if strategy == "" {
+		strategy = m.config.DefaultStrategy // use config default
+	}
+
+	if m.documentHandler == nil {
+		// Fallback to legacy behavior if document handler not initialized
+		if IsPDFFile(filePath) {
+			return m.IndexPDF(ctx, filePath, id)
+		}
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+		return m.IndexWithStrategy(ctx, string(content), id, strategy)
+	}
+
+	// For supported document formats, check if it's a text-based format that can benefit from custom chunking
+	if !m.documentHandler.IsSupported(filePath) {
+		return fmt.Errorf("unsupported file format: %s", filePath)
+	}
+
+	docType := m.documentHandler.DetectDocumentType(filePath)
+
+	// For text-based documents, apply custom chunking strategy
+	if docType == "text" || docType == "markdown" || docType == "csv" {
+		// Parse the document to get the text content
+		content, err := m.documentHandler.ParseFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to parse file %s: %w", filePath, err)
+		}
+
+		if content == "" {
+			return fmt.Errorf("no content found in file %s", filePath)
+		}
+
+		// Use custom chunking strategy for text content
+		return m.IndexWithStrategy(ctx, content, id, strategy)
+	}
+
+	// For other document types (PDF, DOCX, etc.), extract text and apply chunking strategy
+	content, err := m.documentHandler.ParseFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to parse document: %w", err)
+	}
+
+	if content == "" {
+		return fmt.Errorf("no content found in document")
+	}
+
+	// Apply the specified chunking strategy to the extracted content
+	var chunks []Chunk
+	if strategy == ChunkingStrategySemantic {
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(content, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+	} else {
+		chunks = m.chunker.ChunkTextWithStrategy(content, strategy)
+	}
+
+	if len(chunks) == 0 {
+		return fmt.Errorf("no chunks created from document")
+	}
+
+	fmt.Printf("Indexing %s document '%s' with %d chunks (using %s chunking)\n", docType, id, len(chunks), strategy)
+
+	// Record document tokens processed
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += chunk.TokenCount
+	}
+	metrics.RecordDocumentTokens(string(docType), totalTokens)
+
+	// Generate embeddings for all chunks
+	embeddings := make([][]float32, len(chunks))
+	var combinedText strings.Builder
+
+	for i, chunk := range chunks {
+		embedding, err := m.embedder.Embed(ctx, chunk.Text)
+		if err != nil {
+			return fmt.Errorf("failed to create embedding for chunk %d: %w", i, err)
+		}
+		embeddings[i] = embedding
+
+		// Build combined text for storage with preserved formatting
+		if i > 0 {
+			combinedText.WriteString("\n\n" + strings.Repeat("=", 50) + "\n")
+			combinedText.WriteString(fmt.Sprintf("CHUNK %d OF %d", i+1, len(chunks)))
+			combinedText.WriteString("\n" + strings.Repeat("=", 50) + "\n\n")
 		}
 		combinedText.WriteString(chunk.Text)
 	}
@@ -350,7 +525,7 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 		return nil, fmt.Errorf("query cannot be empty")
 	}
 	if limit <= 0 {
-		limit = 10
+		limit = m.config.DefaultLimit
 	}
 	if m.embedder == nil || m.storage == nil {
 		return nil, fmt.Errorf("LilRag not properly initialized")
@@ -370,8 +545,8 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 		return nil, fmt.Errorf("failed to create query embedding: %w", err)
 	}
 
-	// Primary vector search
-	results, err := m.storage.Search(ctx, embedding, limit)
+	// Primary vector search - use individual chunks mode if chunks-only is enabled
+	results, err := m.storage.SearchWithOptions(ctx, embedding, limit, m.config.ReturnMatchingChunksOnly)
 	if err != nil {
 		return nil, fmt.Errorf("vector search failed: %w", err)
 	}
@@ -385,6 +560,11 @@ func (m *LilRag) Search(ctx context.Context, query string, limit int) ([]SearchR
 			// Merge results, prioritizing exact text matches
 			results = m.mergeSearchResults(results, textResults)
 		}
+	}
+
+	// Filter to only matching chunks if enabled
+	if m.config.ReturnMatchingChunksOnly {
+		results = m.filterToMatchingChunksOnly(results)
 	}
 
 	return results, nil
@@ -533,6 +713,28 @@ func (m *LilRag) mergeSearchResults(vectorResults, textResults []SearchResult) [
 	return merged
 }
 
+// filterToMatchingChunksOnly filters search results to return only the chunk text content
+func (m *LilRag) filterToMatchingChunksOnly(results []SearchResult) []SearchResult {
+	for i := range results {
+		if results[i].Metadata == nil {
+			results[i].Metadata = make(map[string]interface{})
+		}
+
+		// Replace the full document text with just the matching chunk
+		if matchingChunk, exists := results[i].Metadata["matching_chunk"]; exists {
+			if chunkText, ok := matchingChunk.(string); ok {
+				// Store original full text in metadata for reference
+				results[i].Metadata["original_full_text"] = results[i].Text
+				// Replace with just the matching chunk text
+				results[i].Text = chunkText
+			}
+		}
+
+		results[i].Metadata["chunks_only"] = true
+	}
+	return results
+}
+
 // UpdateChunk updates a chunk's text and regenerates its embedding
 func (m *LilRag) UpdateChunk(ctx context.Context, chunkID, newText string) error {
 	if strings.TrimSpace(newText) == "" {
@@ -560,25 +762,29 @@ func (m *LilRag) Chat(ctx context.Context, userMessage string, limit int) (strin
 		return "", nil, fmt.Errorf("user message cannot be empty")
 	}
 	if limit <= 0 {
-		limit = 5 // Default limit for chat context
+		limit = m.config.DefaultChatLimit
 	}
 	if m.chatClient == nil {
 		return "", nil, fmt.Errorf("chat client not initialized")
 	}
 
-	// First, optimize the query using the LLM for better semantic search
-	optimizedQuery, err := m.chatClient.OptimizeQuery(ctx, userMessage)
-	if err != nil {
-		// Log the error but continue with the original query
-		fmt.Printf("Warning: Query optimization failed, using original query: %v\n", err)
-		optimizedQuery = userMessage
-	}
+	// Optimize query for better search (only if enabled)
+	optimizedQuery := userMessage
+	if m.config.EnableQueryOptimization {
+		var err error
+		optimizedQuery, err = m.chatClient.OptimizeQuery(ctx, userMessage)
+		if err != nil {
+			// Log the error but continue with the original query
+			fmt.Printf("Warning: Query optimization failed, using original query: %v\n", err)
+			optimizedQuery = userMessage
+		}
 
-	// Log the query transformation for visibility
-	if optimizedQuery != userMessage {
-		fmt.Printf("Query optimization: '%s' → '%s'\n", userMessage, optimizedQuery)
-	} else {
-		fmt.Printf("Query optimization: No change needed for '%s'\n", userMessage)
+		// Log the query transformation for visibility
+		if optimizedQuery != userMessage {
+			fmt.Printf("Query optimization: '%s' → '%s'\n", userMessage, optimizedQuery)
+		} else {
+			fmt.Printf("Query optimization: No change needed for '%s'\n", userMessage)
+		}
 	}
 
 	// Search for relevant documents using the optimized query
@@ -603,25 +809,29 @@ func (m *LilRag) ChatStreaming(ctx context.Context, userMessage string, limit in
 		return nil, fmt.Errorf("user message cannot be empty")
 	}
 	if limit <= 0 {
-		limit = 5 // Default limit for chat context
+		limit = m.config.DefaultChatLimit
 	}
 	if m.chatClient == nil {
 		return nil, fmt.Errorf("chat client not initialized")
 	}
 
-	// First, optimize the query using the LLM for better semantic search
-	optimizedQuery, err := m.chatClient.OptimizeQuery(ctx, userMessage)
-	if err != nil {
-		// Log the error but continue with the original query
-		fmt.Printf("Warning: Query optimization failed, using original query: %v\n", err)
-		optimizedQuery = userMessage
-	}
+	// Optimize query for better search (only if enabled)
+	optimizedQuery := userMessage
+	if m.config.EnableQueryOptimization {
+		var err error
+		optimizedQuery, err = m.chatClient.OptimizeQuery(ctx, userMessage)
+		if err != nil {
+			// Log the error but continue with the original query
+			fmt.Printf("Warning: Query optimization failed, using original query: %v\n", err)
+			optimizedQuery = userMessage
+		}
 
-	// Log the query transformation for visibility
-	if optimizedQuery != userMessage {
-		fmt.Printf("Query optimization: '%s' → '%s'\n", userMessage, optimizedQuery)
-	} else {
-		fmt.Printf("Query optimization: No change needed for '%s'\n", userMessage)
+		// Log the query transformation for visibility
+		if optimizedQuery != userMessage {
+			fmt.Printf("Query optimization: '%s' → '%s'\n", userMessage, optimizedQuery)
+		} else {
+			fmt.Printf("Query optimization: No change needed for '%s'\n", userMessage)
+		}
 	}
 
 	// Search for relevant documents using the optimized query
@@ -906,7 +1116,12 @@ func (m *LilRag) reindexFromFileWithStrategy(ctx context.Context, doc *DocumentI
 	}
 
 	// Apply the specified chunking strategy
-	chunks := m.chunker.ChunkTextWithStrategy(text, strategy)
+	var chunks []Chunk
+	if strategy == ChunkingStrategySemantic {
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+	} else {
+		chunks = m.chunker.ChunkTextWithStrategy(text, strategy)
+	}
 	if len(chunks) == 0 {
 		return fmt.Errorf("failed to create chunks from file %s", doc.SourcePath)
 	}
@@ -921,7 +1136,12 @@ func (m *LilRag) reindexFromTextWithStrategy(ctx context.Context, doc *DocumentI
 	}
 
 	// Apply the specified chunking strategy
-	chunks := m.chunker.ChunkTextWithStrategy(doc.Text, strategy)
+	var chunks []Chunk
+	if strategy == ChunkingStrategySemantic {
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(doc.Text, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+	} else {
+		chunks = m.chunker.ChunkTextWithStrategy(doc.Text, strategy)
+	}
 	if len(chunks) == 0 {
 		return fmt.Errorf("failed to create chunks from text for document %s", doc.ID)
 	}
@@ -967,8 +1187,14 @@ func (m *LilRag) initializeLegacyComponents() error {
 		m.config.ImageMaxSize,
 	)
 
-	// Initialize chat client
-	m.chatClient = NewOllamaChatClientWithTimeout(m.config.OllamaURL, m.config.ChatModel, m.config.TimeoutSeconds*4)
+	// Initialize chat client with configuration
+	m.chatClient = NewOllamaChatClientWithConfig(
+		m.config.OllamaURL,
+		m.config.ChatModel,
+		m.config.TimeoutSeconds*4,
+		m.config.TruncateDocuments,
+		m.config.MaxDocumentLength,
+	)
 
 	return m.storage.Initialize()
 }

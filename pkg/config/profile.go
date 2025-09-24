@@ -8,11 +8,12 @@ import (
 )
 
 type ProfileConfig struct {
-	Ollama      OllamaConfig `json:"ollama"`
-	StoragePath string       `json:"storage_path"`
-	DataDir     string       `json:"data_dir"`
-	Server      ServerConfig `json:"server"`
-	Chunking    ChunkConfig  `json:"chunking"`
+	Ollama      OllamaConfig  `json:"ollama"`
+	StoragePath string        `json:"storage_path"`
+	DataDir     string        `json:"data_dir"`
+	Server      ServerConfig  `json:"server"`
+	Chunking    ChunkConfig   `json:"chunking"`
+	Search      SearchConfig  `json:"search"`
 }
 
 type OllamaConfig struct {
@@ -38,8 +39,22 @@ type ServerConfig struct {
 }
 
 type ChunkConfig struct {
-	MaxTokens int `json:"max_tokens"`
-	Overlap   int `json:"overlap"`
+	MaxTokens         int     `json:"max_tokens"`
+	Overlap           int     `json:"overlap"`
+	DefaultStrategy   string  `json:"default_strategy"`
+	SemanticThreshold float32 `json:"semantic_threshold"`
+	ThresholdType     string  `json:"threshold_type"`
+}
+
+type SearchConfig struct {
+	DefaultLimit             int  `json:"default_limit"`
+	DefaultChatLimit         int  `json:"default_chat_limit"`
+	MaxMCPSearchLimit        int  `json:"max_mcp_search_limit"`
+	MaxMCPChatLimit          int  `json:"max_mcp_chat_limit"`
+	TruncateDocuments        bool `json:"truncate_documents"`
+	MaxDocumentLength        int  `json:"max_document_length"`
+	EnableQueryOptimization  bool `json:"enable_query_optimization"`
+	ReturnMatchingChunksOnly bool `json:"return_matching_chunks_only"`
 }
 
 func DefaultProfile() *ProfileConfig {
@@ -74,8 +89,21 @@ func DefaultProfile() *ProfileConfig {
 			TrustedProxies: []string{}, // Empty by default
 		},
 		Chunking: ChunkConfig{
-			MaxTokens: 256, // Optimized for 2025 RAG best practices (128-512 range)
-			Overlap:   38,  // 15% overlap ratio for optimal context preservation
+			MaxTokens:         256,          // Optimized for 2025 RAG best practices (128-512 range)
+			Overlap:           38,           // 15% overlap ratio for optimal context preservation
+			DefaultStrategy:   "recursive",  // Default chunking strategy
+			SemanticThreshold: 0.95,         // 95th percentile threshold for semantic chunking
+			ThresholdType:     "percentile", // Threshold type for semantic chunking
+		},
+		Search: SearchConfig{
+			DefaultLimit:             25,    // Increased default for comprehensive search results
+			DefaultChatLimit:         15,    // Increased default for richer chat context
+			MaxMCPSearchLimit:        100,   // Increased MCP search limit for flexibility
+			MaxMCPChatLimit:          50,    // Increased MCP chat limit for better context
+			TruncateDocuments:        false, // Disable truncation for full document access
+			MaxDocumentLength:        0,     // 0 means no limit when truncation is disabled
+			EnableQueryOptimization:  false, // Disable query optimization by default, can be enabled for better semantic search
+			ReturnMatchingChunksOnly: false, // Return full context by default, can be enabled to return only matching chunks
 		},
 	}
 }
@@ -181,8 +209,11 @@ func (p *ProfileConfig) ToLilRagConfig() *Config {
 			Port: p.Server.Port,
 		},
 		Chunking: Chunk{
-			MaxTokens: p.Chunking.MaxTokens,
-			Overlap:   p.Chunking.Overlap,
+			MaxTokens:         p.Chunking.MaxTokens,
+			Overlap:           p.Chunking.Overlap,
+			DefaultStrategy:   p.Chunking.DefaultStrategy,
+			SemanticThreshold: p.Chunking.SemanticThreshold,
+			ThresholdType:     p.Chunking.ThresholdType,
 		},
 	}
 }

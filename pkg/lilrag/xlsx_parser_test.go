@@ -214,8 +214,8 @@ func TestXLSXParser_ParseWithChunks_DefaultChunker(t *testing.T) {
 	}
 
 	// Test chunker configuration
-	if parser.chunker.MaxTokens != 200 {
-		t.Errorf("Expected max tokens 200, got %d", parser.chunker.MaxTokens)
+	if parser.chunker.MaxChars != 200 {
+		t.Errorf("Expected max tokens 200, got %d", parser.chunker.MaxChars)
 	}
 
 	if parser.chunker.Overlap != 30 {

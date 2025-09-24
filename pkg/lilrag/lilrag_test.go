@@ -118,6 +118,31 @@ func (m *MockStorage) Search(_ context.Context, _ []float32, limit int) ([]Searc
 	return results, nil
 }
 
+func (m *MockStorage) SearchWithOptions(_ context.Context, _ []float32, limit int, returnIndividualChunks bool) ([]SearchResult, error) {
+	if !m.initialized {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+
+	// For testing, return similar logic to Search but respect returnIndividualChunks flag
+	results := []SearchResult{}
+	count := 0
+	for id, doc := range m.documents {
+		if count >= limit {
+			break
+		}
+		results = append(results, SearchResult{
+			ID:    id,
+			Text:  doc,
+			Score: 0.5,
+		})
+		count++
+		if !returnIndividualChunks {
+			break
+		}
+	}
+	return results, nil
+}
+
 func (m *MockStorage) ListDocuments(_ context.Context) ([]DocumentInfo, error) {
 	if !m.initialized {
 		return nil, fmt.Errorf("storage not initialized")
@@ -731,7 +756,11 @@ func TestLilRag_Search(t *testing.T) {
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(1000, 200),
-		config:   &Config{MaxTokens: 1000, Overlap: 200},
+		config:   &Config{
+			MaxTokens:    1000,
+			Overlap:      200,
+			DefaultLimit: 25, // New configurable default
+		},
 	}
 
 	err := lilRag.storage.Initialize() // Test/benchmark setup, error intentionally ignored
@@ -777,18 +806,18 @@ func TestLilRag_Search(t *testing.T) {
 			expectedResults: 0,
 		},
 		{
-			name:            "zero limit defaults to 10",
+			name:            "zero limit defaults to 25",
 			query:           "artificial intelligence",
 			limit:           0,
 			expectError:     false,
-			expectedResults: 3, // All documents
+			expectedResults: 3, // All documents (less than default limit)
 		},
 		{
-			name:            "negative limit defaults to 10",
+			name:            "negative limit defaults to 25",
 			query:           "computer vision",
 			limit:           -1,
 			expectError:     false,
-			expectedResults: 3, // All documents
+			expectedResults: 3, // All documents (less than default limit)
 		},
 		{
 			name:            "limit larger than available documents",

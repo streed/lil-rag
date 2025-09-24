@@ -35,7 +35,7 @@ LilRag uses a profile-based configuration system that stores settings in `~/.lil
     "trusted_proxies": []
   },
   "chunking": {
-    "max_tokens": 1800,
+    "max_chars": 2000,
     "overlap": 200
   }
 }
@@ -333,43 +333,43 @@ Controls HTTP server behavior, authentication, timeouts, and security settings.
 
 Controls how documents are split into searchable chunks.
 
-#### `max_tokens`
+#### `max_chars`
 - **Type**: Integer
-- **Default**: `256` (optimized for 2025 RAG best practices)
-- **Description**: Maximum tokens per chunk
+- **Default**: `2000`
+- **Description**: Maximum characters per chunk
 - **Recommendations**:
-  - `128-256`: Precise search results, good for Q&A
-  - `512-1024`: More context per result, good for summarization  
-  - `1800+`: Legacy mode, preserves large context blocks
+  - `800-1500`: Precise search results, good for Q&A
+  - `2000-4000`: More context per result, good for summarization
+  - `6000+`: Very large context blocks for comprehensive results
 - **Examples**:
   ```bash
   # Optimize for precise search
-  lil-rag config set chunking.max-tokens 128
-  
+  lil-rag config set chunking.max-chars 1000
+
   # Optimize for context preservation
-  lil-rag config set chunking.max-tokens 512
-  
-  # Legacy chunking (pre-2025)
-  lil-rag config set chunking.max-tokens 1800
+  lil-rag config set chunking.max-chars 3000
+
+  # Large context chunks
+  lil-rag config set chunking.max-chars 6000
   ```
 
 #### `overlap`
 - **Type**: Integer
-- **Default**: `38` (15% of max_tokens)
-- **Description**: Token overlap between adjacent chunks
+- **Default**: `200` (10% of max_chars)
+- **Description**: Character overlap between adjacent chunks
 - **Purpose**: Prevents context loss at chunk boundaries
-- **Recommendations**: 10-20% of max_tokens
+- **Recommendations**: 10-20% of max_chars
 - **Examples**:
   ```bash
   # Calculate overlap for different chunk sizes
-  # For 128 tokens: 128 * 0.15 = 19
-  lil-rag config set chunking.overlap 19
-  
-  # For 512 tokens: 512 * 0.15 = 76  
-  lil-rag config set chunking.overlap 76
-  
-  # For 1800 tokens: 1800 * 0.11 = 200
+  # For 1000 chars: 1000 * 0.15 = 150
+  lil-rag config set chunking.overlap 150
+
+  # For 2000 chars: 2000 * 0.10 = 200
   lil-rag config set chunking.overlap 200
+
+  # For 3000 chars: 3000 * 0.15 = 450
+  lil-rag config set chunking.overlap 450
   ```
 
 ## Command Line Overrides
@@ -539,7 +539,7 @@ lil-rag config set ollama.timeout-seconds 60
 lil-rag config set server.port 12121
 lil-rag config set server.secure true
 lil-rag config set server.read-timeout 60
-lil-rag config set chunking.max-tokens 512
+lil-rag config set chunking.max-chars 2000
 ```
 
 ## Performance Optimization
@@ -554,8 +554,8 @@ lil-rag config set ollama.vector-size 384
 lil-rag config set ollama.chat-model llama3.2:3b
 
 # Small chunks for precise results
-lil-rag config set chunking.max-tokens 128
-lil-rag config set chunking.overlap 19
+lil-rag config set chunking.max-chars 1000
+lil-rag config set chunking.overlap 100
 
 # Lower timeouts
 lil-rag config set ollama.timeout-seconds 15
@@ -571,8 +571,8 @@ lil-rag config set ollama.vector-size 1024
 lil-rag config set ollama.chat-model qwen2.5:7b
 
 # Larger chunks for more context
-lil-rag config set chunking.max-tokens 512
-lil-rag config set chunking.overlap 76
+lil-rag config set chunking.max-chars 3000
+lil-rag config set chunking.overlap 300
 
 # Higher timeouts for better results
 lil-rag config set ollama.timeout-seconds 60

@@ -123,7 +123,7 @@ func (dp *DOCXParser) chunkCodeContent(content string) []Chunk {
 	var chunks []Chunk
 	var currentChunk strings.Builder
 	currentTokens := 0
-	targetSize := int(float64(dp.chunker.MaxTokens) * 1.5) // Larger chunks for code
+	targetSize := int(float64(dp.chunker.MaxChars) * 1.5) // Larger chunks for code
 
 	for _, paragraph := range paragraphs {
 		if strings.TrimSpace(paragraph) == "" {
@@ -207,7 +207,7 @@ func (dp *DOCXParser) chunkStructuredContent(content string) []Chunk {
 		currentTokens += lineTokens
 
 		// Check if chunk is getting too large
-		if currentTokens > dp.chunker.MaxTokens {
+		if currentTokens > dp.chunker.MaxChars {
 			chunk := Chunk{
 				Text:       strings.TrimSpace(currentChunk.String()),
 				StartPos:   0,

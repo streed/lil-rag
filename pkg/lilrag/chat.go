@@ -15,9 +15,11 @@ import (
 
 // OllamaChatClient handles chat interactions with Ollama
 type OllamaChatClient struct {
-	baseURL string
-	model   string
-	client  *http.Client
+	baseURL           string
+	model             string
+	client            *http.Client
+	truncateDocuments bool
+	maxDocumentLength int
 }
 
 // NewOllamaChatClient creates a new Ollama chat client
@@ -27,6 +29,11 @@ func NewOllamaChatClient(baseURL, model string) *OllamaChatClient {
 
 // NewOllamaChatClientWithTimeout creates a new Ollama chat client with configurable timeout
 func NewOllamaChatClientWithTimeout(baseURL, model string, timeoutSeconds int) *OllamaChatClient {
+	return NewOllamaChatClientWithConfig(baseURL, model, timeoutSeconds, false, 3000)
+}
+
+// NewOllamaChatClientWithConfig creates a new Ollama chat client with full configuration
+func NewOllamaChatClientWithConfig(baseURL, model string, timeoutSeconds int, truncateDocuments bool, maxDocumentLength int) *OllamaChatClient {
 	if baseURL == "" {
 		baseURL = DefaultOllamaURL
 	}
@@ -35,8 +42,10 @@ func NewOllamaChatClientWithTimeout(baseURL, model string, timeoutSeconds int) *
 	}
 
 	return &OllamaChatClient{
-		baseURL: baseURL,
-		model:   model,
+		baseURL:           baseURL,
+		model:             model,
+		truncateDocuments: truncateDocuments,
+		maxDocumentLength: maxDocumentLength,
 		client: &http.Client{
 			Timeout: time.Duration(timeoutSeconds) * time.Second,
 		},
@@ -290,10 +299,10 @@ func (c *OllamaChatClient) createSystemPrompt(searchResults []SearchResult) stri
 		prompt.WriteString(fmt.Sprintf("Document %d (ID: %s, Relevance: %.1f%%):\n",
 			i+1, result.ID, result.Score*100))
 
-		// Use a reasonable excerpt length
+		// Apply document truncation based on configuration
 		text := result.Text
-		if len(text) > 3000 {
-			text = text[:3000] + "..."
+		if c.truncateDocuments && c.maxDocumentLength > 0 && len(text) > c.maxDocumentLength {
+			text = text[:c.maxDocumentLength] + "..."
 		}
 
 		prompt.WriteString(text)

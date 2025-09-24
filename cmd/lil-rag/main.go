@@ -90,14 +90,23 @@ func run() error {
 	}
 
 	lilragConfig := &lilrag.Config{
-		DatabasePath: profileConfig.StoragePath,
-		DataDir:      profileConfig.DataDir,
-		OllamaURL:    profileConfig.Ollama.Endpoint,
-		Model:        profileConfig.Ollama.EmbeddingModel,
-		ChatModel:    profileConfig.Ollama.ChatModel,
-		VectorSize:   profileConfig.Ollama.VectorSize,
-		MaxTokens:    profileConfig.Chunking.MaxTokens,
-		Overlap:      profileConfig.Chunking.Overlap,
+		DatabasePath:             profileConfig.StoragePath,
+		DataDir:                  profileConfig.DataDir,
+		OllamaURL:                profileConfig.Ollama.Endpoint,
+		Model:                    profileConfig.Ollama.EmbeddingModel,
+		ChatModel:                profileConfig.Ollama.ChatModel,
+		VectorSize:               profileConfig.Ollama.VectorSize,
+		MaxTokens:                profileConfig.Chunking.MaxTokens,
+		Overlap:                  profileConfig.Chunking.Overlap,
+		DefaultStrategy:          profileConfig.Chunking.DefaultStrategy,
+		SemanticThreshold:        profileConfig.Chunking.SemanticThreshold,
+		ThresholdType:            profileConfig.Chunking.ThresholdType,
+		DefaultLimit:             profileConfig.Search.DefaultLimit,
+		DefaultChatLimit:         profileConfig.Search.DefaultChatLimit,
+		TruncateDocuments:        profileConfig.Search.TruncateDocuments,
+		MaxDocumentLength:        profileConfig.Search.MaxDocumentLength,
+		EnableQueryOptimization:  profileConfig.Search.EnableQueryOptimization,
+		ReturnMatchingChunksOnly: profileConfig.Search.ReturnMatchingChunksOnly,
 	}
 
 	rag, err := lilrag.New(lilragConfig)
@@ -135,7 +144,7 @@ func run() error {
 	case "reindex":
 		return handleReindex(ctx, rag, args[1:])
 	case "health":
-		return handleHealth(rag)
+		return handleHealth(rag, args[1:])
 	case "config":
 		return handleConfig(profileConfig, args[1:])
 	case "auth":
@@ -149,7 +158,64 @@ func run() error {
 
 func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag index [id] <text|file|-> or just: lil-rag index <text|file|->")
+		return fmt.Errorf("usage: lil-rag index [--chunking=STRATEGY] [id] <text|file|-> or just: lil-rag index <text|file|->")
+	}
+
+	// Check for help flag first
+	for _, arg := range args {
+		if arg == helpFlag || arg == "-h" {
+			fmt.Fprintf(os.Stderr, "Usage: lil-rag index [OPTIONS] [id] <text|file|->\n\n")
+			fmt.Fprintf(os.Stderr, "Index text, file, or stdin content for search and chat.\n\n")
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  --chunking=STRATEGY    Chunking strategy: recursive, semantic, simple (default: recursive)\n\n")
+			fmt.Fprintf(os.Stderr, "Arguments:\n")
+			fmt.Fprintf(os.Stderr, "  [id]                   Optional document ID (auto-generated if not provided)\n")
+			fmt.Fprintf(os.Stderr, "  <text|file|->         Text content, file path, or '-' for stdin\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag index \"Hello world\"                    # Auto-generated ID\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag index doc1 \"Hello world\"              # Explicit ID\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag index --chunking=semantic document.txt # Semantic chunking\n")
+			fmt.Fprintf(os.Stderr, "  echo \"text\" | lil-rag index -                # From stdin\n")
+			return nil
+		}
+	}
+
+	// Parse flags
+	var chunkingStrategy string
+	var filteredArgs []string
+
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--chunking=") {
+			chunkingStrategy = strings.TrimPrefix(arg, "--chunking=")
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	// Set default strategy if not specified
+	if chunkingStrategy == "" {
+		chunkingStrategy = "recursive"
+	}
+
+	// Validate chunking strategy
+	validStrategies := []string{"recursive", "semantic", "simple"}
+	isValid := false
+	for _, valid := range validStrategies {
+		if chunkingStrategy == valid {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		return fmt.Errorf("invalid chunking strategy '%s'. Valid strategies: %s",
+			chunkingStrategy, strings.Join(validStrategies, ", "))
+	}
+
+	// Use filtered args for the rest of the processing
+	args = filteredArgs
+
+	if len(args) == 0 {
+		return fmt.Errorf("usage: lil-rag index [--chunking=STRATEGY] [id] <text|file|-> or just: lil-rag index <text|file|->")
 	}
 
 	var id string
@@ -172,24 +238,22 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 
 			// Generate ID automatically
 			id = lilrag.GenerateDocumentID()
-			fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
-			if err := rag.Index(ctx, text, id); err != nil {
+			fmt.Printf("Indexing text with auto-generated ID '%s' using %s chunking...\n", id, chunkingStrategy)
+			if err := rag.IndexWithStrategy(ctx, text, id, chunkingStrategy); err != nil {
 				return fmt.Errorf("failed to index: %w", err)
 			}
 
-			fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
 			return nil
 		}
 
 		if fileExists(arg) {
 			// File exists, index with auto-generated ID
 			id = lilrag.GenerateDocumentID()
-			fmt.Printf("Indexing file '%s' with auto-generated ID '%s'...\n", arg, id)
-			if err := rag.IndexFile(ctx, arg, id); err != nil {
+			fmt.Printf("Indexing file '%s' with auto-generated ID '%s' using %s chunking...\n", arg, id, chunkingStrategy)
+			if err := rag.IndexFileWithStrategy(ctx, arg, id, chunkingStrategy); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
-			fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", arg, id)
-			return nil
+				return nil
 		}
 
 		// Treat as direct text input with auto-generated ID
@@ -199,12 +263,11 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		}
 
 		id = lilrag.GenerateDocumentID()
-		fmt.Printf("Indexing text with auto-generated ID '%s'...\n", id)
-		if err := rag.Index(ctx, text, id); err != nil {
+		fmt.Printf("Indexing text with auto-generated ID '%s' using %s chunking...\n", id, chunkingStrategy)
+		if err := rag.IndexWithStrategy(ctx, text, id, chunkingStrategy); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
 
-		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
 		return nil
 	}
 
@@ -223,22 +286,20 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			return fmt.Errorf("no text to index")
 		}
 
-		fmt.Printf("Indexing text with ID '%s'...\n", id)
-		if err := rag.Index(ctx, text, id); err != nil {
+		fmt.Printf("Indexing text with ID '%s' using %s chunking...\n", id, chunkingStrategy)
+		if err := rag.IndexWithStrategy(ctx, text, id, chunkingStrategy); err != nil {
 			return fmt.Errorf("failed to index: %w", err)
 		}
 
-		fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
 		return nil
 	}
 
 	if fileExists(input) {
 		// Handle file using the document handler (supports PDF, DOCX, XLSX, HTML, CSV, etc.)
-		fmt.Printf("Indexing file '%s' with ID '%s'...\n", input, id)
-		if err := rag.IndexFile(ctx, input, id); err != nil {
+		fmt.Printf("Indexing file '%s' with ID '%s' using %s chunking...\n", input, id, chunkingStrategy)
+		if err := rag.IndexFileWithStrategy(ctx, input, id, chunkingStrategy); err != nil {
 			return fmt.Errorf("failed to index file: %w", err)
 		}
-		fmt.Printf("Successfully indexed file '%s' with ID '%s'\n", input, id)
 		return nil
 	}
 
@@ -248,33 +309,70 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 		return fmt.Errorf("no text to index")
 	}
 
-	fmt.Printf("Indexing text with ID '%s'...\n", id)
-	if err := rag.Index(ctx, text, id); err != nil {
+	fmt.Printf("Indexing text with ID '%s' using %s chunking...\n", id, chunkingStrategy)
+	if err := rag.IndexWithStrategy(ctx, text, id, chunkingStrategy); err != nil {
 		return fmt.Errorf("failed to index: %w", err)
 	}
 
-	fmt.Printf("Successfully indexed %d characters with ID '%s'\n", len(text), id)
 	return nil
 }
 
 func handleSearch(ctx context.Context, rag *lilrag.LilRag, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag search <query> [limit]")
+	// Parse search-specific flags
+	var chunksOnly bool
+	var limit int
+
+	// Create a new flag set for search command
+	searchFlags := flag.NewFlagSet("search", flag.ContinueOnError)
+	searchFlags.BoolVar(&chunksOnly, "chunks-only", false, "Return only matching chunks without full document context")
+	searchFlags.IntVar(&limit, "limit", 0, "Maximum number of results to return (0 uses configured default)")
+
+	// Custom usage function
+	searchFlags.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lil-rag search [OPTIONS] <query>\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		searchFlags.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nArguments:\n")
+		fmt.Fprintf(os.Stderr, "  <query>    Search query string\n")
 	}
 
-	query := args[0]
-	limit := 10
-
-	if len(args) > 1 {
-		if _, err := fmt.Sscanf(args[1], "%d", &limit); err != nil {
-			return fmt.Errorf("invalid limit: %s", args[1])
+	// Parse the arguments
+	if err := searchFlags.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil // Help was already printed
 		}
+		return err
 	}
+
+	// Get remaining args (should be the query)
+	remaining := searchFlags.Args()
+	if len(remaining) == 0 {
+		searchFlags.Usage()
+		return fmt.Errorf("missing query argument")
+	}
+
+	query := remaining[0]
+
+	// Note: Legacy format lil-rag search "query" [limit] is now handled by --limit flag
 
 	fmt.Printf("Searching for: %s\n", query)
+
+	// If chunks-only flag is set, we need to temporarily override the config
+	// Since we can't modify the existing rag instance's config directly,
+	// we'll apply the filtering after the search
 	results, err := rag.Search(ctx, query, limit)
 	if err != nil {
 		return fmt.Errorf("failed to search: %w", err)
+	}
+
+	// Apply chunks-only filtering if flag is set
+	if chunksOnly {
+		for i := range results {
+			if results[i].Metadata == nil {
+				results[i].Metadata = make(map[string]interface{})
+			}
+			results[i].Metadata["chunks_only"] = true
+		}
 	}
 
 	// Try to render with glow first
@@ -298,14 +396,19 @@ func handleSearch(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 		matchInfo := ""
 
 		if result.Metadata != nil {
+			// Check for chunks-only mode first
+			if chunksOnlyFlag, ok := result.Metadata["chunks_only"].(bool); ok && chunksOnlyFlag {
+				matchInfo += " [Chunks Only]"
+			}
+
 			// Show information about which part matched
 			if pageNum, ok := result.Metadata["page_number"].(int); ok {
-				matchInfo = fmt.Sprintf(" [Best match: Page %d]", pageNum)
+				matchInfo += fmt.Sprintf(" [Best match: Page %d]", pageNum)
 			} else if chunkType, ok := result.Metadata["chunk_type"].(string); ok && chunkType == "pdf_page" {
-				matchInfo = " [Best match: PDF Page]"
+				matchInfo += " [Best match: PDF Page]"
 			} else if isChunk, ok := result.Metadata["is_chunk"].(bool); ok && isChunk {
 				if chunkIndex, ok := result.Metadata["chunk_index"].(int); ok {
-					matchInfo = fmt.Sprintf(" [Best match: Chunk %d]", chunkIndex)
+					matchInfo += fmt.Sprintf(" [Best match: Chunk %d]", chunkIndex)
 				}
 			}
 		}
@@ -320,8 +423,28 @@ func handleSearch(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 }
 
 func handleConfig(profileConfig *config.ProfileConfig, args []string) error {
+	// Check for help flag first
+	for _, arg := range args {
+		if arg == helpFlag || arg == "-h" {
+			fmt.Fprintf(os.Stderr, "Usage: lil-rag config <command> [OPTIONS]\n\n")
+			fmt.Fprintf(os.Stderr, "Manage lil-rag configuration settings.\n\n")
+			fmt.Fprintf(os.Stderr, "Commands:\n")
+			fmt.Fprintf(os.Stderr, "  init        Initialize configuration with default settings\n")
+			fmt.Fprintf(os.Stderr, "  show        Display current configuration settings\n")
+			fmt.Fprintf(os.Stderr, "  set         Set configuration values\n\n")
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  -h, --help  Show this help message\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag config init\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag config show\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag config set ollama.endpoint http://localhost:11434\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag config set storage.path /custom/path/storage.db\n")
+			return nil
+		}
+	}
+
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag config <init|show|set>")
+		return fmt.Errorf("usage: lil-rag config <init|show|set>\nUse --help for more details")
 	}
 
 	command := args[0]
@@ -466,19 +589,24 @@ func handleConfigSet(profileConfig *config.ProfileConfig, args []string) error {
 }
 
 func handleReset(profileConfig *config.ProfileConfig, args []string) error {
-	if len(args) > 0 && args[0] == helpFlag {
-		fmt.Println("Usage: lil-rag reset [--force]")
-		fmt.Println("")
-		fmt.Println("Delete the current database and all indexed data.")
-		fmt.Println("")
-		fmt.Println("Options:")
-		fmt.Println("  --force    Skip confirmation prompt")
-		fmt.Println("")
-		fmt.Println("This operation is irreversible and will permanently delete:")
-		fmt.Println("  • The vector database file")
-		fmt.Println("  • All indexed documents and embeddings")
-		fmt.Println("  • Search history and cache")
-		return nil
+	// Check for help flag first
+	for _, arg := range args {
+		if arg == helpFlag || arg == "-h" {
+			fmt.Fprintf(os.Stderr, "Usage: lil-rag reset [OPTIONS]\n\n")
+			fmt.Fprintf(os.Stderr, "Delete the current database and all indexed data.\n\n")
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  --force             Skip confirmation prompt\n")
+			fmt.Fprintf(os.Stderr, "  -h, --help          Show this help message\n\n")
+			fmt.Fprintf(os.Stderr, "Warning:\n")
+			fmt.Fprintf(os.Stderr, "This operation is irreversible and will permanently delete:\n")
+			fmt.Fprintf(os.Stderr, "  • The vector database file\n")
+			fmt.Fprintf(os.Stderr, "  • All indexed documents and embeddings\n")
+			fmt.Fprintf(os.Stderr, "  • Search history and cache\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag reset\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag reset --force\n")
+			return nil
+		}
 	}
 
 	// Check if --force flag is provided
@@ -607,19 +735,40 @@ func fileExists(path string) bool {
 }
 
 func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.ProfileConfig, args []string) error {
+	// Check for help flag first
+	for _, arg := range args {
+		if arg == helpFlag || arg == "-h" {
+			fmt.Fprintf(os.Stderr, "Usage: lil-rag chat [OPTIONS] <message> [limit]\n\n")
+			fmt.Fprintf(os.Stderr, "Chat with your indexed documents using conversational AI.\n\n")
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  --session-id <id>   Resume existing chat session\n")
+			fmt.Fprintf(os.Stderr, "  --new-session       Start new chat session\n")
+			fmt.Fprintf(os.Stderr, "  --list-sessions     List all chat sessions\n")
+			fmt.Fprintf(os.Stderr, "  --show-sources      Display detailed source information (document ID and chunk number)\n")
+			fmt.Fprintf(os.Stderr, "  -h, --help          Show this help message\n\n")
+			fmt.Fprintf(os.Stderr, "Arguments:\n")
+			fmt.Fprintf(os.Stderr, "  <message>           Your question or message to the AI\n")
+			fmt.Fprintf(os.Stderr, "  [limit]             Optional maximum number of results to use (default: configured limit)\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag chat \"What is machine learning?\"\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag chat --show-sources \"Explain neural networks\"\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag chat --session-id my-session \"Continue our discussion\"\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag chat --new-session \"Start fresh conversation\"\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag chat --list-sessions\n")
+			return nil
+		}
+	}
+
 	if len(args) == 0 {
-		return fmt.Errorf("usage: lil-rag chat [flags] <message> [limit]\n" +
-			"  Flags:\n" +
-			"    --session-id <id>    Resume existing chat session\n" +
-			"    --new-session       Start new chat session\n" +
-			"    --list-sessions     List all chat sessions")
+		return fmt.Errorf("usage: lil-rag chat [OPTIONS] <message> [limit]\nUse --help for more details")
 	}
 
 	var sessionID string
 	var forceNewSession bool
 	var listSessions bool
+	var showSources bool
 	var message string
-	limit := 5
+	limit := 0 // Use configured default
 
 	// Parse flags and arguments
 	i := 0
@@ -637,6 +786,9 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 			i++
 		case "--list-sessions":
 			listSessions = true
+			i++
+		case "--show-sources":
+			showSources = true
 			i++
 		default:
 			// This is the message
@@ -713,7 +865,7 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 
 	// Try to render with glow first
 	if isGlowAvailable() {
-		markdown := formatChatResponseAsMarkdownWithSession(session.ID, message, response, sources)
+		markdown := formatChatResponseAsMarkdownWithSession(session.ID, message, response, sources, showSources)
 		if err := renderWithGlow(markdown); err == nil {
 			return nil
 		}
@@ -727,7 +879,27 @@ func handleChat(ctx context.Context, rag *lilrag.LilRag, profileConfig *config.P
 	if len(sources) > 0 {
 		fmt.Printf("📚 Sources (%d):\n", len(sources))
 		for i, source := range sources {
-			fmt.Printf("%d. %s (Score: %.4f)\n", i+1, source.ID, source.Score)
+			sourceInfo := ""
+			if showSources && source.Metadata != nil {
+				sourceInfo = " - "
+				if chunkIndex, ok := source.Metadata["chunk_index"].(int); ok {
+					sourceInfo += fmt.Sprintf("Document ID: %s, Chunk: %d", source.ID, chunkIndex)
+				} else {
+					sourceInfo += fmt.Sprintf("Document ID: %s", source.ID)
+				}
+
+				// Add file path if available
+				if filePath, ok := source.Metadata["file_path"].(string); ok && filePath != "" {
+					sourceInfo += fmt.Sprintf(", File: %s", filePath)
+				}
+
+				// Add source path if available
+				if sourcePath, ok := source.Metadata["source_path"].(string); ok && sourcePath != "" {
+					sourceInfo += fmt.Sprintf(", Source: %s", sourcePath)
+				}
+			}
+
+			fmt.Printf("%d. %s (Score: %.4f)%s\n", i+1, source.ID, source.Score, sourceInfo)
 			fmt.Printf("   %s\n\n", truncateText(source.Text, 200))
 		}
 	}
@@ -777,7 +949,7 @@ func handleDelete(ctx context.Context, rag *lilrag.LilRag, args []string) error 
 		return fmt.Errorf("usage: lil-rag delete <document-id> [--force]")
 	}
 
-	if args[0] == "--help" {
+	if args[0] == helpFlag {
 		fmt.Println("Usage: lil-rag delete <document-id> [--force]")
 		fmt.Println("")
 		fmt.Println("Delete a document and all its chunks from the database.")
@@ -927,7 +1099,24 @@ func handleReindex(ctx context.Context, rag *lilrag.LilRag, args []string) error
 	return nil
 }
 
-func handleHealth(rag *lilrag.LilRag) error {
+func handleHealth(rag *lilrag.LilRag, args []string) error {
+	// Check for help flag first
+	for _, arg := range args {
+		if arg == helpFlag || arg == "-h" {
+			fmt.Fprintf(os.Stderr, "Usage: lil-rag health\n\n")
+			fmt.Fprintf(os.Stderr, "Check the health status of the lil-rag system.\n\n")
+			fmt.Fprintf(os.Stderr, "This command verifies:\n")
+			fmt.Fprintf(os.Stderr, "  • RAG system initialization status\n")
+			fmt.Fprintf(os.Stderr, "  • Database connectivity\n")
+			fmt.Fprintf(os.Stderr, "  • Overall system health\n\n")
+			fmt.Fprintf(os.Stderr, "Options:\n")
+			fmt.Fprintf(os.Stderr, "  -h, --help          Show this help message\n\n")
+			fmt.Fprintf(os.Stderr, "Examples:\n")
+			fmt.Fprintf(os.Stderr, "  lil-rag health\n")
+			return nil
+		}
+	}
+
 	// Simple health check - verify we can initialize the database
 	fmt.Println("Checking system health...")
 
@@ -1040,7 +1229,7 @@ func handleListChatSessions(ctx context.Context, chatHistory *chathistory.ChatHi
 
 // formatChatResponseAsMarkdownWithSession formats chat response with session info
 func formatChatResponseAsMarkdownWithSession(sessionID, message, response string,
-	sources []lilrag.SearchResult) string {
+	sources []lilrag.SearchResult, showSources bool) string {
 	var md strings.Builder
 
 	md.WriteString("# Chat Session Response\n\n")
@@ -1056,6 +1245,28 @@ func formatChatResponseAsMarkdownWithSession(sessionID, message, response string
 		for i, source := range sources {
 			md.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, source.ID))
 			md.WriteString(fmt.Sprintf("**Score:** %.4f\n\n", source.Score))
+
+			// Add detailed source information if requested
+			if showSources && source.Metadata != nil {
+				md.WriteString("**Source:** ")
+				if chunkIndex, ok := source.Metadata["chunk_index"].(int); ok {
+					md.WriteString(fmt.Sprintf("Document ID: `%s`, Chunk: `%d`", source.ID, chunkIndex))
+				} else {
+					md.WriteString(fmt.Sprintf("Document ID: `%s`", source.ID))
+				}
+
+				// Add file path if available
+				if filePath, ok := source.Metadata["file_path"].(string); ok && filePath != "" {
+					md.WriteString(fmt.Sprintf(", File: `%s`", filePath))
+				}
+
+				// Add source path if available
+				if sourcePath, ok := source.Metadata["source_path"].(string); ok && sourcePath != "" {
+					md.WriteString(fmt.Sprintf(", Source: `%s`", sourcePath))
+				}
+				md.WriteString("\n\n")
+			}
+
 			truncatedText := truncateText(source.Text, 200)
 			md.WriteString(fmt.Sprintf("```\n%s\n```\n\n", truncatedText))
 		}
@@ -1071,9 +1282,9 @@ func printUsage() {
 	fmt.Println("  lil-rag [flags] <command> [args]")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  index [id] <text|file|->     Index text, file, or stdin (ID optional, auto-generated if not provided)")
-	fmt.Println("  search <query> [limit]       Search for similar text (default limit: 10)")
-	fmt.Println("  chat [flags] <message> [limit]  Interactive chat with RAG context (default limit: 5)")
+	fmt.Println("  index [--chunking=STRATEGY] [id] <text|file|->  Index text, file, or stdin (ID optional, auto-generated if not provided)")
+	fmt.Println("  search <query> [limit]       Search for similar text (default limit: configurable, 25)")
+	fmt.Println("  chat [flags] <message> [limit]  Interactive chat with RAG context (default limit: configurable, 15)")
 	fmt.Println("      --session-id <id>        Resume existing chat session")
 	fmt.Println("      --new-session           Start new chat session")
 	fmt.Println("      --list-sessions         List all chat sessions")
@@ -1117,17 +1328,24 @@ func printUsage() {
 	fmt.Println("  chunking.max-tokens             Maximum tokens per chunk")
 	fmt.Println("  chunking.overlap                Token overlap between chunks")
 	fmt.Println("")
+	fmt.Println("Available chunking strategies:")
+	fmt.Println("  recursive   Hierarchical text splitting with semantic boundaries (default)")
+	fmt.Println("  semantic    Embedding-based chunking that preserves topic coherence")
+	fmt.Println("  simple      Basic word-based chunking")
+	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  lil-rag config init")
 	fmt.Println("  lil-rag config set ollama.endpoint http://localhost:11434")
 	fmt.Println("  lil-rag config set ollama.model nomic-embed-text")
 	fmt.Println("  lil-rag config set ollama.chat-model llama3.2")
-	fmt.Println("  lil-rag index \"Hello world\"               # Auto-generated ID")
-	fmt.Println("  lil-rag index doc1 \"Hello world\"         # Explicit ID")
-	fmt.Println("  lil-rag index document.pdf                # Auto-generated ID")
-	fmt.Println("  lil-rag index doc2 document.txt           # Explicit ID")
-	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin")
-	fmt.Println("  echo \"Hello world\" | lil-rag index doc3 -  # Explicit ID from stdin")
+	fmt.Println("  lil-rag index \"Hello world\"               # Auto-generated ID with recursive chunking")
+	fmt.Println("  lil-rag index doc1 \"Hello world\"         # Explicit ID with recursive chunking")
+	fmt.Println("  lil-rag index --chunking=semantic \"Long text...\"  # Auto-generated ID with semantic chunking")
+	fmt.Println("  lil-rag index --chunking=simple doc1 \"Text\"       # Explicit ID with simple chunking")
+	fmt.Println("  lil-rag index document.pdf                # Auto-generated ID with recursive chunking")
+	fmt.Println("  lil-rag index --chunking=semantic doc2 document.txt  # Explicit ID with semantic chunking")
+	fmt.Println("  echo \"Hello world\" | lil-rag index -    # Auto-generated ID from stdin with recursive chunking")
+	fmt.Println("  echo \"Hello world\" | lil-rag index --chunking=semantic doc3 -  # Explicit ID from stdin with semantic chunking")
 	fmt.Println("  lil-rag search \"hello\" 5")
 	fmt.Println("  lil-rag chat \"What is machine learning?\" 3")
 	fmt.Println("  lil-rag chat --new-session \"Start a new conversation\"")
@@ -1147,18 +1365,22 @@ func printUsage() {
 
 // handleAuth handles authentication commands
 func handleAuth(profileConfig *config.ProfileConfig, args []string) error {
-	if len(args) == 0 {
-		fmt.Println("Auth commands:")
-		fmt.Println("  add <username> <password>     # Add a new user")
-		fmt.Println("  list                          # List all users")
-		fmt.Println("  delete <username>             # Delete a user")
-		fmt.Println("  reset-password <username> <new-password>  # Reset user's password")
-		fmt.Println("")
-		fmt.Println("Examples:")
-		fmt.Println("  lil-rag auth add alice password123")
-		fmt.Println("  lil-rag auth list")
-		fmt.Println("  lil-rag auth delete alice")
-		fmt.Println("  lil-rag auth reset-password alice newpassword456")
+	// Check for help flag first or no args
+	if len(args) == 0 || (len(args) > 0 && (args[0] == "--help" || args[0] == "-h")) {
+		fmt.Fprintf(os.Stderr, "Usage: lil-rag auth <command> [OPTIONS]\n\n")
+		fmt.Fprintf(os.Stderr, "Manage authentication users for the HTTP server.\n\n")
+		fmt.Fprintf(os.Stderr, "Commands:\n")
+		fmt.Fprintf(os.Stderr, "  add <username> <password>             Add a new user\n")
+		fmt.Fprintf(os.Stderr, "  list                                  List all users\n")
+		fmt.Fprintf(os.Stderr, "  delete <username>                     Delete a user\n")
+		fmt.Fprintf(os.Stderr, "  reset-password <username> <password>  Reset user's password\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fmt.Fprintf(os.Stderr, "  -h, --help                            Show this help message\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  lil-rag auth add alice password123\n")
+		fmt.Fprintf(os.Stderr, "  lil-rag auth list\n")
+		fmt.Fprintf(os.Stderr, "  lil-rag auth delete alice\n")
+		fmt.Fprintf(os.Stderr, "  lil-rag auth reset-password alice newpassword456\n")
 		return nil
 	}
 

@@ -14,6 +14,7 @@ type Config struct {
 	Ollama   Ollama   `json:"ollama" yaml:"ollama"`
 	Server   Server   `json:"server" yaml:"server"`
 	Chunking Chunk    `json:"chunking" yaml:"chunking"`
+	Search   Search   `json:"search" yaml:"search"`
 }
 
 type Database struct {
@@ -42,8 +43,22 @@ type Server struct {
 }
 
 type Chunk struct {
-	MaxTokens int `json:"max_tokens" yaml:"max_tokens"`
-	Overlap   int `json:"overlap" yaml:"overlap"`
+	MaxTokens         int     `json:"max_tokens" yaml:"max_tokens"`
+	Overlap           int     `json:"overlap" yaml:"overlap"`
+	DefaultStrategy   string  `json:"default_strategy" yaml:"default_strategy"`
+	SemanticThreshold float32 `json:"semantic_threshold" yaml:"semantic_threshold"`
+	ThresholdType     string  `json:"threshold_type" yaml:"threshold_type"`
+}
+
+type Search struct {
+	DefaultLimit        int  `json:"default_limit" yaml:"default_limit"`
+	DefaultChatLimit    int  `json:"default_chat_limit" yaml:"default_chat_limit"`
+	MaxMCPSearchLimit   int  `json:"max_mcp_search_limit" yaml:"max_mcp_search_limit"`
+	MaxMCPChatLimit     int  `json:"max_mcp_chat_limit" yaml:"max_mcp_chat_limit"`
+	TruncateDocuments   bool `json:"truncate_documents" yaml:"truncate_documents"`
+	MaxDocumentLength   int  `json:"max_document_length" yaml:"max_document_length"`
+	EnableQueryOptimization bool `json:"enable_query_optimization" yaml:"enable_query_optimization"`
+	ReturnMatchingChunksOnly bool `json:"return_matching_chunks_only" yaml:"return_matching_chunks_only"`
 }
 
 // Default returns a new Config with default values.
@@ -72,8 +87,21 @@ func Default() *Config {
 			TrustedProxies: []string{},
 		},
 		Chunking: Chunk{
-			MaxTokens: 800, // Optimal size based on 2024 research (200-800 range)
-			Overlap:   100, // 12.5% overlap ratio, optimal for context preservation
+			MaxTokens:         800,          // Optimal size based on 2024 research (200-800 range)
+			Overlap:           100,          // 12.5% overlap ratio, optimal for context preservation
+			DefaultStrategy:   "recursive",  // Default chunking strategy
+			SemanticThreshold: 0.95,         // 95th percentile threshold for semantic chunking
+			ThresholdType:     "percentile", // Threshold type for semantic chunking
+		},
+		Search: Search{
+			DefaultLimit:        25,   // Increased default for comprehensive search results
+			DefaultChatLimit:    15,   // Increased default for richer chat context
+			MaxMCPSearchLimit:   100,  // Increased MCP search limit for flexibility
+			MaxMCPChatLimit:     50,   // Increased MCP chat limit for better context
+			TruncateDocuments:   false, // Disable truncation for full document access
+			MaxDocumentLength:   0,    // 0 means no limit when truncation is disabled
+			EnableQueryOptimization: false, // Disable query optimization by default, can be enabled for better semantic search
+			ReturnMatchingChunksOnly: false, // Return full context by default, can be enabled to return only matching chunks
 		},
 	}
 }

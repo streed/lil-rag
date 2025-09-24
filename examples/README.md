@@ -212,7 +212,7 @@ go run mcp_example.go
 builder := lilrag.ConfigurationTemplate{}.FastSearch()
 builder.WithEmbeddingModel("all-MiniLM-L6-v2").
         WithVectorSize(384).
-        WithChunking(128, 19)
+        WithChunking(1000, 100)
 ```
 
 ### Quality Optimization
@@ -221,7 +221,7 @@ builder.WithEmbeddingModel("all-MiniLM-L6-v2").
 builder := lilrag.ConfigurationTemplate{}.ContextualSearch()
 builder.WithEmbeddingModel("mxbai-embed-large").
         WithVectorSize(1024).
-        WithChunking(512, 77)
+        WithChunking(3000, 300)
 ```
 
 ### Balanced Configuration
@@ -230,8 +230,8 @@ builder.WithEmbeddingModel("mxbai-embed-large").
 config := &lilrag.Config{
     Model:      "nomic-embed-text",
     VectorSize: 768,
-    MaxTokens:  256,
-    Overlap:    38,
+    MaxChars:   2000,
+    Overlap:    200,
 }
 ```
 

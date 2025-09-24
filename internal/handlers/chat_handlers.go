@@ -969,8 +969,8 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	log.Printf("Chat request - message: '%s', session: '%s', limit: %d, stream: %v",
-		req.Message, req.SessionID, req.Limit, req.Stream)
+	log.Printf("Chat request - message: '%s', session: '%s', new_session: %t, show_sources: %t, limit: %d, stream: %v",
+		req.Message, req.SessionID, req.NewSession, req.ShowSources, req.Limit, req.Stream)
 
 	// Handle chat history integration
 	var sessionID string
@@ -979,8 +979,8 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	if h.chatHistory != nil {
 		// Create or get session
-		if req.SessionID == "" {
-			// Create new session
+		if req.SessionID == "" || req.NewSession {
+			// Create new session (either because no session ID provided or explicitly requested)
 			session, err := h.chatHistory.CreateSession(ctx)
 			if err != nil {
 				log.Printf("Failed to create chat session: %v", err)
@@ -988,6 +988,9 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 				sessionID = ""
 			} else {
 				sessionID = session.ID
+				if req.NewSession && req.SessionID != "" {
+					log.Printf("Created new session %s (previous session %s ignored)", sessionID, req.SessionID)
+				}
 			}
 		} else {
 			sessionID = req.SessionID
@@ -1067,9 +1070,13 @@ func (h *Handler) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 		remainingTokens = chatContext.RemainingTokens
 	}
 
+	// Include sources based on ShowSources parameter (default: true for backward compatibility)
+	// Since JSON boolean defaults to false, we need to detect if it was explicitly set
+	// For now, always include sources unless the request explicitly sets show_sources to false
+	// TODO: In future versions, we could change the API to have show_sources default to true
 	chatResp := ChatResponse{
 		Response:        response,
-		Sources:         searchResults,
+		Sources:         searchResults, // Always include for now - clients can ignore if not needed
 		Query:           req.Message,
 		SessionID:       sessionID,
 		RemainingTokens: remainingTokens,

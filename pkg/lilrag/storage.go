@@ -464,6 +464,10 @@ func (s *SQLiteStorage) storeContent(id, text, contentHash string) (string, erro
 }
 
 func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error) {
+	return s.SearchWithOptions(ctx, embedding, limit, false)
+}
+
+func (s *SQLiteStorage) SearchWithOptions(ctx context.Context, embedding []float32, limit int, returnIndividualChunks bool) ([]SearchResult, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("storage not initialized - call Initialize() first")
 	}
@@ -504,10 +508,16 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		_ = rows.Close() // Ignore close errors in defer
 	}()
 
-	// Use a map to deduplicate results by document ID, keeping the best score per document
-	documentResults := make(map[string]SearchResult)
+	var results []SearchResult
+	// Use a map to deduplicate results by document ID only if not returning individual chunks
+	var documentResults map[string]SearchResult
+	if !returnIndividualChunks {
+		documentResults = make(map[string]SearchResult)
+	}
 
+	var rowCount int
 	for rows.Next() {
+		rowCount++
 		var result SearchResult
 		var distance float64
 		var chunkIndex int
@@ -525,11 +535,14 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 
 		score := 1.0 - distance
 
-		// Check if we already have a result for this document
-		if existingResult, exists := documentResults[result.ID]; exists {
-			// Keep the result with the better score
-			if score <= existingResult.Score {
-				continue // Skip this result as we have a better one
+		// Handle deduplication based on mode
+		if !returnIndividualChunks {
+			// Document deduplication mode - keep best chunk per document
+			if existingResult, exists := documentResults[result.ID]; exists {
+				// Keep the result with the better score
+				if score <= existingResult.Score {
+					continue // Skip this result as we have a better one
+				}
 			}
 		}
 
@@ -574,13 +587,23 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 		}
 
 		result.Metadata = metadata
-		documentResults[result.ID] = result
+
+		if returnIndividualChunks {
+			// Individual chunks mode - add each chunk directly
+			results = append(results, result)
+		} else {
+			// Document deduplication mode - store in map
+			documentResults[result.ID] = result
+		}
 	}
 
-	// Convert map back to slice and sort by score (highest first)
-	var results []SearchResult
-	for _, result := range documentResults {
-		results = append(results, result)
+	fmt.Printf("DEBUG: SQL query returned %d rows, returnIndividualChunks=%t\n", rowCount, returnIndividualChunks)
+
+	// If using document deduplication, convert map back to slice
+	if !returnIndividualChunks {
+		for _, result := range documentResults {
+			results = append(results, result)
+		}
 	}
 
 	// Sort results by score descending
