@@ -131,14 +131,12 @@ func (m *MockStorage) SearchWithOptions(_ context.Context, _ []float32, limit in
 			break
 		}
 		results = append(results, SearchResult{
-			ID:    id,
-			Text:  doc,
-			Score: 0.5,
+			ID:       id,
+			Text:     doc,
+			Score:    0.5,
+			Metadata: make(map[string]interface{}), // Add metadata to fix nil metadata issue
 		})
 		count++
-		if !returnIndividualChunks {
-			break
-		}
 	}
 	return results, nil
 }
