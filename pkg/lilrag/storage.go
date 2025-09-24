@@ -467,7 +467,8 @@ func (s *SQLiteStorage) Search(ctx context.Context, embedding []float32, limit i
 	return s.SearchWithOptions(ctx, embedding, limit, false)
 }
 
-func (s *SQLiteStorage) SearchWithOptions(ctx context.Context, embedding []float32, limit int, returnIndividualChunks bool) ([]SearchResult, error) {
+func (s *SQLiteStorage) SearchWithOptions(ctx context.Context, embedding []float32, limit int, 
+	returnIndividualChunks bool) ([]SearchResult, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("storage not initialized - call Initialize() first")
 	}

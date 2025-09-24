@@ -291,7 +291,8 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
-						"description": fmt.Sprintf("Maximum number of results to return (default: %d, max: %d)", s.defaultSearchLimit, s.maxSearchLimit),
+						"description": fmt.Sprintf("Maximum number of results to return "+
+							"(default: %d, max: %d)", s.defaultSearchLimit, s.maxSearchLimit),
 						"default":     s.defaultSearchLimit,
 					},
 					"chunks_only": map[string]interface{}{
@@ -315,7 +316,8 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
-						"description": fmt.Sprintf("Maximum number of source documents to use for context (default: %d, max: %d)", s.defaultChatLimit, s.maxChatLimit),
+						"description": fmt.Sprintf("Maximum number of source documents to use for context "+
+							"(default: %d, max: %d)", s.defaultChatLimit, s.maxChatLimit),
 						"default":     s.defaultChatLimit,
 					},
 					"session_id": map[string]interface{}{

@@ -1282,7 +1282,8 @@ func (tc *TextChunker) ChunkTextWithSemanticEmbedding(text, strategy string, emb
 }
 
 // ChunkTextWithSemanticEmbeddingAndThreshold performs semantic chunking with configurable threshold
-func (tc *TextChunker) ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy string, embedder Embedder, thresholdType string, threshold float32) []Chunk {
+func (tc *TextChunker) ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy string, embedder Embedder, 
+	thresholdType string, threshold float32) []Chunk {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
@@ -1383,7 +1384,8 @@ func (tc *TextChunker) groupSentencesForSemanticAnalysis(sentences []string) [][
 }
 
 // createSemanticChunksFromGroups creates chunks from sentence groups and breakpoints
-func (tc *TextChunker) createSemanticChunksFromGroups(sentences []string, sentenceGroups [][]string, breakpoints []int) []Chunk {
+func (tc *TextChunker) createSemanticChunksFromGroups(sentences []string, sentenceGroups [][]string, 
+	breakpoints []int) []Chunk {
 	if len(sentenceGroups) == 0 {
 		return nil
 	}

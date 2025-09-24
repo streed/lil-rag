@@ -33,7 +33,8 @@ func NewOllamaChatClientWithTimeout(baseURL, model string, timeoutSeconds int) *
 }
 
 // NewOllamaChatClientWithConfig creates a new Ollama chat client with full configuration
-func NewOllamaChatClientWithConfig(baseURL, model string, timeoutSeconds int, truncateDocuments bool, maxDocumentLength int) *OllamaChatClient {
+func NewOllamaChatClientWithConfig(baseURL, model string, timeoutSeconds int, 
+	truncateDocuments bool, maxDocumentLength int) *OllamaChatClient {
 	if baseURL == "" {
 		baseURL = DefaultOllamaURL
 	}
