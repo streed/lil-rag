@@ -253,7 +253,7 @@ func handleIndex(ctx context.Context, rag *lilrag.LilRag, args []string) error {
 			if err := rag.IndexFileWithStrategy(ctx, arg, id, chunkingStrategy); err != nil {
 				return fmt.Errorf("failed to index file: %w", err)
 			}
-				return nil
+			return nil
 		}
 
 		// Treat as direct text input with auto-generated ID

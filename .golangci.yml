@@ -55,7 +55,7 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - copyloopvar  # replaces exportloopvar
+    - exportloopref  # replaces exportloopvar
     - dogsled
     - errcheck
     - exhaustive
@@ -81,7 +81,7 @@ issues:
     - path: _test\.go
       linters:
         - bodyclose
-        - copyloopvar
+        - exportloopref
         - dogsled
         - errcheck
         - exhaustive

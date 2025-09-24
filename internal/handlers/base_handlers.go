@@ -42,12 +42,12 @@ type SearchRequest struct {
 }
 
 type ChatRequest struct {
-	Message      string `json:"message"`
-	SessionID    string `json:"session_id,omitempty"`
-	NewSession   bool   `json:"new_session,omitempty"`   // Start a new chat session
-	ShowSources  bool   `json:"show_sources,omitempty"`  // Display detailed source information
-	Limit        int    `json:"limit,omitempty"`
-	Stream       bool   `json:"stream,omitempty"`
+	Message     string `json:"message"`
+	SessionID   string `json:"session_id,omitempty"`
+	NewSession  bool   `json:"new_session,omitempty"`  // Start a new chat session
+	ShowSources bool   `json:"show_sources,omitempty"` // Display detailed source information
+	Limit       int    `json:"limit,omitempty"`
+	Stream      bool   `json:"stream,omitempty"`
 }
 
 type ChatResponse struct {

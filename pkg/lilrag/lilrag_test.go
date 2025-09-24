@@ -756,7 +756,7 @@ func TestLilRag_Search(t *testing.T) {
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(1000, 200),
-		config:   &Config{
+		config: &Config{
 			MaxTokens:    1000,
 			Overlap:      200,
 			DefaultLimit: 25, // New configurable default

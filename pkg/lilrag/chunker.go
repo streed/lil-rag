@@ -40,7 +40,7 @@ type Chunk struct {
 	StartPos   int
 	EndPos     int
 	CharCount  int
-	TokenCount int   // Kept for backward compatibility
+	TokenCount int    // Kept for backward compatibility
 	PageNumber *int   // Optional page number for PDF chunks
 	ChunkType  string // Type of chunk: "text", "pdf_page"
 }
@@ -441,13 +441,13 @@ func (tc *TextChunker) getBaseSeparators(contentType string) []string {
 func (tc *TextChunker) getLanguageSeparators() []string {
 	// LangChain-inspired international separators
 	return []string{
-		"。",     // Japanese/Chinese period
-		"．",     // Fullwidth period
-		"！",     // Fullwidth exclamation
-		"？",     // Fullwidth question mark
-		"；",     // Fullwidth semicolon
-		"，",     // Fullwidth comma
-		"、",     // Ideographic comma
+		"。",      // Japanese/Chinese period
+		"．",      // Fullwidth period
+		"！",      // Fullwidth exclamation
+		"？",      // Fullwidth question mark
+		"；",      // Fullwidth semicolon
+		"，",      // Fullwidth comma
+		"、",      // Ideographic comma
 		"\u200b", // Zero-width space (used in some languages)
 		"·",      // Middle dot (used in Catalan, etc.)
 		"¿",      // Inverted question mark (Spanish)
