@@ -42,21 +42,21 @@ func (b *Builder) WithConfig(cfg *ServiceConfig) *Builder {
 // WithProfileConfig loads configuration from a profile config
 func (b *Builder) WithProfileConfig(profileConfig *config.Config, dataDir string) *Builder {
 	b.config = &ServiceConfig{
-		DatabasePath:        profileConfig.Database.Path,
-		DataDir:             dataDir,
-		OllamaURL:           profileConfig.Ollama.URL,
-		Model:               profileConfig.Ollama.Model,
-		ChatModel:           DefaultChatModel, // Default chat model
-		VisionModel:         profileConfig.Ollama.VisionModel,
-		TimeoutSeconds:      profileConfig.Ollama.TimeoutSeconds,
-		VectorSize:          profileConfig.Database.VectorSize,
-		MaxTokens:           profileConfig.Chunking.MaxTokens,
-		Overlap:             profileConfig.Chunking.Overlap,
-		ImageMaxSize:        profileConfig.Ollama.ImageMaxSize,
-		DefaultLimit:        profileConfig.Search.DefaultLimit,
-		DefaultChatLimit:    profileConfig.Search.DefaultChatLimit,
-		TruncateDocuments:   profileConfig.Search.TruncateDocuments,
-		MaxDocumentLength:   profileConfig.Search.MaxDocumentLength,
+		DatabasePath:      profileConfig.Database.Path,
+		DataDir:           dataDir,
+		OllamaURL:         profileConfig.Ollama.URL,
+		Model:             profileConfig.Ollama.Model,
+		ChatModel:         DefaultChatModel, // Default chat model
+		VisionModel:       profileConfig.Ollama.VisionModel,
+		TimeoutSeconds:    profileConfig.Ollama.TimeoutSeconds,
+		VectorSize:        profileConfig.Database.VectorSize,
+		MaxTokens:         profileConfig.Chunking.MaxTokens,
+		Overlap:           profileConfig.Chunking.Overlap,
+		ImageMaxSize:      profileConfig.Ollama.ImageMaxSize,
+		DefaultLimit:      profileConfig.Search.DefaultLimit,
+		DefaultChatLimit:  profileConfig.Search.DefaultChatLimit,
+		TruncateDocuments: profileConfig.Search.TruncateDocuments,
+		MaxDocumentLength: profileConfig.Search.MaxDocumentLength,
 	}
 	return b
 }

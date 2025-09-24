@@ -8,12 +8,12 @@ import (
 )
 
 type ProfileConfig struct {
-	Ollama      OllamaConfig  `json:"ollama"`
-	StoragePath string        `json:"storage_path"`
-	DataDir     string        `json:"data_dir"`
-	Server      ServerConfig  `json:"server"`
-	Chunking    ChunkConfig   `json:"chunking"`
-	Search      SearchConfig  `json:"search"`
+	Ollama      OllamaConfig `json:"ollama"`
+	StoragePath string       `json:"storage_path"`
+	DataDir     string       `json:"data_dir"`
+	Server      ServerConfig `json:"server"`
+	Chunking    ChunkConfig  `json:"chunking"`
+	Search      SearchConfig `json:"search"`
 }
 
 type OllamaConfig struct {

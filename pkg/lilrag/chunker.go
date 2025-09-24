@@ -40,7 +40,7 @@ type Chunk struct {
 	StartPos   int
 	EndPos     int
 	CharCount  int
-	TokenCount int   // Kept for backward compatibility
+	TokenCount int    // Kept for backward compatibility
 	PageNumber *int   // Optional page number for PDF chunks
 	ChunkType  string // Type of chunk: "text", "pdf_page"
 }
@@ -441,13 +441,13 @@ func (tc *TextChunker) getBaseSeparators(contentType string) []string {
 func (tc *TextChunker) getLanguageSeparators() []string {
 	// LangChain-inspired international separators
 	return []string{
-		"。",     // Japanese/Chinese period
-		"．",     // Fullwidth period
-		"！",     // Fullwidth exclamation
-		"？",     // Fullwidth question mark
-		"；",     // Fullwidth semicolon
-		"，",     // Fullwidth comma
-		"、",     // Ideographic comma
+		"。",      // Japanese/Chinese period
+		"．",      // Fullwidth period
+		"！",      // Fullwidth exclamation
+		"？",      // Fullwidth question mark
+		"；",      // Fullwidth semicolon
+		"，",      // Fullwidth comma
+		"、",      // Ideographic comma
 		"\u200b", // Zero-width space (used in some languages)
 		"·",      // Middle dot (used in Catalan, etc.)
 		"¿",      // Inverted question mark (Spanish)
@@ -1282,7 +1282,8 @@ func (tc *TextChunker) ChunkTextWithSemanticEmbedding(text, strategy string, emb
 }
 
 // ChunkTextWithSemanticEmbeddingAndThreshold performs semantic chunking with configurable threshold
-func (tc *TextChunker) ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy string, embedder Embedder, thresholdType string, threshold float32) []Chunk {
+func (tc *TextChunker) ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy string, embedder Embedder, 
+	thresholdType string, threshold float32) []Chunk {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil
@@ -1383,7 +1384,8 @@ func (tc *TextChunker) groupSentencesForSemanticAnalysis(sentences []string) [][
 }
 
 // createSemanticChunksFromGroups creates chunks from sentence groups and breakpoints
-func (tc *TextChunker) createSemanticChunksFromGroups(sentences []string, sentenceGroups [][]string, breakpoints []int) []Chunk {
+func (tc *TextChunker) createSemanticChunksFromGroups(sentences []string, sentenceGroups [][]string, 
+	breakpoints []int) []Chunk {
 	if len(sentenceGroups) == 0 {
 		return nil
 	}

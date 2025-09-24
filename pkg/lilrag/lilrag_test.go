@@ -131,14 +131,12 @@ func (m *MockStorage) SearchWithOptions(_ context.Context, _ []float32, limit in
 			break
 		}
 		results = append(results, SearchResult{
-			ID:    id,
-			Text:  doc,
-			Score: 0.5,
+			ID:       id,
+			Text:     doc,
+			Score:    0.5,
+			Metadata: make(map[string]interface{}), // Add metadata to fix nil metadata issue
 		})
 		count++
-		if !returnIndividualChunks {
-			break
-		}
 	}
 	return results, nil
 }
@@ -756,7 +754,7 @@ func TestLilRag_Search(t *testing.T) {
 		storage:  NewMockStorage(),
 		embedder: NewMockEmbedder(),
 		chunker:  NewTextChunker(1000, 200),
-		config:   &Config{
+		config: &Config{
 			MaxTokens:    1000,
 			Overlap:      200,
 			DefaultLimit: 25, // New configurable default

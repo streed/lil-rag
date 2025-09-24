@@ -650,40 +650,40 @@ func createSemanticMockEmbedder() *SemanticMockEmbedder {
 	// Pre-populate with topic-specific embeddings to ensure proper semantic clustering
 	embedder.embeddings = map[string][]float32{
 		// AI/ML topic cluster - high similarity within group
-		"Artificial intelligence is transforming the world.": generateTopicEmbedding("ai artificial intelligence transforming world"),
+		"Artificial intelligence is transforming the world.":            generateTopicEmbedding("ai artificial intelligence transforming world"),
 		"Machine learning algorithms can process vast amounts of data.": generateTopicEmbedding("machine learning algorithms process data"),
 
 		// Database topic cluster - different from AI/ML
-		"Database systems store information efficiently.": generateTopicEmbedding("database systems store information efficiently"),
+		"Database systems store information efficiently.":    generateTopicEmbedding("database systems store information efficiently"),
 		"SQL queries retrieve specific records from tables.": generateTopicEmbedding("sql queries retrieve records tables"),
-		"Data warehouses organize enterprise information.": generateTopicEmbedding("data warehouses organize enterprise information"),
+		"Data warehouses organize enterprise information.":   generateTopicEmbedding("data warehouses organize enterprise information"),
 
 		// Web topic cluster - different from both above
-		"Web servers handle HTTP requests from clients.": generateTopicEmbedding("web servers handle http requests clients"),
-		"RESTful APIs provide structured endpoints.": generateTopicEmbedding("restful apis provide structured endpoints"),
+		"Web servers handle HTTP requests from clients.":            generateTopicEmbedding("web servers handle http requests clients"),
+		"RESTful APIs provide structured endpoints.":                generateTopicEmbedding("restful apis provide structured endpoints"),
 		"Microservices architecture enables scalable applications.": generateTopicEmbedding("microservices architecture enables scalable applications"),
 
 		// Topic coherence test sentences
-		"Artificial intelligence research focuses on creating intelligent agents.": generateTopicEmbedding("ai artificial intelligence research intelligent agents"),
+		"Artificial intelligence research focuses on creating intelligent agents.":      generateTopicEmbedding("ai artificial intelligence research intelligent agents"),
 		"Machine learning is a subset of AI that enables computers to learn from data.": generateTopicEmbedding("machine learning ai computers learn data"),
-		"Deep learning uses neural networks with multiple layers.": generateTopicEmbedding("machine learning neural networks layers"),
+		"Deep learning uses neural networks with multiple layers.":                      generateTopicEmbedding("machine learning neural networks layers"),
 
 		"Database normalization reduces data redundancy.": generateTopicEmbedding("database normalization data redundancy"),
-		"SQL joins combine data from multiple tables.": generateTopicEmbedding("sql joins data tables"),
+		"SQL joins combine data from multiple tables.":    generateTopicEmbedding("sql joins data tables"),
 		"ACID properties ensure transaction reliability.": generateTopicEmbedding("database acid properties transaction reliability"),
 
-		"HTTP protocols enable web communication.": generateTopicEmbedding("web http protocols communication"),
-		"REST APIs follow stateless principles.": generateTopicEmbedding("web rest apis stateless principles"),
+		"HTTP protocols enable web communication.":        generateTopicEmbedding("web http protocols communication"),
+		"REST APIs follow stateless principles.":          generateTopicEmbedding("web rest apis stateless principles"),
 		"JSON provides lightweight data exchange format.": generateTopicEmbedding("web json data exchange format"),
 
 		// Threshold types test sentences
 		"Machine learning algorithms process data efficiently.": generateTopicEmbedding("machine learning algorithms process data efficiently"),
-		"Neural networks learn complex patterns.": generateTopicEmbedding("machine learning neural networks patterns"),
-		"Deep learning revolutionizes AI applications.": generateTopicEmbedding("machine learning ai applications"),
+		"Neural networks learn complex patterns.":               generateTopicEmbedding("machine learning neural networks patterns"),
+		"Deep learning revolutionizes AI applications.":         generateTopicEmbedding("machine learning ai applications"),
 
 		"Database optimization improves query performance.": generateTopicEmbedding("database optimization query performance"),
-		"Indexing strategies reduce lookup times.": generateTopicEmbedding("database indexing strategies lookup times"),
-		"Query planners optimize execution paths.": generateTopicEmbedding("database query planners optimize execution"),
+		"Indexing strategies reduce lookup times.":          generateTopicEmbedding("database indexing strategies lookup times"),
+		"Query planners optimize execution paths.":          generateTopicEmbedding("database query planners optimize execution"),
 	}
 
 	return embedder
@@ -1047,10 +1047,10 @@ func TestTextChunker_SemanticChunking_FallbackToRecursive(t *testing.T) {
 
 func TestCosineSimilarity(t *testing.T) {
 	testCases := []struct {
-		name     string
-		vec1     []float32
-		vec2     []float32
-		expected float32
+		name      string
+		vec1      []float32
+		vec2      []float32
+		expected  float32
 		tolerance float32
 	}{
 		{
@@ -1098,27 +1098,27 @@ func TestFindSemanticBreakpoints(t *testing.T) {
 	similarities := []float32{0.9, 0.85, 0.3, 0.8, 0.2, 0.9}
 
 	testCases := []struct {
-		name          string
-		thresholdType string
-		threshold     float32
+		name           string
+		thresholdType  string
+		threshold      float32
 		expectedBreaks []int
 	}{
 		{
-			name:          "percentile_threshold",
-			thresholdType: "percentile",
-			threshold:     0.8, // 80th percentile
+			name:           "percentile_threshold",
+			thresholdType:  "percentile",
+			threshold:      0.8,         // 80th percentile
 			expectedBreaks: []int{2, 4}, // indices where similarity drops significantly
 		},
 		{
-			name:          "fixed_threshold",
-			thresholdType: "fixed",
-			threshold:     0.5,
+			name:           "fixed_threshold",
+			thresholdType:  "fixed",
+			threshold:      0.5,
 			expectedBreaks: []int{2, 4}, // similarities below 0.5
 		},
 		{
-			name:          "gradient_small_array",
-			thresholdType: "gradient",
-			threshold:     0.8,
+			name:           "gradient_small_array",
+			thresholdType:  "gradient",
+			threshold:      0.8,
 			expectedBreaks: []int{}, // will be overridden by test below
 		},
 	}

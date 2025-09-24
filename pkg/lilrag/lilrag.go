@@ -67,7 +67,8 @@ type Storage interface {
 		originalFilePath, docType, namespace string,
 	) error
 	Search(ctx context.Context, embedding []float32, limit int) ([]SearchResult, error)
-	SearchWithOptions(ctx context.Context, embedding []float32, limit int, returnIndividualChunks bool) ([]SearchResult, error)
+	SearchWithOptions(ctx context.Context, embedding []float32, limit int, 
+		returnIndividualChunks bool) ([]SearchResult, error)
 	ListDocuments(ctx context.Context) ([]DocumentInfo, error)
 	GetDocumentByID(ctx context.Context, documentID string) (*DocumentInfo, error)
 	GetDocumentChunks(ctx context.Context, documentID string) ([]Chunk, error)
@@ -264,7 +265,8 @@ func (m *LilRag) IndexWithStrategy(ctx context.Context, text, id, strategy strin
 	// Always apply the specified chunking strategy, regardless of text length
 	var chunks []Chunk
 	if strategy == ChunkingStrategySemantic {
-		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy, m.embedder, 
+			m.config.ThresholdType, m.config.SemanticThreshold)
 	} else {
 		chunks = m.chunker.ChunkTextWithStrategy(text, strategy)
 	}
@@ -478,7 +480,8 @@ func (m *LilRag) IndexFileWithStrategy(ctx context.Context, filePath, id, strate
 	// Apply the specified chunking strategy to the extracted content
 	var chunks []Chunk
 	if strategy == ChunkingStrategySemantic {
-		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(content, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(content, strategy, m.embedder, 
+			m.config.ThresholdType, m.config.SemanticThreshold)
 	} else {
 		chunks = m.chunker.ChunkTextWithStrategy(content, strategy)
 	}
@@ -1118,7 +1121,8 @@ func (m *LilRag) reindexFromFileWithStrategy(ctx context.Context, doc *DocumentI
 	// Apply the specified chunking strategy
 	var chunks []Chunk
 	if strategy == ChunkingStrategySemantic {
-		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(text, strategy, m.embedder, 
+			m.config.ThresholdType, m.config.SemanticThreshold)
 	} else {
 		chunks = m.chunker.ChunkTextWithStrategy(text, strategy)
 	}
@@ -1138,7 +1142,8 @@ func (m *LilRag) reindexFromTextWithStrategy(ctx context.Context, doc *DocumentI
 	// Apply the specified chunking strategy
 	var chunks []Chunk
 	if strategy == ChunkingStrategySemantic {
-		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(doc.Text, strategy, m.embedder, m.config.ThresholdType, m.config.SemanticThreshold)
+		chunks = m.chunker.ChunkTextWithSemanticEmbeddingAndThreshold(doc.Text, strategy, m.embedder, 
+			m.config.ThresholdType, m.config.SemanticThreshold)
 	} else {
 		chunks = m.chunker.ChunkTextWithStrategy(doc.Text, strategy)
 	}

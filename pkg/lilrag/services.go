@@ -238,7 +238,8 @@ func NewChatService(searchService SearchService, chatClient *OllamaChatClient) C
 }
 
 // NewChatServiceWithConfig creates a new chat service with configuration
-func NewChatServiceWithConfig(searchService SearchService, chatClient *OllamaChatClient, defaultChatLimit int, enableQueryOptimization bool) ChatService {
+func NewChatServiceWithConfig(searchService SearchService, chatClient *OllamaChatClient, 
+	defaultChatLimit int, enableQueryOptimization bool) ChatService {
 	return &DefaultChatService{
 		searchService:           searchService,
 		chatClient:              chatClient,
@@ -442,7 +443,8 @@ func (f *ServiceFactory) CreateServices(_ context.Context) (*Services, error) {
 	// Create services
 	indexingService := NewIndexingService(storage, embedder, parsingService)
 	searchService := NewSearchService(storage, embedder)
-	chatService := NewChatServiceWithConfig(searchService, chatClient, f.config.DefaultChatLimit, f.config.EnableQueryOptimization)
+	chatService := NewChatServiceWithConfig(searchService, chatClient, f.config.DefaultChatLimit, 
+		f.config.EnableQueryOptimization)
 	documentService := NewDocumentService(storage)
 	healthService := NewHealthService(storage, embedder)
 

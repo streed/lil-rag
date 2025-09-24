@@ -18,11 +18,11 @@ import (
 var version = "dev"
 
 type LilRagMCPServer struct {
-	rag                 *lilrag.LilRag
-	defaultSearchLimit  int
-	defaultChatLimit    int
-	maxSearchLimit      int
-	maxChatLimit        int
+	rag                *lilrag.LilRag
+	defaultSearchLimit int
+	defaultChatLimit   int
+	maxSearchLimit     int
+	maxChatLimit       int
 }
 
 // MCP Protocol types
@@ -95,35 +95,35 @@ func NewLilRagMCPServer() (*LilRagMCPServer, error) {
 	if err != nil {
 		// If profile loading fails, use environment variables or defaults
 		ragConfig = &lilrag.Config{
-			DatabasePath:        getEnvOrDefault("LILRAG_DB_PATH", "lilrag.db"),
-			DataDir:             getEnvOrDefault("LILRAG_DATA_DIR", "data"),
-			OllamaURL:           getEnvOrDefault("LILRAG_OLLAMA_URL", "http://localhost:11434"),
-			Model:               getEnvOrDefault("LILRAG_MODEL", "nomic-embed-text"),
-			VectorSize:          getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),
-			MaxTokens:           getEnvIntOrDefault("LILRAG_MAX_TOKENS", 200),
-			Overlap:             getEnvIntOrDefault("LILRAG_OVERLAP", 50),
-			ImageMaxSize:        getEnvIntOrDefault("LILRAG_IMAGE_MAX_SIZE", 1120),
-			DefaultLimit:        getEnvIntOrDefault("LILRAG_DEFAULT_LIMIT", 25),
-			DefaultChatLimit:    getEnvIntOrDefault("LILRAG_DEFAULT_CHAT_LIMIT", 15),
-			TruncateDocuments:   getEnvBoolOrDefault("LILRAG_TRUNCATE_DOCUMENTS", false),
-			MaxDocumentLength:   getEnvIntOrDefault("LILRAG_MAX_DOCUMENT_LENGTH", 0),
+			DatabasePath:      getEnvOrDefault("LILRAG_DB_PATH", "lilrag.db"),
+			DataDir:           getEnvOrDefault("LILRAG_DATA_DIR", "data"),
+			OllamaURL:         getEnvOrDefault("LILRAG_OLLAMA_URL", "http://localhost:11434"),
+			Model:             getEnvOrDefault("LILRAG_MODEL", "nomic-embed-text"),
+			VectorSize:        getEnvIntOrDefault("LILRAG_VECTOR_SIZE", 768),
+			MaxTokens:         getEnvIntOrDefault("LILRAG_MAX_TOKENS", 200),
+			Overlap:           getEnvIntOrDefault("LILRAG_OVERLAP", 50),
+			ImageMaxSize:      getEnvIntOrDefault("LILRAG_IMAGE_MAX_SIZE", 1120),
+			DefaultLimit:      getEnvIntOrDefault("LILRAG_DEFAULT_LIMIT", 25),
+			DefaultChatLimit:  getEnvIntOrDefault("LILRAG_DEFAULT_CHAT_LIMIT", 15),
+			TruncateDocuments: getEnvBoolOrDefault("LILRAG_TRUNCATE_DOCUMENTS", false),
+			MaxDocumentLength: getEnvIntOrDefault("LILRAG_MAX_DOCUMENT_LENGTH", 0),
 		}
 	} else {
 		// Convert profile config to RAG config
 		ragConfig = &lilrag.Config{
-			DatabasePath:        profileConfig.StoragePath,
-			DataDir:             profileConfig.DataDir,
-			OllamaURL:           profileConfig.Ollama.Endpoint,
-			Model:               profileConfig.Ollama.EmbeddingModel,
-			ChatModel:           profileConfig.Ollama.ChatModel,
-			VectorSize:          profileConfig.Ollama.VectorSize,
-			MaxTokens:           profileConfig.Chunking.MaxTokens,
-			Overlap:             profileConfig.Chunking.Overlap,
-			ImageMaxSize:        profileConfig.Ollama.ImageMaxSize,
-			DefaultLimit:        profileConfig.Search.DefaultLimit,
-			DefaultChatLimit:    profileConfig.Search.DefaultChatLimit,
-			TruncateDocuments:   profileConfig.Search.TruncateDocuments,
-			MaxDocumentLength:   profileConfig.Search.MaxDocumentLength,
+			DatabasePath:      profileConfig.StoragePath,
+			DataDir:           profileConfig.DataDir,
+			OllamaURL:         profileConfig.Ollama.Endpoint,
+			Model:             profileConfig.Ollama.EmbeddingModel,
+			ChatModel:         profileConfig.Ollama.ChatModel,
+			VectorSize:        profileConfig.Ollama.VectorSize,
+			MaxTokens:         profileConfig.Chunking.MaxTokens,
+			Overlap:           profileConfig.Chunking.Overlap,
+			ImageMaxSize:      profileConfig.Ollama.ImageMaxSize,
+			DefaultLimit:      profileConfig.Search.DefaultLimit,
+			DefaultChatLimit:  profileConfig.Search.DefaultChatLimit,
+			TruncateDocuments: profileConfig.Search.TruncateDocuments,
+			MaxDocumentLength: profileConfig.Search.MaxDocumentLength,
 		}
 	}
 
@@ -291,7 +291,8 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
-						"description": fmt.Sprintf("Maximum number of results to return (default: %d, max: %d)", s.defaultSearchLimit, s.maxSearchLimit),
+						"description": fmt.Sprintf("Maximum number of results to return "+
+							"(default: %d, max: %d)", s.defaultSearchLimit, s.maxSearchLimit),
 						"default":     s.defaultSearchLimit,
 					},
 					"chunks_only": map[string]interface{}{
@@ -315,7 +316,8 @@ func (s *LilRagMCPServer) handleToolsList(message MCPMessage) *MCPMessage {
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
-						"description": fmt.Sprintf("Maximum number of source documents to use for context (default: %d, max: %d)", s.defaultChatLimit, s.maxChatLimit),
+						"description": fmt.Sprintf("Maximum number of source documents to use for context "+
+							"(default: %d, max: %d)", s.defaultChatLimit, s.maxChatLimit),
 						"default":     s.defaultChatLimit,
 					},
 					"session_id": map[string]interface{}{

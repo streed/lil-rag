@@ -142,7 +142,8 @@ func (h *Handler) performSearch(w http.ResponseWriter, r *http.Request, query st
 	h.performSearchWithOptions(w, r, query, limit, false)
 }
 
-func (h *Handler) performSearchWithOptions(w http.ResponseWriter, r *http.Request, query string, limit int, chunksOnly bool) {
+func (h *Handler) performSearchWithOptions(w http.ResponseWriter, r *http.Request, query string, 
+	limit int, chunksOnly bool) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 

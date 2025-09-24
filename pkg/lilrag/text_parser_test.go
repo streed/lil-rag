@@ -170,7 +170,7 @@ func TestTextParser_ParseWithChunks(t *testing.T) {
 		{
 			name:           "long text - multiple chunks",
 			content:        strings.Repeat("This is a sentence that will be repeated many times to create a long document. ", 20),
-			expectedChunks: 20, // Recursive chunker splits by sentences, each repeat is a sentence
+			expectedChunks: 9, // With 256 char limit, sentences are combined into optimally sized chunks
 			minChunkSize:   50,
 		},
 		{
